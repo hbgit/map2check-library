@@ -1,5 +1,3 @@
-set(CMAKE_CXX_COMPILER "clang++-8")
-
 include_directories(../include)
 
 #Can manually add the sources using the set command as follows:
