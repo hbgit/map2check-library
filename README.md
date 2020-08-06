@@ -35,7 +35,7 @@ NONDET_CALL new_nondet_call(
         "NonDetLog" : {        
             "line"          : unsigned,
             "scope"         : unsigned,
-            "value"         : int,
+            "value"         : template <typename T>,
             "function_name" : const char *
         }
     }
@@ -48,7 +48,7 @@ In : NonDetLog nondet_obj;
 Out: 1 => {} 
 
 /** Data structure, where n is the number of the step, and {} is NonDetLog * object from that step **/
-In : list map<unsigned, NonDetLog> nondet_obj_list;
+In : list<map<unsigned, NonDetLog>> nondet_obj_list;
 Out: N => [1 : {}, ... n : {}] 
 
 ```

@@ -1,7 +1,7 @@
 #project (TestLibrary)
 
 #For the static library:
-set ( PROJECT_LINK_LIBS libhelloworld.a )
+set ( PROJECT_LINK_LIBS libmap2check.a )
 
 message( STATUS ${PROJECT_BINARY_DIR}/lib )
 
