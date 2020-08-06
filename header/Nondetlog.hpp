@@ -1,14 +1,24 @@
+#include <boost/variant/variant.hpp>
 #include <iostream>
+// include guard
+#ifndef __NONDETLOG_H_INCLUDED__
+#define __NONDETLOG_H_INCLUDED__
+
 #include <string>
+#include <boost/variant.hpp>
 using namespace std; 
 
-//template <typename T>
 class NonDetLog {
 public:
+    NonDetLog();
+
     unsigned line;
     unsigned scope;
-    //T value;
+    boost::variant<int, unsigned, char, double, float> value;
     string functionName;     
-
-    NonDetLog(); 
+ 
 };
+
+NonDetLog::NonDetLog(){}
+
+#endif // __NONDETLOG_H_INCLUDED__ 

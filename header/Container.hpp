@@ -8,19 +8,21 @@
 #include <map>
 #include <iterator> 
 
+#include "../header/Nondetlog.hpp"
+
 using namespace std; 
 
-template <typename T> 
+template <class T>
 class Container { 
 private:
-    T obj_container;
+    list<map<int, T>> containerLog_;    
 
 public:    
     Container();
-    void setTypeObj(T type);
-    //T getAllValueObj();
-    void printMyTest(); 
-    //unsigned scope;  
+    void appendContainerNondetLog(int step, T object_model_in);
+    string getNonDetLogTypeValue_(NonDetLog obj);
+    void showItemsFromContNonDetLog();
+    
 };
 
 #endif // __CONTAINER_H_INCLUDED__ 
