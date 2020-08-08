@@ -54,15 +54,9 @@ Out: N => [1 : {}, ... n : {}]
 ```json
 {
     "Container" : {        
-        "object_model"  : {
-            "in"    : "template <typename T> obj",
-            "out-k" : "for each obj k of type T in {nondetlog} we have a list<map<unsigned, T>>", 
-        },
-        "append_obj"    : void,
-        "sizefof_obj"   : {
-            "in" : void,
-            "out": unsigned
-        },
+        "object_model(template <typename T> obj)" : "for each obj k of type T in {nondetlog} we have a list<map<unsigned, T>>",         
+        "append_obj()"    : "void",
+        "sizefof_obj()"   : "unsigned"
     }
 }
 ```
@@ -71,34 +65,57 @@ Out: N => [1 : {}, ... n : {}]
 ```json
 {
     "NonDetLog" : {        
-        "line"          : unsigned,
-        "scope"         : unsigned,
-        "value"         : template <typename T>,
-        "function_name" : const char *
+        "line"          : "unsigned",
+        "scope"         : "unsigned",
+        "value"         : "boost::variant<int, unsigned, char, double, float> value",
+        "function_name" : "const char *"
     }
 }
 ```
 
-- AllocationLog Object:
+- AllocationLog Object (DOING):
 
 This object contains all methods that are used for the AllocationLog which is a structure that contains all memory operations.   
 
 ```json
 {
     "AllocationLog" : {        
-        "address"                   : long,
-        "size_to_destiny"           : int,  
-        "is_free"                   : bool,
-        "valid_allocation_log()"    : bool,
-        ""
-
+        "address"                   : "long",
+        "size_to_destiny"           : "int" ,  
+        "is_free"                   : "bool",
+        "valid_allocation_log()"    : "bool"
     }
 }
 ```
 
 
-How is the modeled the return from container?
-In the a assert function or the end of program analyzed a JSON string is returned with all data collected in the execution analysis.
+## How is the output from container execution?
+
+In the assert function or the end of program analyzed a JSON (specification RFC 8259) string is returned with all data collected in the execution analysis, as following:
+
+```json
+{
+  "Output": {
+    "Result": "string",
+    "Container_NonDetLog": [
+      {
+        "step"         : "01",
+        "line"         : "unsigned",
+        "scope"        : "unsigned",
+        "value"        : "typename T",
+        "function_name": "const char *"
+      }
+    ],
+    "Container_AllocationLog": [
+      {
+        "step"           : "01",
+        "address"        : "long",
+        "size_to_destiny": "int"
+      }
+    ]
+  }
+}
+```
 
 
 
