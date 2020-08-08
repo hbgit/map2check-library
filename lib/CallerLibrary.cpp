@@ -36,7 +36,7 @@ void add_item_map2check_nondet_log(
     map2check_nondet.value = value;
 
     // Add object in the container
-    container_nondetlog.appendContainerNondetLog(
+    container_nondetlog.append_container(
         execution_step, map2check_nondet
     );
     execution_step++;
@@ -44,5 +44,5 @@ void add_item_map2check_nondet_log(
 
 
 void showItemsFromContNonDetLog(){
-    container_nondetlog.showItemsFromContNonDetLog();
+    container_nondetlog.nonDetLog_show_items_from_log();
 }

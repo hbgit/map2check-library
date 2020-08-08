@@ -83,7 +83,7 @@ This object contains all methods that are used for the AllocationLog which is a 
         "address"                   : "long",
         "size_to_destiny"           : "int" ,  
         "is_free"                   : "bool",
-        "valid_allocation_log()"    : "bool"
+        "is_valid_allocation_log()"    : "bool"
     }
 }
 ```

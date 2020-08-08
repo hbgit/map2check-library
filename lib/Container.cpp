@@ -11,17 +11,16 @@ Container<T>::Container(){
 }
 
 template <class T>
-void Container<T>::appendContainerNondetLog(int step, T object_model_in){
+void Container<T>::append_container(int step, T object_model_in){
     
     map<int, T> item_to_container; 
     item_to_container.insert(pair<int, T>(step, object_model_in));
-
     containerLog_.push_back(item_to_container);
 
 }
 
 template <class T>
-string Container<T>::getNonDetLogTypeValue_(NonDetLog obj){
+string Container<T>::nonDetLog_get_type_value(NonDetLog obj){
     //cout << obj.value.which() << endl;
     string typeofvalue;
     if(obj.value.type() == typeid(int)){
@@ -45,7 +44,7 @@ string Container<T>::getNonDetLogTypeValue_(NonDetLog obj){
 
 
 template <class T>
-void Container<T>::showItemsFromContNonDetLog(){
+void Container<T>::nonDetLog_show_items_from_log(){
 
     cout << containerLog_.back().size() << endl;
 
@@ -56,8 +55,27 @@ void Container<T>::showItemsFromContNonDetLog(){
             cout << map_item.second.line << "\t" ;
             cout << map_item.second.scope << "\t" ;
             cout << map_item.second.value << "\t" ;
-            cout << this->getNonDetLogTypeValue_(map_item.second) << "\t" ;
+            cout << this->nonDetLog_get_type_value(map_item.second) << "\t" ;
             cout << map_item.second.functionName << "\t" << endl;
+        }
+
+    }
+
+}
+
+
+template <class T>
+void Container<T>::allocaLog_show_items_from_log(){
+
+    cout << containerLog_.back().size() << endl;
+
+    cout << "Step;\taddress;\tis_free;\tsize_to_destiny" << endl;
+    for(auto item : containerLog_){
+        for(auto map_item : item){
+            cout << map_item.first << "\t" ;
+            cout << map_item.second.address << "\t" ;
+            cout << map_item.second.is_free << "\t" ;
+            cout << map_item.second.size_to_destiny << endl;
         }
 
     }
