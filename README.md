@@ -53,44 +53,9 @@ Out: N => [1 : {}, ... n : {}]
 
 ```
 
+- NonDetLog Object
 
-- Container Object:
-```json
-{
-    "Container" : {        
-        "object_model(template <typename T> obj)" : "for each obj k of type T in {nondetlog} we have a list<map<unsigned, T>>",         
-        "append_obj()"    : "void",
-        "sizefof_obj()"   : "unsigned"
-    }
-}
-```
-
-- NonDetLog Object:
-```json
-{
-    "NonDetLog" : {        
-        "line"          : "unsigned",
-        "scope"         : "unsigned",
-        "value"         : "boost::variant<int, unsigned, char, double, float> value",
-        "function_name" : "const char *"
-    }
-}
-```
-
-- AllocationLog Object (DOING):
-
-This object contains all methods that are used for the AllocationLog which is a structure that contains all memory operations.   
-
-```json
-{
-    "AllocationLog" : {        
-        "address"                   : "long",
-        "size_to_destiny"           : "int" ,  
-        "is_free"                   : "bool",
-        "is_valid_allocation_log()"    : "bool"
-    }
-}
-```
+- AllocationLog Object (DOING): This object contains all methods that are used for the AllocationLog which is a structure that contains all memory operations.   
 
 
 ## How is the output from container execution?
@@ -100,7 +65,9 @@ In the assert function or the end of program analyzed a JSON (specification RFC 
 ```json
 {
   "Output": {
-    "Result": "string",
+    "Result"     : "string",
+    "LineNumber" : "unsigned",
+    "Property"   : ["TRUE", "FALSE", "UNKWNON"],
     "Container_NonDetLog": [
       {
         "step"         : "01",
