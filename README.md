@@ -38,7 +38,7 @@ NONDET_CALL new_nondet_call(
 In this new data model, we aims to create a model object for each data structure that need a storage, e.g., NonDetLog that has all data about nondet call functions. In this sense, we have a Container object that handle with the storage for each data structure using STL.
 
 <center>
-<img src="./imgs/class-diagram.png">
+<img src="./docs/imgs/class-diagram.png">
 </center>
 
 ```C++
