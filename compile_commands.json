@@ -1,0 +1,37 @@
+[
+{
+  "directory": "/mnt/9e4daa88-9e4f-4a65-85c9-dd4d195cbb1c/Documents/Projects/map2check-library/build/src",
+  "command": "/usr/bin/clang++-8   -I/mnt/9e4daa88-9e4f-4a65-85c9-dd4d195cbb1c/Documents/Projects/map2check-library/src/../include  -O3 -DNDEBUG   -std=gnu++11 -o CMakeFiles/map2check.dir/CallerLibrary.cpp.o -c /mnt/9e4daa88-9e4f-4a65-85c9-dd4d195cbb1c/Documents/Projects/map2check-library/src/CallerLibrary.cpp",
+  "file": "/mnt/9e4daa88-9e4f-4a65-85c9-dd4d195cbb1c/Documents/Projects/map2check-library/src/CallerLibrary.cpp"
+},
+{
+  "directory": "/mnt/9e4daa88-9e4f-4a65-85c9-dd4d195cbb1c/Documents/Projects/map2check-library/build/src",
+  "command": "/usr/bin/clang++-8   -I/mnt/9e4daa88-9e4f-4a65-85c9-dd4d195cbb1c/Documents/Projects/map2check-library/src/../include  -O3 -DNDEBUG   -std=gnu++11 -o CMakeFiles/map2check.dir/Container.cpp.o -c /mnt/9e4daa88-9e4f-4a65-85c9-dd4d195cbb1c/Documents/Projects/map2check-library/src/Container.cpp",
+  "file": "/mnt/9e4daa88-9e4f-4a65-85c9-dd4d195cbb1c/Documents/Projects/map2check-library/src/Container.cpp"
+},
+{
+  "directory": "/mnt/9e4daa88-9e4f-4a65-85c9-dd4d195cbb1c/Documents/Projects/map2check-library/build/googletest-build/googlemock",
+  "command": "/usr/bin/clang++-8   -isystem /mnt/9e4daa88-9e4f-4a65-85c9-dd4d195cbb1c/Documents/Projects/map2check-library/build/googletest-src/googlemock/include -isystem /mnt/9e4daa88-9e4f-4a65-85c9-dd4d195cbb1c/Documents/Projects/map2check-library/build/googletest-src/googlemock -isystem /mnt/9e4daa88-9e4f-4a65-85c9-dd4d195cbb1c/Documents/Projects/map2check-library/build/googletest-src/googletest/include -isystem /mnt/9e4daa88-9e4f-4a65-85c9-dd4d195cbb1c/Documents/Projects/map2check-library/build/googletest-src/googletest  -O3 -DNDEBUG   -Wall -Wshadow -Werror -Wconversion -DGTEST_HAS_PTHREAD=1 -fexceptions -W -Wpointer-arith -Wreturn-type -Wcast-qual -Wwrite-strings -Wswitch -Wunused-parameter -Wcast-align -Wchar-subscripts -Winline -Wredundant-decls -std=c++11 -o CMakeFiles/gmock_main.dir/src/gmock_main.cc.o -c /mnt/9e4daa88-9e4f-4a65-85c9-dd4d195cbb1c/Documents/Projects/map2check-library/build/googletest-src/googlemock/src/gmock_main.cc",
+  "file": "/mnt/9e4daa88-9e4f-4a65-85c9-dd4d195cbb1c/Documents/Projects/map2check-library/build/googletest-src/googlemock/src/gmock_main.cc"
+},
+{
+  "directory": "/mnt/9e4daa88-9e4f-4a65-85c9-dd4d195cbb1c/Documents/Projects/map2check-library/build/googletest-build/googlemock",
+  "command": "/usr/bin/clang++-8   -I/mnt/9e4daa88-9e4f-4a65-85c9-dd4d195cbb1c/Documents/Projects/map2check-library/build/googletest-src/googlemock/include -I/mnt/9e4daa88-9e4f-4a65-85c9-dd4d195cbb1c/Documents/Projects/map2check-library/build/googletest-src/googlemock -isystem /mnt/9e4daa88-9e4f-4a65-85c9-dd4d195cbb1c/Documents/Projects/map2check-library/build/googletest-src/googletest/include -isystem /mnt/9e4daa88-9e4f-4a65-85c9-dd4d195cbb1c/Documents/Projects/map2check-library/build/googletest-src/googletest  -O3 -DNDEBUG   -Wall -Wshadow -Werror -Wconversion -DGTEST_HAS_PTHREAD=1 -fexceptions -W -Wpointer-arith -Wreturn-type -Wcast-qual -Wwrite-strings -Wswitch -Wunused-parameter -Wcast-align -Wchar-subscripts -Winline -Wredundant-decls -std=c++11 -o CMakeFiles/gmock.dir/src/gmock-all.cc.o -c /mnt/9e4daa88-9e4f-4a65-85c9-dd4d195cbb1c/Documents/Projects/map2check-library/build/googletest-src/googlemock/src/gmock-all.cc",
+  "file": "/mnt/9e4daa88-9e4f-4a65-85c9-dd4d195cbb1c/Documents/Projects/map2check-library/build/googletest-src/googlemock/src/gmock-all.cc"
+},
+{
+  "directory": "/mnt/9e4daa88-9e4f-4a65-85c9-dd4d195cbb1c/Documents/Projects/map2check-library/build/googletest-build/googletest",
+  "command": "/usr/bin/clang++-8   -isystem /mnt/9e4daa88-9e4f-4a65-85c9-dd4d195cbb1c/Documents/Projects/map2check-library/build/googletest-src/googletest/include -isystem /mnt/9e4daa88-9e4f-4a65-85c9-dd4d195cbb1c/Documents/Projects/map2check-library/build/googletest-src/googletest  -O3 -DNDEBUG   -Wall -Wshadow -Werror -Wconversion -DGTEST_HAS_PTHREAD=1 -fexceptions -W -Wpointer-arith -Wreturn-type -Wcast-qual -Wwrite-strings -Wswitch -Wunused-parameter -Wcast-align -Wchar-subscripts -Winline -Wredundant-decls -std=c++11 -o CMakeFiles/gtest_main.dir/src/gtest_main.cc.o -c /mnt/9e4daa88-9e4f-4a65-85c9-dd4d195cbb1c/Documents/Projects/map2check-library/build/googletest-src/googletest/src/gtest_main.cc",
+  "file": "/mnt/9e4daa88-9e4f-4a65-85c9-dd4d195cbb1c/Documents/Projects/map2check-library/build/googletest-src/googletest/src/gtest_main.cc"
+},
+{
+  "directory": "/mnt/9e4daa88-9e4f-4a65-85c9-dd4d195cbb1c/Documents/Projects/map2check-library/build/googletest-build/googletest",
+  "command": "/usr/bin/clang++-8   -I/mnt/9e4daa88-9e4f-4a65-85c9-dd4d195cbb1c/Documents/Projects/map2check-library/build/googletest-src/googletest/include -I/mnt/9e4daa88-9e4f-4a65-85c9-dd4d195cbb1c/Documents/Projects/map2check-library/build/googletest-src/googletest  -O3 -DNDEBUG   -Wall -Wshadow -Werror -Wconversion -DGTEST_HAS_PTHREAD=1 -fexceptions -W -Wpointer-arith -Wreturn-type -Wcast-qual -Wwrite-strings -Wswitch -Wunused-parameter -Wcast-align -Wchar-subscripts -Winline -Wredundant-decls -std=c++11 -o CMakeFiles/gtest.dir/src/gtest-all.cc.o -c /mnt/9e4daa88-9e4f-4a65-85c9-dd4d195cbb1c/Documents/Projects/map2check-library/build/googletest-src/googletest/src/gtest-all.cc",
+  "file": "/mnt/9e4daa88-9e4f-4a65-85c9-dd4d195cbb1c/Documents/Projects/map2check-library/build/googletest-src/googletest/src/gtest-all.cc"
+},
+{
+  "directory": "/mnt/9e4daa88-9e4f-4a65-85c9-dd4d195cbb1c/Documents/Projects/map2check-library/build/test",
+  "command": "/usr/bin/clang++-8   -I/mnt/9e4daa88-9e4f-4a65-85c9-dd4d195cbb1c/Documents/Projects/map2check-library/test/header -isystem /mnt/9e4daa88-9e4f-4a65-85c9-dd4d195cbb1c/Documents/Projects/map2check-library/build/googletest-src/googletest/include -isystem /mnt/9e4daa88-9e4f-4a65-85c9-dd4d195cbb1c/Documents/Projects/map2check-library/build/googletest-src/googletest  -O3 -DNDEBUG   -std=gnu++11 -o CMakeFiles/unit_tests.dir/nondetlog_test.cpp.o -c /mnt/9e4daa88-9e4f-4a65-85c9-dd4d195cbb1c/Documents/Projects/map2check-library/test/nondetlog_test.cpp",
+  "file": "/mnt/9e4daa88-9e4f-4a65-85c9-dd4d195cbb1c/Documents/Projects/map2check-library/test/nondetlog_test.cpp"
+}
+]

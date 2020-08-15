@@ -20,5 +20,3 @@ ExternalProject_Add(
   INSTALL_COMMAND ""
   TEST_COMMAND ""
   )
-
-  message("OKAY 1")

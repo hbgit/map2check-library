@@ -1,8 +1,8 @@
 //#include "../header/CallerLibrary.hpp"
 
-#include "../header/Nondetlog.hpp"
-#include "../header/Container.hpp"
-#include "../lib/Container.cpp"
+#include "../include/Nondetlog.hpp"
+#include "../include/Container.hpp"
+#include "../src/Container.cpp"
 
 using namespace std;
 
@@ -30,10 +30,10 @@ void add_item_map2check_nondet_log(
     std::string str_functname(functionName);
     
     // Set data on NonDetLog object
-    map2check_nondet.functionName = str_functname;
-    map2check_nondet.line = line;
-    map2check_nondet.scope = scope;
-    map2check_nondet.value = value;
+    map2check_nondet.FunctionName = str_functname;
+    map2check_nondet.Line = line;
+    map2check_nondet.Scope = scope;
+    map2check_nondet.Value = value;
 
     // Add object in the container
     container_nondetlog.append_container(

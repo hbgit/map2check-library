@@ -1,5 +1,11 @@
 # mkdir build
-# cp build
+# cd build
+# --------------------
+# # Testing
+# cmake .. -DCMAKE_CXX_COMPILER=`which clang++-8` -DCMAKE_INSTALL_PREFIX=../release-library/ -DENABLE_TEST=ON
+# make
+# --------------------
+# # Releasing
 # cmake .. -DCMAKE_CXX_COMPILER=`which clang++-8` -DCMAKE_INSTALL_PREFIX=../release-library/
 # make
 # make install
@@ -12,7 +18,7 @@
 cmake_minimum_required(VERSION 3.5)
 project(LibMap2Check)
 set(CMAKE_BUILD_TYPE Release)
-option(ENABLE_TEST "Build all tests" ON)
+option(ENABLE_TEST "Build all tests" OFF)
 
 set(CMAKE_CXX_COMPILER "/usr/bin/clang++-8")
 set(CMAKE_CXX_STANDARD 11)

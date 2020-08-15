@@ -18,8 +18,8 @@
 #include <map>
 #include <iterator> 
 
-#include "../header/Nondetlog.hpp"
-#include "../header/AllocationLog.hpp"
+#include "../include/Nondetlog.hpp"
+#include "../include/AllocationLog.hpp"
 
 using namespace std; 
 

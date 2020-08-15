@@ -8,7 +8,7 @@
  * Abstract: This file has all structure to handle the container objects.
  **/
 
-#include "../header/Container.hpp"
+#include "../include/Container.hpp"
 #include <list> 
 #include <iterator> 
 
@@ -41,35 +41,6 @@ void Container<T>::append_container(int step, T object_model_in){
 
 
 /**
- * @brief  Identify the variable type from NonDetLog value
- * @param  object_model_in  NonDetLog object modeled to map2check
- * @return typeofvalue      Returns the variable type as string
- */
-template <class T>
-string Container<T>::nonDetLog_get_type_value(NonDetLog obj){
-    //cout << obj.value.which() << endl;
-    string typeofvalue;
-    if(obj.value.type() == typeid(int)){
-        typeofvalue = "int";
-    }
-    if(obj.value.type() == typeid(unsigned)){
-        typeofvalue = "unsigned";
-    }
-    if(obj.value.type() == typeid(char)){
-        typeofvalue = "char";
-    }
-    if(obj.value.type() == typeid(double)){
-        typeofvalue = "double";
-    }
-    if(obj.value.type() == typeid(float)){
-        typeofvalue = "float";
-    }
-    
-    return typeofvalue;
-}
-
-
-/**
  * @brief  Print in CSV format all data from the NonDetLog Container
  */
 template <class T>
@@ -81,11 +52,11 @@ void Container<T>::nonDetLog_show_items_from_log(){
     for(auto item : containerLog_){
         for(auto map_item : item){
             cout << map_item.first << "\t" ;
-            cout << map_item.second.line << "\t" ;
-            cout << map_item.second.scope << "\t" ;
-            cout << map_item.second.value << "\t" ;
+            cout << map_item.second.Line << "\t" ;
+            cout << map_item.second.Scope << "\t" ;
+            cout << map_item.second.Value << "\t" ;
             cout << this->nonDetLog_get_type_value(map_item.second) << "\t" ;
-            cout << map_item.second.functionName << "\t" << endl;
+            cout << map_item.second.FunctionName << "\t" << endl;
         }
     }
 }

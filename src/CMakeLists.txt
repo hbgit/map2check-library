@@ -7,6 +7,6 @@ file(GLOB SOURCES "*.cpp")
 add_library(map2check STATIC ${SOURCES})
 
 install(
-    FILES ${PROJECT_BINARY_DIR}/lib/libmap2check.a
+    FILES ${PROJECT_BINARY_DIR}/src/libmap2check.a
     DESTINATION lib
 )
