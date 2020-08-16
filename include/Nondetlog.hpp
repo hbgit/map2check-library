@@ -22,11 +22,11 @@ class NonDetLog {
 public:    
     unsigned Line;
     unsigned Scope;
-    boost::variant<int, unsigned, char, double, float> Value;
+    boost::variant<int, unsigned int, char, double, float> Value;
     string FunctionName;     
     
     NonDetLog();
-    string getTypeValue(boost::variant<int, unsigned, char, double, float> Value);
+    string getTypeValue(boost::variant<int, unsigned int, char, double, float> Value);
 };
 
 NonDetLog::NonDetLog(){}
@@ -36,7 +36,7 @@ NonDetLog::NonDetLog(){}
  * @param  object_model_in  NonDetLog object modeled to map2check
  * @return typeofvalue      Returns the variable type as string
  */
-string NonDetLog::getTypeValue(boost::variant<int, unsigned, char, double, float> Value){
+string NonDetLog::getTypeValue(boost::variant<int, unsigned int, char, double, float> Value){
     //cout << obj.value.which() << endl;
     string typeofvalue;
     if(Value.type() == typeid(int)){
