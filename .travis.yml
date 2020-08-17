@@ -1,0 +1,32 @@
+sudo: false
+
+language:
+  - cpp
+
+addons:
+  apt:
+    sources:
+      - ubuntu-toolchain-r-test
+
+before_install:
+  - pip install --user cpp-coveralls
+  - apt-get install -y build-essential cmake
+  - echo "deb http://apt.llvm.org/xenial/ llvm-toolchain-xenial-8 main" >> /etc/apt/sources.list
+  - echo "deb-src http://apt.llvm.org/xenial/ llvm-toolchain-xenial-8 main" >> /etc/apt/sources.list
+  - wget -O - https://apt.llvm.org/llvm-snapshot.gpg.key|apt-key add -
+  - apt update
+  - apt install -y llvm-8-dev clang-8 clang-tools-8
+  - apt-get install -y 
+
+script:
+  - mkdir build
+  - cd build
+  - cmake .. -DCMAKE_CXX_COMPILER=`which clang++-8` -DCMAKE_INSTALL_PREFIX=../release-library/ -DENABLE_TEST=ON -DENABLE_COVCODE=ON
+  - make
+  - ./test/unit_tests
+
+after_success:
+  - coveralls --root .. -E ".*external.*" -E ".*CMakeFiles.*" -E ".*test/.*.cpp.*"
+
+notifications:
+  email: false
