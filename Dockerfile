@@ -5,5 +5,7 @@ RUN apt update
 RUN apt install -y build-essential cmake 
 RUN apt install -y git
 RUN apt install -y libboost-all-dev
+RUN apt install -y doxygen
+RUN apt install -y graphviz
 
 WORKDIR /
