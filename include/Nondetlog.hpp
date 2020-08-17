@@ -16,8 +16,10 @@
 
 using namespace std; 
 
-//typename int::name;
-
+/**
+ * @brief Modelling the object to store the data from
+ * nondet function calls in the program analysis.
+ */
 class NonDetLog {
 public:    
     unsigned Line;
@@ -27,8 +29,5 @@ public:
     
     string getTypeValue(boost::variant<int, unsigned int, char, double, float> Value);
 };
-
-//NonDetLog::NonDetLog(){}
-
 
 #endif // __NONDETLOG_H_INCLUDED__ 

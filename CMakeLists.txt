@@ -15,7 +15,7 @@
 # cp compile_commands.json ..
 
 
-cmake_minimum_required(VERSION 3.5)
+cmake_minimum_required(VERSION 3.16)
 project(LibMap2Check)
 
 set(CMAKE_BUILD_TYPE Release)
@@ -53,6 +53,7 @@ if(ENABLE_TEST)
   # message("Adding tests")
   add_subdirectory(test) # code to functional/unit test lib
 endif()
+
 
 if(BUILD_DOC)
   message(">> Enabling build documentation ")
