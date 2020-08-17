@@ -6,8 +6,8 @@ services:
 
 before_install:
 - docker pull herberthb/llvm-docker-dev:v8
-- sudo apt install -y python-pip
-- pip install --user cpp-coveralls  
+- sudo apt install -y python3-pip
+- pip3 install --user cpp-coveralls  
 
 script:
 - docker run --rm -v $(pwd):/home/:Z --user $(id -u):$(id -g) herberthb/llvm-docker-dev:v8 /bin/bash -c "cd home/; mkdir build; cd build; cmake .. -DCMAKE_CXX_COMPILER=`which clang++-8` -DCMAKE_INSTALL_PREFIX=../release-library/ -DENABLE_TEST=ON -DENABLE_COVCODE=ON; make; ./test/unit_tests"
