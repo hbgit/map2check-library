@@ -3,23 +3,18 @@ dist: focal
 language:
   - cpp
 
+services:
+  - docker
+
 before_install:
-  - pip install --user cpp-coveralls
-  - sudo apt-get install -y build-essential cmake
-  - echo "deb http://apt.llvm.org/xenial/ llvm-toolchain-xenial-8 main" >> /etc/apt/sources.list
-  - echo "deb-src http://apt.llvm.org/xenial/ llvm-toolchain-xenial-8 main" >> /etc/apt/sources.list
-  - wget -O - https://apt.llvm.org/llvm-snapshot.gpg.key | sudo apt-key add -
-  - sudo apt update
-  - sudo apt-get install -y aptitude
-  - sudo aptitude install -y llvm-8-dev clang-8 clang-tools-8
-  
+  - docker pull herberthb/llvm-docker-dev:v8
+  - sudo apt install -y python-pip
+  - pip install --user cpp-coveralls  
 
 script:
-  - mkdir build
-  - cd build
-  - cmake .. -DCMAKE_CXX_COMPILER=`which clang++-8` -DCMAKE_INSTALL_PREFIX=../release-library/ -DENABLE_TEST=ON -DENABLE_COVCODE=ON
-  - make
-  - ./test/unit_tests
+  - docker run --rm -v $(pwd):/home/:Z --user $(id -u):$(id
+  -g) herberthb/llvm-docker-dev:v8 /bin/bash -c "cd home/; mkdir build; cd build; cmake .. -DCMAKE_CXX_COMPILER=`which clang++-8` -DCMAKE_INSTALL_PREFIX=../release-library/ -DENABLE_TEST=ON -DENABLE_COVCODE=ON;
+  make; ./test/unit_tests"
 
 after_success:
   - coveralls --root .. -E ".*external.*" -E ".*CMakeFiles.*" -E ".*test/.*.cpp.*"
