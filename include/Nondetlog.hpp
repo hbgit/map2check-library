@@ -25,37 +25,10 @@ public:
     boost::variant<int, unsigned int, char, double, float> Value;
     string FunctionName;     
     
-    NonDetLog();
     string getTypeValue(boost::variant<int, unsigned int, char, double, float> Value);
 };
 
-NonDetLog::NonDetLog(){}
+//NonDetLog::NonDetLog(){}
 
-/**
- * @brief  Identify the variable type from NonDetLog value
- * @param  object_model_in  NonDetLog object modeled to map2check
- * @return typeofvalue      Returns the variable type as string
- */
-string NonDetLog::getTypeValue(boost::variant<int, unsigned int, char, double, float> Value){
-    //cout << obj.value.which() << endl;
-    string typeofvalue;
-    if(Value.type() == typeid(int)){
-        typeofvalue = "int";
-    }
-    if(Value.type() == typeid(unsigned)){
-        typeofvalue = "unsigned";
-    }
-    if(Value.type() == typeid(char)){
-        typeofvalue = "char";
-    }
-    if(Value.type() == typeid(double)){
-        typeofvalue = "double";
-    }
-    if(Value.type() == typeid(float)){
-        typeofvalue = "float";
-    }
-    
-    return typeofvalue;
-}
 
 #endif // __NONDETLOG_H_INCLUDED__ 

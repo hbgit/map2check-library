@@ -8,64 +8,37 @@
  * Abstract: This file has all structure to handle the container objects.
  **/
 
-#include "../include/Container.hpp"
-#include <list> 
-#include <iterator> 
+#include "../include/ContainerLog.hpp"
+#include "../include/Nondetlog.hpp"
 
+#include <map>
+#include <iterator>
 #include <boost/variant.hpp>
-
-/**
- * @brief Create a Container object to save the data from model proposed
- * in this library. In this case, for each object k of type T in 
- * the set of models {} we have a list<map<unsigned, T>>, i.e., 
- * the private attribute containerLog_.
- */
-template <class T>
-Container<T>::Container(){}
 
 
 /**
  * @brief Append an object in its container 
- * @param  step             Step is a number of the current map2check functions called
- * @param  object_model_in  Object modeled to map2check
+ * @param  Step             Step is a number of the current map2check functions called
+ * @param  ObjModelIn       Object modeled to map2check
  * @return                  Returns is void
  */
-template <class T>
-void Container<T>::append_container(int step, T object_model_in){
+ // 
+template<typename T>
+map<long, T> ContainerLog::appendContainerLog(long Step, T ObjModelIn){
     
-    map<int, T> item_to_container; 
-    item_to_container.insert(pair<int, T>(step, object_model_in));
-    containerLog_.push_back(item_to_container);
+    map<long, T> ItemContainer; 
+    ItemContainer.insert(pair<long, T>(Step, ObjModelIn));
+    return ItemContainer;
+    //return 0;
 
 }
 
-
-/**
- * @brief  Print in CSV format all data from the NonDetLog Container
- */
-template <class T>
-void Container<T>::nonDetLog_show_items_from_log(){
-
-    cout << containerLog_.back().size() << endl;
-
-    cout << "Step;\tLine;\tScope;\tValue;\tType;\tFunction" << endl;
-    for(auto item : containerLog_){
-        for(auto map_item : item){
-            cout << map_item.first << "\t" ;
-            cout << map_item.second.Line << "\t" ;
-            cout << map_item.second.Scope << "\t" ;
-            cout << map_item.second.Value << "\t" ;
-            cout << this->nonDetLog_get_type_value(map_item.second) << "\t" ;
-            cout << map_item.second.FunctionName << "\t" << endl;
-        }
-    }
-}
+// Here is the explicit instanciation
+template map<long, NonDetLog> 
+ContainerLog::appendContainerLog<NonDetLog>(long, NonDetLog); 
 
 
-/**
- * @brief  Print in CSV format all data from the AllocaLog Container
- */
-template <class T>
+/*template <class T>
 void Container<T>::allocaLog_show_items_from_log(){
 
     cout << containerLog_.back().size() << endl;
@@ -79,4 +52,4 @@ void Container<T>::allocaLog_show_items_from_log(){
             cout << map_item.second.size_to_destiny << endl;
         }
     }
-}
+}*/

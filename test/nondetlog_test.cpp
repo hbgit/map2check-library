@@ -3,6 +3,7 @@
 #include "gtest/gtest.h"
 #include <boost/integer_fwd.hpp>
 #include <boost/variant/get.hpp>
+#include <boost/variant.hpp>
 #include <iostream>
 
 
