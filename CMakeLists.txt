@@ -2,7 +2,7 @@
 # cd build
 # --------------------
 # # Testing
-# cmake .. -DCMAKE_CXX_COMPILER=`which clang++-8` -DCMAKE_INSTALL_PREFIX=../release-library/ -DENABLE_TEST=ON -DENABLE_COVCODE=ON
+#
 # make
 # --------------------
 # # Releasing
