@@ -14,7 +14,7 @@ script:
 
 after_success:
 - ls -alh
-- coveralls --root .. -E ".*external.*" -E ".*CMakeFiles.*" -E ".*test/.*.cpp.*"
+- coveralls -E ".*external.*" -E ".*CMakeFiles.*" -E ".*test/.*.cpp.*" --exclude header_old --exclude lib_old --exclude docs --exclude build --exclude release-library
 
 notifications:
   email: false
