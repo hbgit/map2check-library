@@ -15,7 +15,6 @@ script:
 after_success:
 - ls -alh
 - bash <(curl -s https://codecov.io/bash) -f build/test/lcov.info || echo "Codecov did not collect coverage reports"
-- cat build/test/lcov.info | coveralls -E ".*external.*" -E ".*CMakeFiles.*" -E ".*test/.*.cpp.*" --exclude header_old --exclude lib_old --exclude docs --exclude build --exclude release-library
 
 notifications:
   email: false
