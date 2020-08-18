@@ -6,15 +6,6 @@ coverage:
         # basic
         target: 75%
         threshold: 5%
-        base: 0%
-        # advanced
-        branches: null
-        if_no_uploads: error
-        if_not_found: success
-        if_ci_failed: error
-        only_pulls: false
-        flags: null
-        paths: null
-
+        base: auto
 ignore:
   - "lib/json.hpp"
