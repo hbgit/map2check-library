@@ -30,6 +30,7 @@ build_debug()
     LLVM_PROFILE_FILE="map2check.profraw" ./unit_tests
     llvm-profdata-8 merge -sparse map2check.profraw -o map2check.profdata
     llvm-cov-8 report ./unit_tests -instr-profile=map2check.profdata
+    llvm-cov-8 export -format=lcov ./unit_tests -instr-profile=map2check.profdata > lcov.info
 }
 
 ##### Main
