@@ -15,10 +15,13 @@
 # cp compile_commands.json ..
 
 
+# cmake .. -DCMAKE_CXX_COMPILER=/usr/bin/clang++-8 -DCMAKE_INSTALL_PREFIX=../release-library/ -DENABLE_TEST=ON -DENABLE_COVCODE=ON -DBUILD_DOC=OFF -DCMAKE_CXX_FLAGS="-fprofile-instr-generate -fcoverage-mapping -g"
+# cmake --build . -- VERBOSE=1
+
 cmake_minimum_required(VERSION 3.5)
 project(LibMap2Check)
 
-set(CMAKE_BUILD_TYPE Release)
+#set(CMAKE_BUILD_TYPE Debug)
 
 option(ENABLE_TEST "Build all tests" OFF)
 option(ENABLE_COVCODE "Code coverage" OFF)
@@ -30,15 +33,8 @@ set(CMAKE_CXX_STANDARD 11)
 
 if(ENABLE_COVCODE) 
   message(">> Enabling coverage code ")
-  set(CXX_FLAGS "${CXX_FLAGS}  -fno-rtti -fprofile-instr-generate -fcoverage-mapping -g ")
-  set(LDFLAGS "${LDFLAGS} -fprofile-instr-generate")
-else()
-  # BUG: If we do not set this flag opt will not work with our pass
-  # even if it was the same build from llvm
-  set(CXX_FLAGS "${CXX_FLAGS}  -fno-rtti ")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fprofile-instr-generate -fcoverage-mapping")  
 endif()
-
-message(${CXX_FLAGS})
 
 # The following folder will be included
 #include_directories("${PROJECT_SOURCE_DIR}")
@@ -47,10 +43,13 @@ add_subdirectory(src)
 
 # Setting up to unit testing 
 if(ENABLE_TEST)
-  message(">> Enabling unit testing ")
-  enable_testing()
+  message(">> Enabling unit testing ")  
+  enable_testing()  
+  set(CMAKE_CXX_FLAGS " ")
+  set(CMAKE_BUILD_TYPE Release)  
   include(cmake/FindGTest.cmake)
-  # message("Adding tests")
+  #set(CMAKE_BUILD_TYPE Release)
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fprofile-instr-generate -fcoverage-mapping")
   add_subdirectory(test) # code to functional/unit test lib
 endif()
 
