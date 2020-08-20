@@ -24,10 +24,10 @@ class NonDetLog {
 public:    
     unsigned Line;
     unsigned Scope;
-    boost::variant<int, unsigned int, char, double, float> Value;
+    boost::variant<int, unsigned int, long, char, double, float> Value;
     string FunctionName;     
     
-    string getTypeValue(boost::variant<int, unsigned int, char, double, float> Value);
+    string getTypeValue(boost::variant<int, unsigned int, long, char, double, float> Value);
 };
 
 #endif // __NONDETLOG_H_INCLUDED__ 

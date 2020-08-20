@@ -22,8 +22,7 @@ using json = nlohmann::json;
 #include <boost/variant/get.hpp>
 
 
-template<typename T>
-string ContainerNonDetLog::printJsonObj(NonDetLog ObjModelIn, T TypeId){
+string ContainerNonDetLog::printJsonObj(NonDetLog ObjModelIn){
     json j;
 
     j["Line"] = ObjModelIn.Line;
@@ -34,7 +33,9 @@ string ContainerNonDetLog::printJsonObj(NonDetLog ObjModelIn, T TypeId){
     if(ObjModelIn.Value.type() == typeid(int)){
         j["Value"] = boost::get<int>(ObjModelIn.Value);  
     }else if(ObjModelIn.Value.type() == typeid(unsigned)){
-        j["Value"] = boost::get<unsigned>(ObjModelIn.Value);  
+        j["Value"] = boost::get<unsigned>(ObjModelIn.Value); 
+    }else if(ObjModelIn.Value.type() == typeid(long)){
+        j["Value"] = boost::get<long>(ObjModelIn.Value); 
     }else if(ObjModelIn.Value.type() == typeid(char)){
         j["Value"] = boost::get<char>(ObjModelIn.Value);  
     }else if(ObjModelIn.Value.type() == typeid(double)){
@@ -47,8 +48,8 @@ string ContainerNonDetLog::printJsonObj(NonDetLog ObjModelIn, T TypeId){
 }
 
 // Here is the explicit instanciation
-template string ContainerNonDetLog::printJsonObj(NonDetLog ObjModelIn, int TypeId); 
-template string ContainerNonDetLog::printJsonObj(NonDetLog ObjModelIn, unsigned TypeId); 
-template string ContainerNonDetLog::printJsonObj(NonDetLog ObjModelIn, char TypeId); 
-template string ContainerNonDetLog::printJsonObj(NonDetLog ObjModelIn, double TypeId); 
-template string ContainerNonDetLog::printJsonObj(NonDetLog ObjModelIn, float TypeId); 
+// template string ContainerNonDetLog::printJsonObj(NonDetLog ObjModelIn, int TypeId); 
+// template string ContainerNonDetLog::printJsonObj(NonDetLog ObjModelIn, unsigned TypeId); 
+// template string ContainerNonDetLog::printJsonObj(NonDetLog ObjModelIn, char TypeId); 
+// template string ContainerNonDetLog::printJsonObj(NonDetLog ObjModelIn, double TypeId); 
+// template string ContainerNonDetLog::printJsonObj(NonDetLog ObjModelIn, float TypeId); 

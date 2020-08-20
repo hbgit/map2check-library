@@ -31,9 +31,8 @@ TEST(ContainerNonDetLog, ContainerNonDetLog_int)
     auto l_front = CntrNondetlog.ContainerLog_.begin();
     advance(l_front, 0);
     EXPECT_EQ(l_front->at(1).Line, 12) << l_front->at(1).Line;
-    
-    int k;
-    string jsonStr = CntrNondetlog.printJsonObj(NonDet, k);
+      
+    string jsonStr = CntrNondetlog.printJsonObj(NonDet);
     cout << jsonStr << endl;
     EXPECT_TRUE(jsonStr != "");
 

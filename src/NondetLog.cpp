@@ -15,7 +15,7 @@
  * @brief  Identify the variable type from NonDetLog value
  * @return typeofvalue      Returns the variable type as string
  */
-string NonDetLog::getTypeValue(boost::variant<int, unsigned int, char, double, float> Value){
+string NonDetLog::getTypeValue(boost::variant<int, unsigned int, long, char, double, float> Value){
     //cout << obj.value.which() << endl;
     string typeofvalue;
     if(Value.type() == typeid(int)){
@@ -26,6 +26,9 @@ string NonDetLog::getTypeValue(boost::variant<int, unsigned int, char, double, f
     }
     if(Value.type() == typeid(char)){
         typeofvalue = "char";
+    }
+    if(Value.type() == typeid(long)){
+        typeofvalue = "long";
     }
     if(Value.type() == typeid(double)){
         typeofvalue = "double";

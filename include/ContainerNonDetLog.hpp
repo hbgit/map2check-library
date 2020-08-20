@@ -21,9 +21,8 @@
 
 class ContainerNonDetLog {   
     public:
-        list<map<long, NonDetLog>> ContainerLog_;
-        template<typename T>
-        string printJsonObj(NonDetLog ObjModelIn, T TypeId);
+        list<map<long, NonDetLog>> ContainerLog_;        
+        string printJsonObj(NonDetLog ObjModelIn);
 };
 
 
