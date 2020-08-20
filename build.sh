@@ -33,6 +33,12 @@ build_debug()
     llvm-cov-8 export -format=lcov ./unit_tests -instr-profile=map2check.profdata > lcov.info
 }
 
+build_simple()
+{
+    cmake .. -DCMAKE_INSTALL_PREFIX=../release-library/ -DENABLE_TEST=OFF -DENABLE_COVCODE=OFF -DBUILD_DOC=OFF
+    make
+}
+
 ##### Main
 
 type_builds=""
@@ -42,11 +48,9 @@ while [ "$1" != "" ]; do
         -r | --release )            shift
                                     type_builds="release"
                                 ;;
-        -d | --debug )              interactive=1
-                                    type_builds="debug"
+        -d | --debug )              type_builds="debug"
                                 ;;
-        -t | --travis )             interactive=1
-                                    type_builds="travis"
+        -s | --simple-build )       type_builds="simple"
                                 ;;
         -h | --help )               usage
                                     exit
@@ -60,10 +64,12 @@ done
 
 # Test code to verify command line processing
 if [ "$type_builds" = "debug" ]; then
-	echo "Debug build is on"
+	echo ">> Debug build is on"
     build_debug
 elif [ "$type_builds" = "debug" ]; then
-	echo "Release build is on"
-else
-    echo "Travis build is on"
+	echo ">> Release build is on"
+    build_release
+elif [ "$type_builds" = "simple" ]; then
+	echo ">> Simple build is on" 
+    build_simple   
 fi
