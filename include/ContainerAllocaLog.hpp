@@ -27,18 +27,25 @@ using namespace std;
 #include "../lib/json.hpp"
 using json = nlohmann::json;
 
+enum MemoryAddressStatus {
+  STATIC = 0,
+  FREE = 1,
+  DYNAMIC = 2
+  //  INVALID = 3
+};
+
 class ContainerAllocaLog {
     public:
         list<map<long, AllocaLog>> ContainerLog_;
         string printJsonObj(AllocaLog ObjModelIn);
         map<bool,long> allocaLogIsValid();
-        bool isValidAllocaAddress(long Address, int Size);
-        AllocaLog getDataFromLog(long Address);
-        bool hasAddressInLog(long Address);
+        bool isValidAllocaAddress(long Address, int Size);        
+        enum MemoryAddressStatus getAddressTypeInLog(long Address);
         void setDealallocInAddress(long Step, long Address);
         void setAllocInAddress(long Step, long Address);
 
         AllocaLog searchContainerAllocaLog(long Address);
+        AllocaLog getDataFromLog(long Address);
 };
 
 #endif // __CONTAINERALLOCLOG_H_INCLUDED__ 

@@ -85,6 +85,29 @@ void ContainerAllocaLog::setAllocInAddress(long Step, long Address){
     this->ContainerLog_.push_back(MapTmp);
 }
 
+
+/// @brief This replaced the old check_address_allocation_log function. 
+/// We iterate over all elements starting from back of allocation log
+/// in the ContainerLog to get the type of that Address.  
+/// @param Address Address to set up as alloca
+/// @return bool
+enum MemoryAddressStatus ContainerAllocaLog::getAddressTypeInLog(long Address){
+    // Search from bottom/reverse
+    list<map<long, AllocaLog>> :: reverse_iterator rit; 
+    
+    for(rit = this->ContainerLog_.rbegin(); 
+        rit != this->ContainerLog_.rend(); rit++){            
+            if(rit->begin()->second.Address == Address){
+               if(rit->begin()->second.IsFree == true){
+                   return FREE;
+                } 
+                return DYNAMIC;
+            }
+    }
+    return STATIC;
+}
+
+
 /// @brief This replaced the old valid_allocation_log function.
 /// It is to check if all address allocated
 /// were released at the end of the program, to check this, we iterate
@@ -97,6 +120,7 @@ void ContainerAllocaLog::setAllocInAddress(long Step, long Address){
 /// @return map<Error,Address>
 map<bool, long> ContainerAllocaLog::allocaLogIsValid(){
     long MemTrackAddressError = 0;
+    map<bool, long> MapTmp;
 
     // Search from bottom/reverse
     list<map<long, AllocaLog>> :: reverse_iterator rit; 
@@ -114,8 +138,7 @@ map<bool, long> ContainerAllocaLog::allocaLogIsValid(){
                     }
                 }
                 
-                if(ReleasedFound == false){
-                    map<bool, long> MapTmp;
+                if(ReleasedFound == false){                    
                     MapTmp.insert(
                         pair<bool, long>(
                             true, MemTrackAddressError
@@ -125,4 +148,41 @@ map<bool, long> ContainerAllocaLog::allocaLogIsValid(){
                 }
             }
     }
+    MapTmp.insert(
+        pair<bool, long>(
+            false, 0
+        )
+    );
+    return MapTmp;
+}
+
+
+/// @brief This replaced the old is_valid_allocation_address function.
+/// Checking if a given Address is valid in the Alloca Address
+/// We iterate over all elements of the allocation log,
+/// beggining from back, if the address that we are looking for is in the range of
+/// the element address memory space and the element is not free, then it's TRUE
+/// otherwise FALSE and we set last_address to the address of last memory address
+/// of the current heap space i.e. a int on space 0x10 on a 32bit would set the
+/// var to 0x13 (if the int has 4 bytes)
+/// @param Address Address to set up as alloca
+/// @param Step Current step of the program analysis
+/// @return bool if is valid or not
+bool ContainerAllocaLog::isValidAllocaAddress(long Address, int Size){
+    // Search from bottom/reverse
+    list<map<long, AllocaLog>> :: reverse_iterator rit; 
+    
+    for(rit = this->ContainerLog_.rbegin(); 
+        rit != this->ContainerLog_.rend(); rit++){              
+            long RangeAddress = rit->begin()->second.Address + 
+                                (rit->begin()->second.SizeToDestiny - Size) + 1;
+            if(rit->begin()->second.Address <= Address &&
+                Address < RangeAddress){
+               if(rit->begin()->second.IsFree){
+                    return false;
+                }
+                return true; 
+            }
+    }
+    return false;
 }
