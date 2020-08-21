@@ -7,6 +7,7 @@ add_executable(
   nondetlog_test.cpp
   containerNonDetLog_test.cpp
   allocalog_test.cpp
+  containerAllocaLog_test.cpp
 )
 
 target_link_libraries(

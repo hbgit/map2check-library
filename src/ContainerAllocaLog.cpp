@@ -19,6 +19,7 @@
 #include "../lib/json.hpp"
 using json = nlohmann::json;
 
+#include <iostream>
 
 /// @brief Print an given AllocaLog object in Json format.  
 /// @param ObjModelIn AllocaLog object
@@ -61,7 +62,7 @@ void ContainerAllocaLog::setDealallocInAddress(long Step, long Address){
     map<long, AllocaLog> MapTmp;
     MapTmp.insert(
         pair<long, AllocaLog>(
-            Step++, AllocaTmp
+            ++Step, AllocaTmp
         )
     );
     this->ContainerLog_.push_back(MapTmp);
@@ -79,7 +80,7 @@ void ContainerAllocaLog::setAllocInAddress(long Step, long Address){
     map<long, AllocaLog> MapTmp;
     MapTmp.insert(
         pair<long, AllocaLog>(
-            Step++, AllocaTmp
+            ++Step, AllocaTmp
         )
     );
     this->ContainerLog_.push_back(MapTmp);
@@ -141,7 +142,7 @@ map<bool, long> ContainerAllocaLog::allocaLogIsValid(){
                 if(ReleasedFound == false){                    
                     MapTmp.insert(
                         pair<bool, long>(
-                            true, MemTrackAddressError
+                            false, MemTrackAddressError
                         )
                     );
                     return MapTmp;
@@ -150,7 +151,7 @@ map<bool, long> ContainerAllocaLog::allocaLogIsValid(){
     }
     MapTmp.insert(
         pair<bool, long>(
-            false, 0
+            true, 0
         )
     );
     return MapTmp;
