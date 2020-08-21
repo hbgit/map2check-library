@@ -8,6 +8,7 @@ add_executable(
   containerNonDetLog_test.cpp
   allocalog_test.cpp
   containerAllocaLog_test.cpp
+  containerTrackBbLog_test.cpp
 )
 
 target_link_libraries(
