@@ -9,6 +9,7 @@ add_executable(
   allocalog_test.cpp
   containerAllocaLog_test.cpp
   containerTrackBbLog_test.cpp
+  containerHeapLog_test.cpp
 )
 
 target_link_libraries(

@@ -108,7 +108,7 @@ TEST(ContainerNonDetLog, ContainerNonDetLog_unsigned)
     NonDetLog NonDet;
     NonDet.Line = 12;
     NonDet.Scope = 0;
-    NonDet.Value = boost::static_min_max_unsigned_type();
+    NonDet.Value = UINT_MAX;
     string type = NonDet.getTypeValue(NonDet.Value);
     NonDet.FunctionName = "test";
     EXPECT_STREQ(type.c_str(), "unsigned");
