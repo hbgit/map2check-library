@@ -147,7 +147,7 @@ bool ContainerMemoryTrackLog::isInvalidFree(long MemoryAddress){
 /// Getting a given MemoryTrackLOg object.
 /// @param ObjectMemory to be analyzed
 /// @return MemoryAddressStatus
-enum MemoryAddressStatus getMemoryAddressStatus(MemoryTrackLog ObjectMemory){
+enum MemoryAddressStatus ContainerMemoryTrackLog::getMemoryAddressStatus(MemoryTrackLog ObjectMemory){
     if(ObjectMemory.IsFree && !ObjectMemory.IsDynamic){
         return FREE;
     }else if(ObjectMemory.IsDynamic){
