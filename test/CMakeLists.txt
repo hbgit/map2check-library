@@ -10,7 +10,7 @@ add_executable(
   containerAllocaLog_test.cpp
   containerTrackBbLog_test.cpp
   containerHeapLog_test.cpp
-  containerMemoryTrackLog_test.cpp
+  containerMemoryTrackLog_test.cpp  
 )
 
 target_link_libraries(

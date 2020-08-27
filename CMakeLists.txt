@@ -31,6 +31,8 @@ option(BUILD_DOC "Build Documentation" OFF)
 set(CMAKE_CXX_COMPILER "/usr/bin/clang++-8")
 set(CMAKE_CXX_STANDARD 11)
 
+# libfuzzer -fsanitize=address,fuzzer -g
+
 if(ENABLE_COVCODE) 
   message(">> Enabling coverage code ")
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fprofile-instr-generate -fcoverage-mapping")  
