@@ -26,12 +26,18 @@ build_debug()
 {
     cmake .. -DCMAKE_CXX_COMPILER=/usr/bin/clang++-8 -DCMAKE_INSTALL_PREFIX=../release-library/ -DENABLE_TEST=ON -DENABLE_COVCODE=ON -DBUILD_DOC=OFF
     cmake --build . -- VERBOSE=1
-    clang++-8 ../test/codetestfuzz.cpp -fsanitize=address,fuzzer -g -fprofile-instr-generate -fcoverage-mapping src/libmap2check.a
-    exit 0
-    LLVM_PROFILE_FILE="codefuzz.profraw" ./a.out
+    clang++-8 ../test/codetestfuzz.cpp -fsanitize=address,fuzzer -g -fprofile-instr-generate -fcoverage-mapping src/libmap2check.a    
+    ./a.out 2> out.fuzz 
+    cat out.fuzz | grep -c "a.out: ../test/codetestfuzz.cpp:50"
+    if [ $? -eq 0 ]; 
+    then
+        echo ">>> LibFuzzer OKAY"
+    else
+        echo ">>> LibFuzzer ERROR"
+    fi
     cd test
     LLVM_PROFILE_FILE="map2check.profraw" ./unit_tests
-    llvm-profdata-8 merge -sparse ../codefuzz.profraw map2check.profraw -o map2check.profdata
+    llvm-profdata-8 merge -sparse map2check.profraw -o map2check.profdata
     llvm-cov-8 report ./unit_tests -instr-profile=map2check.profdata
     llvm-cov-8 export -format=lcov ./unit_tests -instr-profile=map2check.profdata > lcov.info
 }
