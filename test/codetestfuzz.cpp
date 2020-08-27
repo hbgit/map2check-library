@@ -11,7 +11,7 @@
 using namespace std;
 
 int __map2check_main__() {
-  unsigned long vint64 = libFuzzerNonDetInt64_t();
+  //unsigned long vint64 = libFuzzerNonDetInt64_t();
   // char *vstr = libFuzzerNonDetPChar();
   // bool vbool = libFuzzerNonDetBool();
   // short vshrt = libFuzzerNonDetShort();
@@ -22,6 +22,8 @@ int __map2check_main__() {
   // long vlong = libFuzzerNonDetLong();
   // char vchar = libFuzzerNonDetChar();
   // int32_t vi32 = libFuzzerNonDetInt32_t();
+
+  unsigned int vuint = libFuzzerNonDetUint();
 
   // FULL test time: more than 40min
   /*if (vdouble > 1.45 && vfloat > 1.0145f && vint64 == INT64_MAX &&
@@ -43,9 +45,9 @@ int __map2check_main__() {
     assert(0);
   }*/
 
-  if (vint64 == INT64_MAX) {
+  if (vuint == UINT_MAX) {
 
-    cout << "Value vint64: " << vint64 << endl;
+    cout << "Value vint64: " << vuint << endl;
 
     assert(0);
   }

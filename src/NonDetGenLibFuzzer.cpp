@@ -42,7 +42,7 @@ extern int __map2check_main__();
 /// @brief Modelling an assume function to be adopted by LibFuzzer
 /// @param int an expression to be analyzed
 /// @return void
-void nondetAssume(int Expr) {
+void nondetAssume(int Expr) {  
   if (!Expr) {
     // pthread_exit(NULL);
   }
@@ -54,10 +54,10 @@ void nondetAssume(int Expr) {
 ///        has its main function in the libfuzzer
 /// @param args as input to libfuzzer or analyzed program
 /// @return void
-void *fuzzerExecutionFunction(void *args) {
-  __map2check_main__();
-  return NULL;
-}
+// void *fuzzerExecutionFunction(void *args) {
+//  __map2check_main__();
+//  return NULL;
+// }
 
 int numberOfPosInData = 25;
 
@@ -177,7 +177,7 @@ unsigned libFuzzerNonDetUnsigned() {
   // 4 bytes * 8 = 32/8 = 4 slots from data
 
   unsigned result = 0;
-  // cout << sizeof(unsigned);
+  //cout << sizeof(unsigned int);
 
   if (Map2checkFuzzerSize == MaxNumSlotData) {
 
@@ -325,7 +325,53 @@ unsigned long libFuzzerNonDetULong() {
   return 0;
 }
 
+
 // 46..49
+unsigned int libFuzzerNonDetUint(){
+  // 4 bytes * 8 = 32  /8 = 4 slots from data
+  //cout << sizeof(unsigned int);
+  unsigned int result = 0;
+  // cout << sizeof(unsigned long);
+
+  if (Map2checkFuzzerSize == MaxNumSlotData) {
+
+    for (size_t cnt = 46; cnt < 50; cnt++) {
+      result = result << 8;
+      // uint8_t is indeed an alias of unsigned char
+      result = result | (unsigned int)(Map2checkFuzzerData[cnt]);
+    }
+
+    // cout << ":::::" << result << endl;
+    return result;
+  }
+
+  return 0;
+
+}
+
+//50..51
+unsigned short libFuzzerNonDetUshort(){
+  // 2 bytes * 8 = 16  /8 = 2 slots from data
+  cout << sizeof(unsigned short);
+  unsigned short result = 0;
+  // cout << sizeof(unsigned long);
+
+  if (Map2checkFuzzerSize == MaxNumSlotData) {
+
+    for (size_t cnt = 50; cnt < 52; cnt++) {
+      result = result << 8;
+      // uint8_t is indeed an alias of unsigned char
+      result = result | (unsigned short)(Map2checkFuzzerData[cnt]);
+    }
+
+    // cout << ":::::" << result << endl;
+    return result;
+  }
+
+  return 0;
+}
+
+// 52..55
 float libFuzzerNonDetFloat() {
   // each value from const uint8_t has 8 bits
   // 1 byte = 8 bits
@@ -341,10 +387,10 @@ float libFuzzerNonDetFloat() {
 
   if (Map2checkFuzzerSize == MaxNumSlotData) {
 
-    fp.byte[0] = (int)Map2checkFuzzerData[46];
-    fp.byte[1] = (int)Map2checkFuzzerData[47];
-    fp.byte[2] = (int)Map2checkFuzzerData[48];
-    fp.byte[3] = (int)Map2checkFuzzerData[49];
+    fp.byte[0] = (int)Map2checkFuzzerData[52];
+    fp.byte[1] = (int)Map2checkFuzzerData[53];
+    fp.byte[2] = (int)Map2checkFuzzerData[54];
+    fp.byte[3] = (int)Map2checkFuzzerData[55];
 
     // cout << ":::::" << fp.real << endl;
     // cout << ":::::" << (float)*Map2checkFuzzerData << endl;
@@ -357,7 +403,7 @@ float libFuzzerNonDetFloat() {
   return 0.0f;
 }
 
-// 50..57
+// 56..63
 double libFuzzerNonDetDouble() {
   // each value from const uint8_t has 8 bits
   // 1 byte = 8 bits
@@ -374,14 +420,14 @@ double libFuzzerNonDetDouble() {
 
   if (Map2checkFuzzerSize == MaxNumSlotData) {
 
-    dp.byte[0] = (int)Map2checkFuzzerData[50];
-    dp.byte[1] = (int)Map2checkFuzzerData[51];
-    dp.byte[2] = (int)Map2checkFuzzerData[52];
-    dp.byte[3] = (int)Map2checkFuzzerData[53];
-    dp.byte[4] = (int)Map2checkFuzzerData[54];
-    dp.byte[5] = (int)Map2checkFuzzerData[55];
-    dp.byte[6] = (int)Map2checkFuzzerData[56];
-    dp.byte[7] = (int)Map2checkFuzzerData[57];
+    dp.byte[0] = (int)Map2checkFuzzerData[56];
+    dp.byte[1] = (int)Map2checkFuzzerData[57];
+    dp.byte[2] = (int)Map2checkFuzzerData[58];
+    dp.byte[3] = (int)Map2checkFuzzerData[59];
+    dp.byte[4] = (int)Map2checkFuzzerData[60];
+    dp.byte[5] = (int)Map2checkFuzzerData[61];
+    dp.byte[6] = (int)Map2checkFuzzerData[62];
+    dp.byte[7] = (int)Map2checkFuzzerData[63];
     return dp.real;
   }
 

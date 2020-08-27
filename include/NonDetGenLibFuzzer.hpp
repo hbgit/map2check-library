@@ -35,23 +35,26 @@ union DoublePattern
    double real;
 };
 
-
-
 extern "C" int LLVMFuzzerTestOneInput(const uint8_t *Data, size_t Size);
 
 void nondetAssume(int Expr);
-void * fuzzerExecutionFunction(void *args);
 
-int64_t libFuzzerNonDetInt64_t();
-int32_t libFuzzerNonDetInt32_t();
-char libFuzzerNonDetChar();
-float libFuzzerNonDetFloat();
-long libFuzzerNonDetLong();
-unsigned libFuzzerNonDetUnsigned();
-double libFuzzerNonDetDouble();
-short libFuzzerNonDetShort();
 bool libFuzzerNonDetBool();
+char libFuzzerNonDetChar();
+short libFuzzerNonDetShort();
+unsigned libFuzzerNonDetUnsigned();
+int32_t libFuzzerNonDetInt32_t();
 char * libFuzzerNonDetPChar();
+long libFuzzerNonDetLong();
+int64_t libFuzzerNonDetInt64_t();
 unsigned long libFuzzerNonDetULong();
+unsigned int libFuzzerNonDetUint();
+unsigned short libFuzzerNonDetUshort();
+float libFuzzerNonDetFloat();
+double libFuzzerNonDetDouble();
+
+
+
+
 
 #endif // __NONDETGENLIBFUZZER_H_INCLUDED__ 

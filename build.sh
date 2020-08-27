@@ -28,12 +28,13 @@ build_debug()
     cmake --build . -- VERBOSE=1
     clang++-8 ../test/codetestfuzz.cpp -fsanitize=address,fuzzer -g -fprofile-instr-generate -fcoverage-mapping src/libmap2check.a    
     ./a.out 2> out.fuzz 
-    cat out.fuzz | grep -c "a.out: ../test/codetestfuzz.cpp:50"
+    cat out.fuzz | grep -c "a.out: ../test/codetestfuzz.cpp:52"
     if [ $? -eq 0 ]; 
     then
         echo ">>> LibFuzzer OKAY"
     else
         echo ">>> LibFuzzer ERROR"
+        exit 1
     fi
     cd test
     LLVM_PROFILE_FILE="map2check.profraw" ./unit_tests
