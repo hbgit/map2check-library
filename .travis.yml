@@ -11,10 +11,11 @@ before_install:
 - pip3 install --user cpp-coveralls  
 
 script:
-- docker run --rm -v $(pwd):/home/:Z --user $(id -u):$(id -g) hbgit/map2checklibrary /bin/bash -c "cd home/; ./build.sh -d"
+- docker run --rm -v $(pwd):/home/:Z --user $(id -u):$(id -g) hbgit/map2checklibrary /bin/bash -c "cd home/; ./build.sh -d -t"
 
 after_success:
 - ls -alh
+- ./run_klee_test.sh
 - bash <(curl -s https://codecov.io/bash) -f build/test/lcov.info || echo "Codecov did not collect coverage reports"
 
 notifications:
