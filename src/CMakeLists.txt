@@ -15,6 +15,8 @@ list(APPEND MAP2CHECK_C_LIB "ContainerTrackBbLog")
 list(APPEND MAP2CHECK_C_LIB "NonDetGenKlee")
 list(APPEND MAP2CHECK_C_LIB "NonDetGenLibFuzzer")
 list(APPEND MAP2CHECK_C_LIB "NondetLog")
+list(APPEND MAP2CHECK_C_LIB "AnalysisModeAssert")
+
 
 # Generating lib as bc to LLVM
 foreach(F ${MAP2CHECK_C_LIB})
