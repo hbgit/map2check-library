@@ -15,7 +15,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "../include/ContainerAllocaLog.hpp"
-#include "AllocaLog.hpp"
+#include "../include/AllocaLog.hpp"
 #include "../lib/json.hpp"
 using json = nlohmann::json;
 

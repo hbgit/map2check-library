@@ -15,7 +15,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "../include/ContainerMemoryTrackLog.hpp"
-#include "MemoryTrackLog.hpp"
+#include "../include/MemoryTrackLog.hpp"
 #include "../lib/json.hpp"
 #include <algorithm>
 using json = nlohmann::json;

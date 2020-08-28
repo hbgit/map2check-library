@@ -19,6 +19,9 @@
 
 #include "Nondetlog.hpp"
 
+#include <list>
+#include <map>
+
 class ContainerNonDetLog {   
     public:
         list<map<long, NonDetLog>> ContainerLog_;        

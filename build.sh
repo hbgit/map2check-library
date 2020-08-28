@@ -25,7 +25,20 @@ build_release()
 build_debug()
 {
     cmake .. -DCMAKE_CXX_COMPILER=/usr/bin/clang++-8 -DCMAKE_INSTALL_PREFIX=../release-library/ -DENABLE_TEST=ON -DENABLE_COVCODE=ON -DBUILD_DOC=OFF
-    cmake --build . -- VERBOSE=1
+    cmake --build . -- VERBOSE=1    
+    #klee
+    clang++-8 -c -emit-llvm -O0 -Xclang -disable-O0-optnone ../test/codetest_klee.cpp
+    llvm-link-8 codetest_klee.bc src/NonDetGenKlee.bc > fullprogram.bc
+    docker run --rm -v $(pwd):/home/src:Z klee/klee /bin/bash -c "cd klee_build; klee --libcxx -exit-on-error-type=Abort /home/src/fullprogram.bc"
+    docker run --rm -v $(pwd):/home/src:Z klee/klee /bin/bash -c "cd klee_build; ktest-tool /home/src/klee-out-0/test000001.ktest | grep -c \"object 0: name:\" "
+    if [ $? -eq 0 ]; 
+    then
+        echo ">>> KLEE OKAY"
+    else
+        echo ">>> KLEE ERROR"
+        exit 1
+    fi
+    #libfuzzer
     clang++-8 ../test/codetestfuzz.cpp -fsanitize=address,fuzzer -g -fprofile-instr-generate -fcoverage-mapping src/libmap2check.a    
     ./a.out 2> out.fuzz 
     cat out.fuzz | grep -c "a.out: ../test/codetestfuzz.cpp:52"
@@ -36,6 +49,7 @@ build_debug()
         echo ">>> LibFuzzer ERROR"
         exit 1
     fi
+    # Unit Testing
     cd test
     LLVM_PROFILE_FILE="map2check.profraw" ./unit_tests
     llvm-profdata-8 merge -sparse map2check.profraw -o map2check.profdata

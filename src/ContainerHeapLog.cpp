@@ -15,7 +15,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "../include/ContainerHeapLog.hpp"
-#include "HeapLog.hpp"
+#include "../include/HeapLog.hpp"
 
 #include "../lib/json.hpp"
 #include <memory>
