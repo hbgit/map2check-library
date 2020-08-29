@@ -124,7 +124,7 @@ bool AnalysisModeOverflow::checkOverBinopDivInt() {
 // This compliant solution uses a popcount() function, which counts the number
 // of bits set on any unsigned integer, allowing this code to determine the
 // precision of any integer type, signed or unsigned.
-size_t popcount(uintmax_t num) {
+size_t AnalysisModeOverflow::popcount(uintmax_t num) {
   size_t precision = 0;
   while (num != 0) {
     if (num % 2 == 1) {
@@ -140,11 +140,13 @@ size_t popcount(uintmax_t num) {
 
 #define PRECISION(umax_value) popcount(umax_value)
 bool AnalysisModeOverflow::checkOverBinopShlInt() {
-  signed long si_a = boost::get<int>(this->ValueParam1);
-  signed long si_b = boost::get<int>(this->ValueParam2);
-  if ((si_a < 0) || (si_b < 0) || (si_b >= PRECISION(ULONG_MAX)) ||
-      (si_a > (LONG_MAX >> si_b))) {
+  signed int si_a = boost::get<int>(this->ValueParam1);
+  signed int si_b = boost::get<int>(this->ValueParam2);
+  if ((si_a < 0) || (si_b < 0) || (si_b >= PRECISION(UINT_MAX)) ||
+      (si_a > (INT_MAX >> si_b))) {
     /* Handle error */
+    return true;
+  }else if( (si_a << si_b) > INT_MAX){
     return true;
   }
   return false;
@@ -172,11 +174,16 @@ bool AnalysisModeOverflow::checkOverBinopNegInt() {
 
 /// based on Cordeiro SMT-Based Bounded Model Checking for Embedded ANSI-C Software
 /// l_unsigned_overflow <-> (r − (r mod 2^w )) < 2^w
+using namespace std;
+#include <iostream>
 bool AnalysisModeOverflow::checkOverBinopAddUint(){
     unsigned u_a = boost::get<unsigned>(this->ValueParam1);
     unsigned u_b = boost::get<unsigned>(this->ValueParam2);
+        
     unsigned l_unsigned_overflow = ( (u_a+u_b) - ((u_a+u_b) % UINT_MAX));
-    if( l_unsigned_overflow < UINT_MAX){
+    //cout << l_unsigned_overflow << endl;
+    
+    if( l_unsigned_overflow > UINT_MAX){
         return true;
     }
 
@@ -196,7 +203,7 @@ bool AnalysisModeOverflow::checkOverBinopSubUint(){
     unsigned u_a = boost::get<unsigned>(this->ValueParam1);
     unsigned u_b = boost::get<unsigned>(this->ValueParam2);
     unsigned l_unsigned_overflow = ( (u_a-u_b) - ((u_a-u_b) % UINT_MAX));
-    if( l_unsigned_overflow < UINT_MAX){
+    if( l_unsigned_overflow > UINT_MAX){
         return true;
     }
 
@@ -217,7 +224,7 @@ bool AnalysisModeOverflow::checkOverBinopMulUint(){
     unsigned u_a = boost::get<unsigned>(this->ValueParam1);
     unsigned u_b = boost::get<unsigned>(this->ValueParam2);
     unsigned l_unsigned_overflow = ( (u_a*u_b) - ((u_a*u_b) % UINT_MAX));
-    if( l_unsigned_overflow < UINT_MAX){
+    if( l_unsigned_overflow > UINT_MAX){
         return true;
     }
 
@@ -229,7 +236,7 @@ bool AnalysisModeOverflow::checkOverBinopDivUint(){
     unsigned u_a = boost::get<unsigned>(this->ValueParam1);
     unsigned u_b = boost::get<unsigned>(this->ValueParam2);
     unsigned l_unsigned_overflow = ( (u_a/u_b) - ((u_a/u_b) % UINT_MAX));
-    if( l_unsigned_overflow < UINT_MAX){
+    if( l_unsigned_overflow > UINT_MAX){
         return true;
     }
 
@@ -241,7 +248,7 @@ bool AnalysisModeOverflow::checkOverBinopShlUint(){
     unsigned u_a = boost::get<unsigned>(this->ValueParam1);
     unsigned u_b = boost::get<unsigned>(this->ValueParam2);
     unsigned l_unsigned_overflow = ( (u_a << u_b) - ((u_a << u_b) % UINT_MAX));
-    if( l_unsigned_overflow < UINT_MAX){
+    if( l_unsigned_overflow > UINT_MAX){
         return true;
     }
 

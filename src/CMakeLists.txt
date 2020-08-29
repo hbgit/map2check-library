@@ -16,6 +16,7 @@ list(APPEND MAP2CHECK_C_LIB "NonDetGenKlee")
 list(APPEND MAP2CHECK_C_LIB "NonDetGenLibFuzzer")
 list(APPEND MAP2CHECK_C_LIB "NondetLog")
 list(APPEND MAP2CHECK_C_LIB "AnalysisModeAssert")
+list(APPEND MAP2CHECK_C_LIB "AnalysisModeOverflow")
 
 
 # Generating lib as bc to LLVM

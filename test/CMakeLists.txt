@@ -12,6 +12,7 @@ add_executable(
   containerHeapLog_test.cpp
   containerMemoryTrackLog_test.cpp  
   AnalysisModeAssert_test.cpp
+  AnalysisModeOverflow_test.cpp
 )
 
 target_link_libraries(
