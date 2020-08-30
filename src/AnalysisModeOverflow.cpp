@@ -21,6 +21,7 @@
 #include <boost/variant/get.hpp>
 #include <boost/variant/variant.hpp>
 #include <climits>
+#include <cstdio>
 #include <limits>
 
 /// @brief SIGNED CHECK over Add operation:
@@ -152,6 +153,20 @@ bool AnalysisModeOverflow::checkOverBinopShlInt() {
   return false;
 }
 
+
+bool AnalysisModeOverflow::checkOverBinopShRInt() {
+  signed int si_a = boost::get<int>(this->ValueParam1);
+  signed int si_b = boost::get<int>(this->ValueParam2);
+
+  if (si_b >= PRECISION(UINT_MAX)) {
+    /* Handle error */
+    return true;
+  }else if( (si_a << si_b) > INT_MAX){
+    return true;
+  }
+  return false;
+}
+
 /// based on
 /// https://wiki.sei.cmu.edu/confluence/display/c/INT32-C.+Ensure+that+operations+on+signed+integers+do+not+result+in+overflow
 /// The unary negation operator takes an operand of arithmetic type. Overflow
@@ -180,10 +195,10 @@ bool AnalysisModeOverflow::checkOverBinopAddUint(){
     unsigned u_a = boost::get<unsigned>(this->ValueParam1);
     unsigned u_b = boost::get<unsigned>(this->ValueParam2);
         
-    unsigned l_unsigned_overflow = ( (u_a+u_b) - ((u_a+u_b) % UINT_MAX));
+    
     //cout << l_unsigned_overflow << endl;
     
-    if( l_unsigned_overflow > UINT_MAX){
+    if( ((u_a+u_b) - ((u_a+u_b) % UINT_MAX)) > UINT_MAX){
         return true;
     }
 
@@ -202,8 +217,8 @@ bool AnalysisModeOverflow::checkOverBinopAddUint(){
 bool AnalysisModeOverflow::checkOverBinopSubUint(){
     unsigned u_a = boost::get<unsigned>(this->ValueParam1);
     unsigned u_b = boost::get<unsigned>(this->ValueParam2);
-    unsigned l_unsigned_overflow = ( (u_a-u_b) - ((u_a-u_b) % UINT_MAX));
-    if( l_unsigned_overflow > UINT_MAX){
+    //unsigned l_unsigned_overflow = ( (u_a-u_b) - ((u_a-u_b) % UINT_MAX));
+    if( ( (u_a-u_b) - ((u_a-u_b) % UINT_MAX)) > UINT_MAX){
         return true;
     }
 
@@ -219,12 +234,12 @@ bool AnalysisModeOverflow::checkOverBinopSubUint(){
 
 }
 
-
+/// https://wiki.sei.cmu.edu/confluence/display/c/INT30-C.+Ensure+that+unsigned+integer+operations+do+not+wrap
 bool AnalysisModeOverflow::checkOverBinopMulUint(){
-    unsigned u_a = boost::get<unsigned>(this->ValueParam1);
-    unsigned u_b = boost::get<unsigned>(this->ValueParam2);
-    unsigned l_unsigned_overflow = ( (u_a*u_b) - ((u_a*u_b) % UINT_MAX));
-    if( l_unsigned_overflow > UINT_MAX){
+    unsigned int u_a = boost::get<unsigned>(this->ValueParam1);
+    unsigned int u_b = boost::get<unsigned>(this->ValueParam2);
+    
+    if( u_a > UINT_MAX/u_b ){        
         return true;
     }
 
@@ -235,8 +250,8 @@ bool AnalysisModeOverflow::checkOverBinopMulUint(){
 bool AnalysisModeOverflow::checkOverBinopDivUint(){
     unsigned u_a = boost::get<unsigned>(this->ValueParam1);
     unsigned u_b = boost::get<unsigned>(this->ValueParam2);
-    unsigned l_unsigned_overflow = ( (u_a/u_b) - ((u_a/u_b) % UINT_MAX));
-    if( l_unsigned_overflow > UINT_MAX){
+    
+    if( u_b == 0 ){
         return true;
     }
 
@@ -244,11 +259,12 @@ bool AnalysisModeOverflow::checkOverBinopDivUint(){
 }
 
 
-bool AnalysisModeOverflow::checkOverBinopShlUint(){
+/// https://wiki.sei.cmu.edu/confluence/display/c/INT30-C.+Ensure+that+unsigned+integer+operations+do+not+wrap
+bool AnalysisModeOverflow::checkOverBinopShRUint(){
     unsigned u_a = boost::get<unsigned>(this->ValueParam1);
     unsigned u_b = boost::get<unsigned>(this->ValueParam2);
-    unsigned l_unsigned_overflow = ( (u_a << u_b) - ((u_a << u_b) % UINT_MAX));
-    if( l_unsigned_overflow > UINT_MAX){
+    
+    if( !(u_b >= 0 && u_b < 32) ){ // 32 bits
         return true;
     }
 

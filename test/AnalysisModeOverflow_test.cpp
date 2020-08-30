@@ -115,6 +115,29 @@ TEST(AnalysisModeOverflow, checkOverBinopShlInt)
 }
 
 
+TEST(AnalysisModeOverflow, checkOverBinopShRInt)
+{
+    AnalysisModeOverflow Amo;
+    Amo.LineNumber = 12;
+    Amo.FunctionName = "foo";
+    Amo.Scope = 0;
+
+    Amo.ValueParam1 = 1024;
+    Amo.ValueParam2 = 32;
+    
+    bool Ans = Amo.checkOverBinopShRInt();
+    
+    EXPECT_EQ(Ans, true);
+
+    Amo.ValueParam1 = 12;
+    Amo.ValueParam2 = 2;
+    
+    bool Ans1 = Amo.checkOverBinopShRInt();
+    
+    EXPECT_EQ(Ans1, false);
+}
+
+
 TEST(AnalysisModeOverflow, checkOverBinopNegInt)
 {
     AnalysisModeOverflow Amo;
@@ -179,6 +202,74 @@ TEST(AnalysisModeOverflow, checkOverBinopSubUint)
     Amo.ValueParam2 = (unsigned)2;
     
     bool Ans1 = Amo.checkOverBinopSubUint();
+    
+    EXPECT_EQ(Ans1, false);
+}
+
+
+TEST(AnalysisModeOverflow, checkOverBinopMulUint)
+{
+    AnalysisModeOverflow Amo;
+    Amo.LineNumber = 12;
+    Amo.FunctionName = "foo";
+    Amo.Scope = 0;
+
+    Amo.ValueParam1 = (unsigned)UINT_MAX;
+    Amo.ValueParam2 = (unsigned)UINT_MAX;
+    
+    bool Ans = Amo.checkOverBinopMulUint();
+    
+    EXPECT_EQ(Ans, true);
+
+    Amo.ValueParam1 = (unsigned)12;
+    Amo.ValueParam2 = (unsigned)2;
+    
+    bool Ans1 = Amo.checkOverBinopMulUint();
+    
+    EXPECT_EQ(Ans1, false);
+}
+
+TEST(AnalysisModeOverflow, checkOverBinopDivUint)
+{
+    AnalysisModeOverflow Amo;
+    Amo.LineNumber = 12;
+    Amo.FunctionName = "foo";
+    Amo.Scope = 0;
+
+    Amo.ValueParam1 = (unsigned)UINT_MAX;
+    Amo.ValueParam2 = (unsigned)0;
+    
+    bool Ans = Amo.checkOverBinopDivUint();
+    
+    EXPECT_EQ(Ans, true);
+
+    Amo.ValueParam1 = (unsigned)12;
+    Amo.ValueParam2 = (unsigned)2;
+    
+    bool Ans1 = Amo.checkOverBinopDivUint();
+    
+    EXPECT_EQ(Ans1, false);
+}
+
+
+TEST(AnalysisModeOverflow, checkOverBinopShRUint)
+{
+    AnalysisModeOverflow Amo;
+    Amo.LineNumber = 12;
+    Amo.FunctionName = "foo";
+    Amo.Scope = 0;
+
+    Amo.ValueParam1 = (unsigned)UINT_MAX;
+    Amo.ValueParam2 = (unsigned)32;
+    
+    bool Ans = Amo.checkOverBinopShRUint();
+    
+    EXPECT_EQ(Ans, true);
+
+    Amo.ValueParam1 = (unsigned)12;
+    Amo.ValueParam2 = (unsigned)2;
+    
+    bool Ans1 = Amo.checkOverBinopShRUint();
     
     EXPECT_EQ(Ans1, false);
 }

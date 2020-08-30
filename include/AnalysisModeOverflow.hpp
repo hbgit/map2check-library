@@ -36,14 +36,15 @@ class AnalysisModeOverflow {
         bool checkOverBinopSubInt();
         bool checkOverBinopMulInt();
         bool checkOverBinopDivInt();       
-        bool checkOverBinopShlInt(); //shift
+        bool checkOverBinopShlInt(); //shift left
+        bool checkOverBinopShRInt(); //shift right
         bool checkOverBinopNegInt();
         // unsigned
         bool checkOverBinopAddUint();
         bool checkOverBinopSubUint();
         bool checkOverBinopMulUint();
         bool checkOverBinopDivUint();
-        bool checkOverBinopShlUint(); //shift
+        bool checkOverBinopShRUint(); //shift
         
         
          
