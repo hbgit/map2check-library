@@ -1,0 +1,23 @@
+========================= AnalysisModeMemTrack
+- analysis_init
+- map2check_load
+- map2check_free_resolved_address
+- map2check_check_deref
+- map2check_free
+- FROM ContainerMemoryTrackLog isInvalidFree
+- FROM ContainerMemoryTrackLog isMemCleanUpError
+- FROM ContainerMemoryTrackLog isDerefError
+
+========================= ContainerMemoryTrackLog
+- update_reference_list_log
+- map2check_add_store_pointer
+- 
+
+========================= ContainerAllocaLog
+- map2check_malloc
+- map2check_calloc
+
+========================= ContainerHeapLog
+- FROM AnalysisModeMemTrack map2check_non_static_alloca
+- FROM AnalysisModeMemTrack map2check_alloca
+- FROM AnalysisModeMemTrack map2check_function
