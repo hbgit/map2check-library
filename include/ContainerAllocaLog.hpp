@@ -43,6 +43,8 @@ class ContainerAllocaLog {
         enum MemoryAddressStatus getAddressTypeInLog(long Address);
         void setDealallocInAddress(long Step, long Address);
         void setAllocInAddress(long Step, long Address);
+        void setMalloc(long Step, long Address, int Size);
+        void setCalloc(long Step, long Address, int Quantity, int Size);
 
         AllocaLog searchContainerAllocaLog(long Address);
         AllocaLog getDataFromLog(long Address);

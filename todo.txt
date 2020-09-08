@@ -13,9 +13,9 @@
 - map2check_add_store_pointer
 - 
 
-========================= ContainerAllocaLog
-- map2check_malloc
-- map2check_calloc
+========================= ContainerAllocaLog - OK
+- map2check_malloc OK
+- map2check_calloc OK
 
 ========================= ContainerHeapLog
 - FROM AnalysisModeMemTrack map2check_non_static_alloca

@@ -187,3 +187,44 @@ bool ContainerAllocaLog::isValidAllocaAddress(long Address, int Size){
     }
     return false;
 }
+
+
+/// @brief This replaced the old map2check_malloc function. 
+/// Tracks address that are resolved during free (this function is 
+/// to be used for instrumentation)
+/// @param Step Current step of the program analysis
+/// @param Address Address to set up as alloca
+/// @param Size Size of the allocated addres
+/// @return void
+void ContainerAllocaLog::setMalloc(long Step, long Address, int Size){
+    auto AllocaTmp = this->searchContainerAllocaLog(Address);
+    
+    if(AllocaTmp.Address != 0){
+        AllocaTmp.SizeToDestiny = Size;
+        AllocaTmp.IsFree = false;
+    }else{
+        AllocaTmp.Address = Address;
+        AllocaTmp.SizeToDestiny = Size;
+        AllocaTmp.IsFree = false;
+
+        map<long, AllocaLog> MapTmp;
+        MapTmp.insert(
+            pair<long, AllocaLog>(
+                ++Step, AllocaTmp
+            )
+        );
+        this->ContainerLog_.push_back(MapTmp);
+    }
+}
+
+/// @brief This replaced the old map2check_malloc function. 
+/// Tracks address that are resolved during free (this function is 
+/// to be used for instrumentation)
+/// @param Step Current step of the program analysis
+/// @param Address Address to set up as calloca to alloca
+/// @param Quantity The Size
+/// @param Size Size of the allocated addres
+/// @return void
+void ContainerAllocaLog::setCalloc(long Step, long Address, int Quantity, int Size){
+    this->setMalloc(Step, Address, Quantity * Size);
+}
