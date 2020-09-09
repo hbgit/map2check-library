@@ -38,10 +38,7 @@ class ContainerMemoryTrackLog {
     public:
         list<map<long, MemoryTrackLog>> ContainerLog_;
         string printJsonObj(MemoryTrackLog ObjModelIn);
-        long getLastReference(long MemoryAddress);
-        bool isMemCleanUpError(long MemoryAddress);
-        bool isDerefError(long MemoryAddress);
-        bool isInvalidFree(long MemoryAddress);
+        long getLastReference(long MemoryAddress);        
         enum MemoryAddressStatus getMemoryAddressStatus(MemoryTrackLog ObjectMemory);
 
         // From AllocaLog
@@ -56,6 +53,14 @@ class ContainerMemoryTrackLog {
 
         // From HeapLog
         bool isValidHeapAddress(long Address, int Size);
+
+        // From AnalysisModeMemory
+        void memNonStaticAlloca();
+        void memAlloca();
+        void memFunction();
+        void updateReferenceListLog(long Address, MemoryAddressStatus Status, unsigned LineNumber);
+        void memAddStorePointer(ContainerMemoryTrackLog CntrMemTrkLog);
+
 };
 
 #endif // __CONTAINERMEMORYTRACKLOG_H_INCLUDED__ 

@@ -25,9 +25,11 @@
 /// old map2check_free_resolved_address
 /// Tracks address that are resolved during free (this function is to be used for
 /// instrumentation)
-bool AnalysisModeOverflow::freeResolvedAddress(ContainerMemoryTrackLog CntrMemTrkLog){
+bool AnalysisModeMemory::freeResolvedAddress(ContainerMemoryTrackLog CntrMemTrkLog){
     
-    if(this->PtrAddress == NULL && this->IsNullValid){
+    /*if(this->PtrAddress == NULL && this->IsNullValid){
         return false;
-    }
+    }*/
+
+    return false;
 }

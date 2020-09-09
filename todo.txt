@@ -21,7 +21,7 @@
 - map2check_malloc OK
 - map2check_calloc OK
 
-========================= ContainerHeapLog
+========================= ContainerHeapLog - OK
 - FROM AnalysisModeMemTrack map2check_non_static_alloca
 - FROM AnalysisModeMemTrack map2check_alloca
 - FROM AnalysisModeMemTrack map2check_function

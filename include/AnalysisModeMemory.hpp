@@ -23,34 +23,21 @@
 
 using namespace std;
 
-class AnalysisModeOverflow {
+class AnalysisModeMemory {
     public:
-        unsigned LineNumber;
-        string FunctName;
-        void * VarAddress;
-        void * PtrAddress;
-        void * ValueAddress;
-        string VarName;
-        unsigned long SizeAddress;
-        unsigned long SizeOfPrimitive;
-        int QuantityAlloc;
-        int Scope;
-        string PtrFunctName;
+        AnalysisModeMemory(ContainerMemoryTrackLog CntrMemTrkLog);
+
         bool IsNullValid;
         bool IsCheckMemCleanUp;
 
         bool freeResolvedAddress(ContainerMemoryTrackLog CntrMemTrkLog);
-        void updateReferenceListLog(long Address, MemoryAddressStatus Status, unsigned LineNumber);
-        void memAddStorePointer(ContainerMemoryTrackLog CntrMemTrkLog);
-        void memFunction();
-        void memAlloca();
-        void memNonStaticAlloca();
-        bool memFree(ContainerMemoryTrackLog CntrMemTrkLog);
-        void memCalloc();
-        void memPosix();
-        bool memMalloc();
-        bool memIsMemCleanUpError();
+        bool isMemCleanUpError(long MemoryAddress);
+        bool isDerefError(long MemoryAddress);
+        bool isInvalidFree(long MemoryAddress);
         bool memLoad(void * PtrAddress, int SizeAddress);
+        bool memFree(ContainerMemoryTrackLog CntrMemTrkLog);
+        bool memIsMemCleanUpError();
+        
 };
 
 #endif // __ANALYSISMODEMEMORY_H_INCLUDED__ 
