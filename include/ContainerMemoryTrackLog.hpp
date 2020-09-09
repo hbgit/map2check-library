@@ -53,6 +53,9 @@ class ContainerMemoryTrackLog {
         void setMalloc(long Step, long Address, int Size);
         void setCalloc(long Step, long Address, int Quantity, int Size);
         MemoryTrackLog searchContainerAllocaLog(long Address);
+
+        // From HeapLog
+        bool isValidHeapAddress(long Address, int Size);
 };
 
 #endif // __CONTAINERMEMORYTRACKLOG_H_INCLUDED__ 

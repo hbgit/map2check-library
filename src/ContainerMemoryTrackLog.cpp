@@ -38,6 +38,8 @@ string ContainerMemoryTrackLog::printJsonObj(MemoryTrackLog ObjModelIn){
     j["PointerName"] = ObjModelIn.PointerName;
     j["FunctionName"] = ObjModelIn.FunctionName;   
     j["SizeToDestiny"] = ObjModelIn.SizeToDestiny; 
+    j["SizeOfPrimitive"] = ObjModelIn.SizeOfPrimitive; 
+    j["SizeToLoad"] = ObjModelIn.SizeToLoad; 
         
     return j.dump().c_str();
 }
@@ -356,3 +358,30 @@ void ContainerMemoryTrackLog::setCalloc(long Step, long Address, int Quantity, i
 }
 // From AllocaLog End ============================
 
+
+// From HeapLog Begin ============================
+/// @brief This replaced the old is_valid_heap_address function.
+/// Checking if a given Address is valid in the Heap Address.
+/// We iterate over all elements of the allocation log,
+/// beggining from back, if the address that we are looking for is in the range of
+/// the element address memory space, different from Alloca here
+/// we do not check if the element is not free. 
+/// @param Address Address to set up as alloca
+/// @param Size    Size memory
+/// @return bool if is valid or not
+bool ContainerMemoryTrackLog::isValidHeapAddress(long Address, int Size){
+    // Search from bottom/reverse
+    list<map<long, MemoryTrackLog>> :: reverse_iterator rit; 
+    
+    for(rit = this->ContainerLog_.rbegin(); 
+        rit != this->ContainerLog_.rend(); rit++){              
+            long RangeAddress = (long)rit->begin()->second.VarMemoryAddress + 
+                                (rit->begin()->second.SizeToLoad - Size) + 1;
+            if(rit->begin()->second.VarMemoryAddress <= Address &&
+                (long)Address < RangeAddress){
+               return true;
+            }
+    }
+    return false;
+}
+// From HeapLog End ============================

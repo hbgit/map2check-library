@@ -9,7 +9,7 @@ add_executable(
   # allocalog_test.cpp
   # containerAllocaLog_test.cpp
   containerTrackBbLog_test.cpp
-  containerHeapLog_test.cpp
+  # containerHeapLog_test.cpp
   containerMemoryTrackLog_test.cpp  
   AnalysisModeAssert_test.cpp
   AnalysisModeOverflow_test.cpp
