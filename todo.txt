@@ -11,7 +11,11 @@
 ========================= ContainerMemoryTrackLog
 - update_reference_list_log
 - map2check_add_store_pointer
-- 
+>> Why not merge all memory track here?
+    > We have duplicate code
+    > Memcleanup and AnalysisModeMemTrack, we can just add a flag to diff
+    > In HeapLog.c we just have is_valid_heap_address
+    > AllocationLog.c need to be merged on ContainerMemoryTrackLog aims to center all memory data
 
 ========================= ContainerAllocaLog - OK
 - map2check_malloc OK
