@@ -6,8 +6,8 @@ add_executable(
   unit_tests  
   nondetlog_test.cpp
   containerNonDetLog_test.cpp
-  allocalog_test.cpp
-  containerAllocaLog_test.cpp
+  # allocalog_test.cpp
+  # containerAllocaLog_test.cpp
   containerTrackBbLog_test.cpp
   containerHeapLog_test.cpp
   containerMemoryTrackLog_test.cpp  

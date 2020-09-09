@@ -43,6 +43,16 @@ class ContainerMemoryTrackLog {
         bool isDerefError(long MemoryAddress);
         bool isInvalidFree(long MemoryAddress);
         enum MemoryAddressStatus getMemoryAddressStatus(MemoryTrackLog ObjectMemory);
+
+        // From AllocaLog
+        map<bool,long> allocaLogIsValid();
+        bool isValidAllocaAddress(long Address, int Size);        
+        enum MemoryAddressStatus getAddressTypeInLog(long Address);
+        void setDealallocInAddress(long Step, long Address);
+        void setAllocInAddress(long Step, long Address);
+        void setMalloc(long Step, long Address, int Size);
+        void setCalloc(long Step, long Address, int Quantity, int Size);
+        MemoryTrackLog searchContainerAllocaLog(long Address);
 };
 
 #endif // __CONTAINERMEMORYTRACKLOG_H_INCLUDED__ 

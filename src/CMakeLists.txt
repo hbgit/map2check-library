@@ -7,7 +7,7 @@ file(GLOB SOURCES "*.cpp")
 add_library(map2check STATIC ${SOURCES})
 
 list(APPEND MAP2CHECK_C_LIB "")
-list(APPEND MAP2CHECK_C_LIB "ContainerAllocaLog")
+#list(APPEND MAP2CHECK_C_LIB "ContainerAllocaLog")
 list(APPEND MAP2CHECK_C_LIB "ContainerHeapLog")
 list(APPEND MAP2CHECK_C_LIB "ContainerMemoryTrackLog")
 list(APPEND MAP2CHECK_C_LIB "ContainerNonDetLog")

@@ -31,6 +31,9 @@ class MemoryTrackLog {
         unsigned LineNumber;
         string PointerName;
         string FunctionName;
+        int SizeToDestiny;
+        int SizeToLoad;
+        int SizeOfPrimitive;
         
 };
 
