@@ -16,6 +16,7 @@
 
 
 #include "../include/AnalysisModeMemory.hpp"
+#include <boost/range/adaptor/reversed.hpp>
 
 
 // This file adopted other Container to analysis so we need to check given as
@@ -32,4 +33,88 @@ bool AnalysisModeMemory::freeResolvedAddress(ContainerMemoryTrackLog CntrMemTrkL
     }*/
 
     return false;
+}
+
+
+/// @brief This replaced the old is_memcleanup_error function.
+/// A memcleanup error occurs when a memory leak happens but we still have
+/// a pointer that points to the leaked location, so to verify we:
+/// 1. From last element to the first check if some variable points to the
+/// location
+/// 2. If found, iterates from the found element to the last and check if the
+/// pointer does not change.
+/// 3a. If it doesn't change, then it is a memcleanup error
+/// 3b. Else, go on 1 loop.
+/// 4. If loop ends without finding leaked address, then it isn't a memcleanup
+/// error.
+/// @param MemoryAddress to be searched in the list
+/// @return bool to check a memcleanup error 
+bool AnalysisModeMemory::isMemCleanUpError(long MemoryAddress){
+    // Search from bottom/reverse
+    list<map<long, MemoryTrackLog>> :: reverse_iterator rit; 
+    
+    for(rit = this->ContainerLog_.rbegin(); 
+        rit != this->ContainerLog_.rend(); rit++){            
+            if(rit->begin()->second.MemoryAddressPointsTo == MemoryAddress){
+               bool error = true;
+               for(auto item : boost::adaptors::reverse(this->ContainerLog_)){
+                   if(rit->begin()->second.VarMemoryAddress == item.begin()->second.VarMemoryAddress){
+                       error = item.begin()->second.MemoryAddressPointsTo == MemoryAddress ? 
+                               true : false;
+                        break;
+                   }
+               }
+               if(error){
+                   return true;
+               }
+            }
+    }
+    return false;
+}
+
+/// @brief This replaced the old is_deref_error function.
+/// Checking in the container memory if a given address
+/// execute an operation with derefence error:
+/// 1. Where the var memory address is not in the container
+/// 2. If the address already executed an dealallocation - free
+/// @param MemoryAddress to be searched in the list
+/// @return bool as answer
+bool AnalysisModeMemory::isDerefError(long MemoryAddress){
+    for(auto item : boost::adaptors::reverse(this->ContainerLog_)){
+        if(item.begin()->second.VarMemoryAddress == MemoryAddress){
+            return false;
+        }
+        if(item.begin()->second.MemoryAddressPointsTo == MemoryAddress){
+            if(item.begin()->second.IsFree || !item.begin()->second.IsDynamic){
+                return true;
+            }else{
+                return false;
+            }
+        }
+    }
+    return false;
+}
+
+
+/// @brief This replaced the old is_invalid_free function.
+/// Checking in the container memory if a given address
+/// execute an invalid free, when that given address was released.
+/// @param MemoryAddress to be searched in the list
+/// @return bool as answer
+bool AnalysisModeMemory::isInvalidFree(long MemoryAddress){
+    
+    if(MemoryAddress == (long)NULL){
+        return false;
+    }
+    
+    for(auto item : boost::adaptors::reverse(this->ContainerLog_)){
+        if(item.begin()->second.MemoryAddressPointsTo == MemoryAddress){
+            if(item.begin()->second.IsFree || !item.begin()->second.IsDynamic){
+                return true;
+            }else{
+                return false;
+            }
+        }
+    }
+    return true;
 }

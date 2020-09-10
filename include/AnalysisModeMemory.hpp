@@ -24,6 +24,9 @@
 using namespace std;
 
 class AnalysisModeMemory {
+    private:
+        list<map<long, MemoryTrackLog>> ContainerLog_;
+
     public:
         AnalysisModeMemory(ContainerMemoryTrackLog CntrMemTrkLog);
 
