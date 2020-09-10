@@ -37,19 +37,20 @@ enum MemoryAddressStatus {
 class ContainerMemoryTrackLog {
     public:
         list<map<long, MemoryTrackLog>> ContainerLog_;
+
         string printJsonObj(MemoryTrackLog ObjModelIn);
         long getLastReference(long MemoryAddress);        
         enum MemoryAddressStatus getMemoryAddressStatus(MemoryTrackLog ObjectMemory);
 
         // From AllocaLog
-        map<bool,long> allocaLogIsValid();
+        map<bool,long> isAllAllocaAddressValidInLog();
         bool isValidAllocaAddress(long Address, int Size);        
         enum MemoryAddressStatus getAddressTypeInLog(long Address);
         void setDealallocInAddress(long Step, long Address);
         void setAllocInAddress(long Step, long Address);
         void setMalloc(long Step, long Address, int Size);
         void setCalloc(long Step, long Address, int Quantity, int Size);
-        MemoryTrackLog searchContainerAllocaLog(long Address);
+        MemoryTrackLog searchInContainerLogByAddress(long Address);
 
         // From HeapLog
         bool isValidHeapAddress(long Address, int Size);

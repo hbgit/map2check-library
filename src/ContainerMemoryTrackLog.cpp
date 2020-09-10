@@ -82,7 +82,7 @@ enum MemoryAddressStatus ContainerMemoryTrackLog::getMemoryAddressStatus(MemoryT
 /// @brief Searching for an given address in the Container list
 /// @param Address to be searched in the list
 /// @return An MemoryTrackLog object
-MemoryTrackLog ContainerMemoryTrackLog::searchContainerAllocaLog(long Address){
+MemoryTrackLog ContainerMemoryTrackLog::searchInContainerLogByAddress(long Address){
 
     for(auto item : this->ContainerLog_){
         if(item.begin()->second.VarMemoryAddress == Address){
@@ -101,7 +101,7 @@ MemoryTrackLog ContainerMemoryTrackLog::searchContainerAllocaLog(long Address){
 /// @param Address Address to set up as free
 /// @return void
 void ContainerMemoryTrackLog::setDealallocInAddress(long Step, long Address){
-    auto AllocaTmp = this->searchContainerAllocaLog(Address);
+    auto AllocaTmp = this->searchInContainerLogByAddress(Address);
     AllocaTmp.IsFree = true;
     
     map<long, MemoryTrackLog> MapTmp;
@@ -114,12 +114,12 @@ void ContainerMemoryTrackLog::setDealallocInAddress(long Step, long Address){
 }
 
 /// @brief This replaced the old mark_allocation_log function. Saving
-/// in the ContainerLog the alloca action executed  
+/// in the ContainerLog the alloca action executed in the LLVM-IR, i.e., Var decl.
 /// @param Step Current step of the program analysis
 /// @param Address Address to set up as alloca
 /// @return void
 void ContainerMemoryTrackLog::setAllocInAddress(long Step, long Address){
-    auto AllocaTmp = this->searchContainerAllocaLog(Address);
+    auto AllocaTmp = this->searchInContainerLogByAddress(Address);
     AllocaTmp.IsFree = false;
     
     map<long, MemoryTrackLog> MapTmp;
@@ -163,7 +163,7 @@ enum MemoryAddressStatus ContainerMemoryTrackLog::getAddressTypeInLog(long Addre
 /// @param Step Current step of the program analysis
 /// @param Address Address to set up as alloca
 /// @return map<Error,Address>
-map<bool, long> ContainerMemoryTrackLog::allocaLogIsValid(){
+map<bool, long> ContainerMemoryTrackLog::isAllAllocaAddressValidInLog(){
     long MemTrackAddressError = 0;
     map<bool, long> MapTmp;
 
@@ -241,7 +241,7 @@ bool ContainerMemoryTrackLog::isValidAllocaAddress(long Address, int Size){
 /// @param Size Size of the allocated addres
 /// @return void
 void ContainerMemoryTrackLog::setMalloc(long Step, long Address, int Size){
-    auto AllocaTmp = this->searchContainerAllocaLog(Address);
+    auto AllocaTmp = this->searchInContainerLogByAddress(Address);
     
     if(AllocaTmp.VarMemoryAddress != 0){
         AllocaTmp.SizeToDestiny = Size;
@@ -250,15 +250,15 @@ void ContainerMemoryTrackLog::setMalloc(long Step, long Address, int Size){
         AllocaTmp.VarMemoryAddress = Address;
         AllocaTmp.SizeToDestiny = Size;
         AllocaTmp.IsFree = false;
-
-        map<long, MemoryTrackLog> MapTmp;
-        MapTmp.insert(
-            pair<long, MemoryTrackLog>(
-                ++Step, AllocaTmp
-            )
-        );
-        this->ContainerLog_.push_back(MapTmp);
     }
+    map<long, MemoryTrackLog> MapTmp;
+    MapTmp.insert(
+        pair<long, MemoryTrackLog>(
+            ++Step, AllocaTmp
+        )
+    );
+    this->ContainerLog_.push_back(MapTmp);
+    
 }
 
 
