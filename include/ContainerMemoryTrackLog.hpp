@@ -56,11 +56,11 @@ class ContainerMemoryTrackLog {
         bool isValidHeapAddress(long Address, int Size);
 
         // From AnalysisModeMemory
-        void memNonStaticAlloca();
-        void memAlloca();
-        void memFunction();
-        void updateReferenceListLog(long Address, MemoryAddressStatus Status, unsigned LineNumber);
-        void memAddStorePointer(ContainerMemoryTrackLog CntrMemTrkLog);
+        void memNonStaticAlloca(long Step, MemoryTrackLog ObjectMemory);
+        void memAlloca(long Step, MemoryTrackLog ObjectMemory);
+        void memFunction(long Step, MemoryTrackLog ObjectMemory);
+        void updateReferenceListLog(long Step, long Address, MemoryAddressStatus Status, unsigned LineNumber);
+        void memAddStorePointer(MemoryTrackLog ObjectMemory);
 
 };
 
