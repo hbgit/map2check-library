@@ -11,7 +11,9 @@
 ///
 /// \file
 /// This file contains the declaration of the ContainerMemoryTrackLog.cpp class,
-/// which modelling the Container to storage a list with TrackBbLog objects.
+/// which modelling the Container to storage a list with TrackBbLog objects. 
+/// The functions are based on paper "Memory Management Test-Case Generation of C Programs" 
+/// (SEFM 2015).
 ///
 //===----------------------------------------------------------------------===//
 
@@ -40,11 +42,185 @@ string ContainerMemoryTrackLog::printJsonObj(MemoryTrackLog ObjModelIn) {
   j["FunctionName"] = ObjModelIn.FunctionName;
   j["SizeToDestiny"] = ObjModelIn.SizeToDestiny;
   j["SizeOfPrimitive"] = ObjModelIn.SizeOfPrimitive;
-  j["SizeToLoad"] = ObjModelIn.SizeToLoad;
 
   return j.dump().c_str();
 }
 
+
+/// @brief This replaced the old map2check_alloca function.
+/// Tracking alloca instruction in LLVM-IR, i.e., var decl.
+void ContainerMemoryTrackLog::mapAlloca(long Step,
+                                        MemoryTrackLog ObjectMemory) {
+  map<long, MemoryTrackLog> MapTmp;
+  MapTmp.insert(pair<long, MemoryTrackLog>(++Step, ObjectMemory));
+  this->ContainerLog_.push_back(MapTmp);
+}
+
+
+/// @brief This replaced the old map2check_non_static_alloca function.
+/// Tracking alloca instruction in LLVM-IR, i.e., static var decl.
+void ContainerMemoryTrackLog::mapNonStaticAlloca(long Step,
+                                                 MemoryTrackLog ObjectMemory) {
+  ObjectMemory.SizeToDestiny =
+      ObjectMemory.SizeToDestiny * ObjectMemory.SizeOfPrimitive;
+  this->mapAlloca(Step, ObjectMemory);
+}
+
+
+/// @brief This replaced the old map2check_function function.
+/// Tracking function address in LLVM-IR, i.e., function decl.
+void ContainerMemoryTrackLog::mapFunctionAddress(long Step,
+                                          MemoryTrackLog ObjectMemory) {
+  map<long, MemoryTrackLog> MapTmp;
+  MapTmp.insert(pair<long, MemoryTrackLog>(++Step, ObjectMemory));
+  this->ContainerLog_.push_back(MapTmp);
+}
+
+
+/// @brief This replaced the old is_valid_allocation_address function.
+/// Checking if a given Address is valid in the Alloca Addresses tracked.
+/// We iterate over all elements of the allocation log,
+/// beggining from back, if the address that we are looking for is in the range
+/// of the element address memory space and the element is not free, then it's
+/// TRUE otherwise FALSE and we set last_address to the address of last memory
+/// address of the current heap space i.e. a int on space 0x10 on a 32bit would
+/// set the var to 0x13 (if the int has 4 bytes)
+/// @param Address Address to set up as alloca
+/// @param Step Current step of the program analysis
+/// @return bool if is valid or not
+bool ContainerMemoryTrackLog::isValidAllocaAddress(long Address, int Size) {
+  // Search from bottom/reverse
+  list<map<long, MemoryTrackLog>>::reverse_iterator rit;
+
+  for (rit = this->ContainerLog_.rbegin(); rit != this->ContainerLog_.rend();
+       rit++) {
+    long RangeAddress = rit->begin()->second.VarMemoryAddress +
+                        (rit->begin()->second.SizeToDestiny - Size) + 1;
+    if (rit->begin()->second.VarMemoryAddress <= Address &&
+        Address < RangeAddress) {
+      if (rit->begin()->second.IsFree) {
+        return false;
+      }
+      return true;
+    }
+  }
+  return false;
+}
+
+
+/// @brief This replaced the old valid_allocation_log function.
+/// It is to check if all address allocated and tracked 
+/// were released at the end of the program, to check this, we iterate
+/// over all elements starting from bottom of allocation log, if the
+/// address of the current item is not Free, we iterate from the top
+/// if we find that the address was released, then we go on
+/// if not we return FALSE
+/// @param Step Current step of the program analysis
+/// @param Address Address to set up as alloca 
+/// @return map<Error,Address>
+map<bool, long> ContainerMemoryTrackLog::isAllAllocaAddressValidInTheEnd() {
+  long MemTrackAddressError = 0;
+  map<bool, long> MapTmp;
+
+  // Search from bottom/reverse
+  list<map<long, MemoryTrackLog>>::reverse_iterator rit;
+
+  for (rit = this->ContainerLog_.rbegin(); rit != this->ContainerLog_.rend();
+       rit++) {
+    if (rit->begin()->second.IsFree == false) {
+      bool ReleasedFound = false;
+      MemTrackAddressError = rit->begin()->second.VarMemoryAddress;
+      // Search from top
+      for (auto item : this->ContainerLog_) {
+        if (MemTrackAddressError == item.begin()->second.VarMemoryAddress &&
+            item.begin()->second.IsFree) {
+          ReleasedFound = true;
+        }
+      }
+
+      if (ReleasedFound == false) {
+        MapTmp.insert(pair<bool, long>(false, MemTrackAddressError));
+        return MapTmp;
+      }
+    }
+  }
+  MapTmp.insert(pair<bool, long>(true, 0));
+  return MapTmp;
+}
+
+
+// From HeapLog Begin ============================
+/// @brief This replaced the old is_valid_heap_address function.
+/// Checking if a given Address is valid in the Heap Address.
+/// It is called heap because it is a pile of memory space available to programmers to allocated and de-allocate.
+/// We iterate over all elements,
+/// beggining from back, if the address that we are looking for is in the range
+/// of the element address memory space, different from Alloca here we do not
+/// check if the element is not free.
+/// @param Address Address to set up as alloca
+/// @param Size    Size memory
+/// @return bool if is valid or not
+bool ContainerMemoryTrackLog::isValidHeapAddress(long Address, int Size) {
+  // Search from bottom/reverse
+  list<map<long, MemoryTrackLog>>::reverse_iterator rit;
+
+  for (rit = this->ContainerLog_.rbegin(); rit != this->ContainerLog_.rend();
+       rit++) {
+    long RangeAddress = (long)rit->begin()->second.VarMemoryAddress +
+                        (rit->begin()->second.SizeToDestiny - Size) + 1;
+    if (rit->begin()->second.VarMemoryAddress <= Address &&
+        (long)Address < RangeAddress) {
+      return true;
+    }
+  }
+  return false;
+}
+
+
+/// @brief This replaced the old map2check_malloc function.
+/// Tracks address that was pass as input to malloc function.  
+/// @param Step Current step of the program analysis
+/// @param Address Address to set up as alloca
+/// @param Size Size of the allocated addres
+/// @return void
+void ContainerMemoryTrackLog::setMalloc(long Step, long Address, int Size) {
+  auto AllocaTmp = this->searchInContainerLogByAddress(Address);
+
+  if (AllocaTmp.VarMemoryAddress != 0) {
+    AllocaTmp.SizeToDestiny = Size;
+    AllocaTmp.IsFree = false;
+  } else {
+    AllocaTmp.VarMemoryAddress = Address;
+    AllocaTmp.SizeToDestiny = Size;
+    AllocaTmp.IsFree = false;
+  }
+  map<long, MemoryTrackLog> MapTmp;
+  MapTmp.insert(pair<long, MemoryTrackLog>(++Step, AllocaTmp));
+  this->ContainerLog_.push_back(MapTmp);
+}
+
+
+/// @brief This replaced the old map2check_malloc function.
+/// Tracks address that are resolved during free (this function is
+/// to be used for instrumentation)
+/// @param Step Current step of the program analysis
+/// @param Address Address to set up as calloca to alloca
+/// @param Quantity The Size
+/// @param Size Size of the allocated addres
+/// @return void
+void ContainerMemoryTrackLog::setCalloc(long Step, long Address, int Quantity,
+                                        int Size) {
+  this->setMalloc(Step, Address, Quantity * Size);
+}
+
+
+/// @brief This replaced the old map2check_add_store_pointer function.
+/// Tracking pointer store, i.e., pointer assignment
+void ContainerMemoryTrackLog::mapStorePointer(long Step, MemoryTrackLog ObjectMemory) {
+
+}
+
+/*
 /// @brief This replaced the old get_old_reference function.
 /// Searching in the container list the last time where the Address
 /// was reached
@@ -96,34 +272,6 @@ ContainerMemoryTrackLog::searchInContainerLogByAddress(long Address) {
   return tmp;
 }
 
-/// @brief This replaced the old mark_deallocation_log function. Saving
-/// in the ContainerLog the action executed
-/// @param Step Current step of the program analysis
-/// @param Address Address to set up as free
-/// @return void
-void ContainerMemoryTrackLog::setDealallocInAddress(long Step, long Address) {
-  auto AllocaTmp = this->searchInContainerLogByAddress(Address);
-  AllocaTmp.IsFree = true;
-
-  map<long, MemoryTrackLog> MapTmp;
-  MapTmp.insert(pair<long, MemoryTrackLog>(++Step, AllocaTmp));
-  this->ContainerLog_.push_back(MapTmp);
-}
-
-/// @brief This replaced the old mark_allocation_log function. Saving
-/// in the ContainerLog the alloca action executed, e.g., malloc.
-/// @param Step Current step of the program analysis
-/// @param Address Address to set up as alloca
-/// @return void
-void ContainerMemoryTrackLog::setAllocInAddress(long Step, long Address) {
-  auto AllocaTmp = this->searchInContainerLogByAddress(Address);
-  AllocaTmp.IsFree = false;
-
-  map<long, MemoryTrackLog> MapTmp;
-  MapTmp.insert(pair<long, MemoryTrackLog>(++Step, AllocaTmp));
-  this->ContainerLog_.push_back(MapTmp);
-}
-
 /// @brief This replaced the old check_address_allocation_log function.
 /// We iterate over all elements starting from back of allocation log
 /// in the ContainerLog to get the type of that Address.
@@ -146,165 +294,25 @@ ContainerMemoryTrackLog::getAddressTypeInLog(long Address) {
   return STATIC;
 }
 
-/// @brief This replaced the old valid_allocation_log function.
-/// It is to check if all address allocated
-/// were released at the end of the program, to check this, we iterate
-/// over all elements starting from bottom of allocation log, if the
-/// address of the current item is not Free, we iterate from the top
-/// if we find that the address was released, then we go on
-/// if not we return FALSE
-/// @param Step Current step of the program analysis
-/// @param Address Address to set up as alloca
-/// @return map<Error,Address>
-map<bool, long> ContainerMemoryTrackLog::isAllAllocaAddressValidInLog() {
-  long MemTrackAddressError = 0;
-  map<bool, long> MapTmp;
 
-  // Search from bottom/reverse
-  list<map<long, MemoryTrackLog>>::reverse_iterator rit;
 
-  for (rit = this->ContainerLog_.rbegin(); rit != this->ContainerLog_.rend();
-       rit++) {
-    if (rit->begin()->second.IsFree == false) {
-      bool ReleasedFound = false;
-      MemTrackAddressError = rit->begin()->second.VarMemoryAddress;
-      // Search from top
-      for (auto item : this->ContainerLog_) {
-        if (MemTrackAddressError == item.begin()->second.VarMemoryAddress &&
-            item.begin()->second.IsFree) {
-          ReleasedFound = true;
-        }
-      }
 
-      if (ReleasedFound == false) {
-        MapTmp.insert(pair<bool, long>(false, MemTrackAddressError));
-        return MapTmp;
-      }
-    }
-  }
-  MapTmp.insert(pair<bool, long>(true, 0));
-  return MapTmp;
-}
 
-/// @brief This replaced the old is_valid_allocation_address function.
-/// Checking if a given Address is valid in the Alloca Address
-/// We iterate over all elements of the allocation log,
-/// beggining from back, if the address that we are looking for is in the range
-/// of the element address memory space and the element is not free, then it's
-/// TRUE otherwise FALSE and we set last_address to the address of last memory
-/// address of the current heap space i.e. a int on space 0x10 on a 32bit would
-/// set the var to 0x13 (if the int has 4 bytes)
-/// @param Address Address to set up as alloca
-/// @param Step Current step of the program analysis
-/// @return bool if is valid or not
-bool ContainerMemoryTrackLog::isValidAllocaAddress(long Address, int Size) {
-  // Search from bottom/reverse
-  list<map<long, MemoryTrackLog>>::reverse_iterator rit;
 
-  for (rit = this->ContainerLog_.rbegin(); rit != this->ContainerLog_.rend();
-       rit++) {
-    long RangeAddress = rit->begin()->second.VarMemoryAddress +
-                        (rit->begin()->second.SizeToDestiny - Size) + 1;
-    if (rit->begin()->second.VarMemoryAddress <= Address &&
-        Address < RangeAddress) {
-      if (rit->begin()->second.IsFree) {
-        return false;
-      }
-      return true;
-    }
-  }
-  return false;
-}
 
-/// @brief This replaced the old map2check_malloc function.
-/// Tracks address that are resolved during free (this function is
-/// to be used for instrumentation)
-/// @param Step Current step of the program analysis
-/// @param Address Address to set up as alloca
-/// @param Size Size of the allocated addres
-/// @return void
-void ContainerMemoryTrackLog::setMalloc(long Step, long Address, int Size) {
-  auto AllocaTmp = this->searchInContainerLogByAddress(Address);
 
-  if (AllocaTmp.VarMemoryAddress != 0) {
-    AllocaTmp.SizeToDestiny = Size;
-    AllocaTmp.IsFree = false;
-  } else {
-    AllocaTmp.VarMemoryAddress = Address;
-    AllocaTmp.SizeToDestiny = Size;
-    AllocaTmp.IsFree = false;
-  }
-  map<long, MemoryTrackLog> MapTmp;
-  MapTmp.insert(pair<long, MemoryTrackLog>(++Step, AllocaTmp));
-  this->ContainerLog_.push_back(MapTmp);
-}
-
-/// @brief This replaced the old map2check_malloc function.
-/// Tracks address that are resolved during free (this function is
-/// to be used for instrumentation)
-/// @param Step Current step of the program analysis
-/// @param Address Address to set up as calloca to alloca
-/// @param Quantity The Size
-/// @param Size Size of the allocated addres
-/// @return void
-void ContainerMemoryTrackLog::setCalloc(long Step, long Address, int Quantity,
-                                        int Size) {
-  this->setMalloc(Step, Address, Quantity * Size);
-}
 // From AllocaLog End ============================
 
-// From HeapLog Begin ============================
-/// @brief This replaced the old is_valid_heap_address function.
-/// Checking if a given Address is valid in the Heap Address.
-/// We iterate over all elements of the allocation log,
-/// beggining from back, if the address that we are looking for is in the range
-/// of the element address memory space, different from Alloca here we do not
-/// check if the element is not free.
-/// @param Address Address to set up as alloca
-/// @param Size    Size memory
-/// @return bool if is valid or not
-bool ContainerMemoryTrackLog::isValidHeapAddress(long Address, int Size) {
-  // Search from bottom/reverse
-  list<map<long, MemoryTrackLog>>::reverse_iterator rit;
 
-  for (rit = this->ContainerLog_.rbegin(); rit != this->ContainerLog_.rend();
-       rit++) {
-    long RangeAddress = (long)rit->begin()->second.VarMemoryAddress +
-                        (rit->begin()->second.SizeToLoad - Size) + 1;
-    if (rit->begin()->second.VarMemoryAddress <= Address &&
-        (long)Address < RangeAddress) {
-      return true;
-    }
-  }
-  return false;
-}
 // From HeapLog End ============================
 
 // From AnalysisModeMemTrack Begin ============================
 
-/// @brief This replaced the old map2check_non_static_alloca function.
-void ContainerMemoryTrackLog::memNonStaticAlloca(long Step,
-                                                 MemoryTrackLog ObjectMemory) {
-  ObjectMemory.SizeToDestiny =
-      ObjectMemory.SizeToDestiny * ObjectMemory.SizeOfPrimitive;
-  this->memAlloca(Step, ObjectMemory);
-}
 
-/// @brief This replaced the old map2check_alloca function.
-void ContainerMemoryTrackLog::memAlloca(long Step,
-                                        MemoryTrackLog ObjectMemory) {
-  map<long, MemoryTrackLog> MapTmp;
-  MapTmp.insert(pair<long, MemoryTrackLog>(++Step, ObjectMemory));
-  this->ContainerLog_.push_back(MapTmp);
-}
 
-/// @brief This replaced the old map2check_function function.
-void ContainerMemoryTrackLog::memFunction(long Step,
-                                          MemoryTrackLog ObjectMemory) {
-  map<long, MemoryTrackLog> MapTmp;
-  MapTmp.insert(pair<long, MemoryTrackLog>(++Step, ObjectMemory));
-  this->ContainerLog_.push_back(MapTmp);
-}
+
+
+
 
 /// @brief This replaced the old update_reference_list_log function.
 /// Updates all variables that points to the address with new status
@@ -365,8 +373,5 @@ void ContainerMemoryTrackLog::updateReferenceListLog(long Step, long Address,
   }
 }
 
-
-void ContainerMemoryTrackLog::memAddStorePointer(MemoryTrackLog ObjectMemory){
-  
-}
+*/
 // From AnalysisModeMemTrack End   ============================

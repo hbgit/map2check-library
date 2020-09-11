@@ -9,7 +9,7 @@
 //===----------------------------------------------------------------------===//
 ///
 /// \file
-/// This file contains the declaration of the MemoryTrackLog.hpp class, which 
+/// This file contains the declaration of the MemoryTrackLog.hpp class, which
 /// modelling the MemoryTrackLog object.
 ///
 //===----------------------------------------------------------------------===//
@@ -22,19 +22,17 @@
 using namespace std;
 
 class MemoryTrackLog {
-    public:
-        long VarMemoryAddress;
-        long MemoryAddressPointsTo;
-        int Scope;
-        bool IsDynamic;
-        bool IsFree;
-        unsigned LineNumber;
-        string PointerName;
-        string FunctionName;
-        int SizeToDestiny;
-        int SizeToLoad;
-        int SizeOfPrimitive;
-        
+public:
+  long VarMemoryAddress;
+  long MemoryAddressPointsTo;
+  int Scope;
+  bool IsDynamic;
+  bool IsFree;
+  unsigned LineNumber;
+  string PointerName;
+  string FunctionName;
+  int SizeToDestiny;
+  int SizeOfPrimitive;
 };
 
-#endif // __MEMORYTRACKLOG_H_INCLUDED__ 
+#endif // __MEMORYTRACKLOG_H_INCLUDED__
