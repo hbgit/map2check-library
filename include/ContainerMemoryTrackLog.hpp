@@ -47,6 +47,7 @@ public:
   void mapAlloca(long Step, MemoryTrackLog ObjectMemory);
   void mapNonStaticAlloca(long Step, MemoryTrackLog ObjectMemory);
   void mapFunctionAddress(long Step, MemoryTrackLog ObjectMemory);
+  void mapStorePointer(long Step, MemoryTrackLog ObjectMemory);
   bool isValidAllocaAddress(long Address, int Size);
   map<bool, long> isAllAllocaAddressValidInTheEnd();
   bool isValidHeapAddress(long Address, int Size);
@@ -54,8 +55,7 @@ public:
   // Functions from heap memory
   void setMalloc(long Step, long Address, int Size);
   void setCalloc(long Step, long Address, int Quantity, int Size);
-  // NOTE: realloc is modelling by set free and then execute a new malloc
-  void mapStorePointer(long Step, MemoryTrackLog ObjectMemory);
+  // NOTE: realloc is modelling by set free and then execute a new malloc  
   void setFree(long Step, MemoryTrackLog ObjectMemory,
                      short int IsNullValid);
 };
