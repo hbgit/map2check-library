@@ -48,10 +48,7 @@ public:
   void mapNonStaticAlloca(long Step, MemoryTrackLog ObjectMemory);
   void mapFunctionAddress(long Step, MemoryTrackLog ObjectMemory);
   void mapStorePointer(long Step, MemoryTrackLog ObjectMemory);
-  bool isValidAllocaAddress(long Address, int Size);
-  map<bool, long> isAllAllocaAddressValidInTheEnd();
-  bool isValidHeapAddress(long Address, int Size);
-
+  
   // Functions from heap memory
   void setMalloc(long Step, long Address, int Size);
   void setCalloc(long Step, long Address, int Quantity, int Size);

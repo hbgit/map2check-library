@@ -9,8 +9,9 @@
 //===----------------------------------------------------------------------===//
 ///
 /// \file
-/// This file contains the declaration of the AnalysisModeMemory.hpp class, which 
-/// modelling the programa analysis to check memory operation in a given C code.
+/// This file contains the declaration of the AnalysisModeMemory.hpp class,
+/// which modelling the programa analysis to check memory operation in a given C
+/// code.
 ///
 //===----------------------------------------------------------------------===//
 
@@ -24,23 +25,27 @@
 using namespace std;
 
 class AnalysisModeMemory {
-    private:
-        list<map<long, MemoryTrackLog>> ContainerLog_;
+private:
+  list<map<long, MemoryTrackLog>> ContainerLog_;
 
-    public:
-        AnalysisModeMemory(ContainerMemoryTrackLog CntrMemTrkLog);
+public:
+  AnalysisModeMemory(list<map<long, MemoryTrackLog>> CntrContainerLog_) {
+    this->ContainerLog_ = CntrContainerLog_;
+  }
 
-        bool IsNullValid;
-        bool IsCheckMemCleanUp;
+  bool IsNullValid;
+  bool IsCheckMemCleanUp;
 
-        bool freeResolvedAddress(ContainerMemoryTrackLog CntrMemTrkLog);
-        bool isMemCleanUpError(long MemoryAddress);
-        bool isDerefError(long MemoryAddress);
-        bool isInvalidFree(long MemoryAddress);
-        bool memLoad(void * PtrAddress, int SizeAddress);
-        bool memFree(ContainerMemoryTrackLog CntrMemTrkLog);
-        bool memIsMemCleanUpError();
-        
+  bool isValidAllocaAddress(long Address, int Size);
+  map<bool, long> isAllAllocaAddressValidInTheEnd();
+  bool isValidHeapAddress(long Address, int Size);
+  
+  bool isMemCleanUpError(long MemoryAddress);
+  bool isDerefError(long MemoryAddress);
+  bool isInvalidFree(long MemoryAddress);  
+  
+  // TODO
+  bool freeResolvedAddress(ContainerMemoryTrackLog CntrMemTrkLog);
 };
 
-#endif // __ANALYSISMODEMEMORY_H_INCLUDED__ 
+#endif // __ANALYSISMODEMEMORY_H_INCLUDED__
