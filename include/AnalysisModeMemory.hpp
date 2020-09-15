@@ -43,9 +43,8 @@ public:
   bool isMemCleanUpError(long MemoryAddress);
   bool isDerefError(long MemoryAddress);
   bool isInvalidFree(long MemoryAddress);  
-  
-  // TODO
-  bool freeResolvedAddress(ContainerMemoryTrackLog CntrMemTrkLog);
+    
+  bool freeResolvedAddress(long Address);
 };
 
 #endif // __ANALYSISMODEMEMORY_H_INCLUDED__
