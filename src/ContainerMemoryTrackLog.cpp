@@ -11,9 +11,9 @@
 ///
 /// \file
 /// This file contains the declaration of the ContainerMemoryTrackLog.cpp class,
-/// which modelling the Container to storage a list with TrackBbLog objects.
-/// The functions are based on paper "Memory Management Test-Case Generation of
-/// C Programs" (SEFM 2015).
+/// which modelling the Container to storage a list with MemoryTrackLog objects.
+/// The functions to track memory are based on paper "Memory Management
+/// Test-Case Generation of C Programs" (SEFM 2015).
 ///
 //===----------------------------------------------------------------------===//
 
@@ -21,33 +21,37 @@
 #include "../include/MemoryTrackLog.hpp"
 #include "../lib/json.hpp"
 #include <algorithm>
+
 using json = nlohmann::json;
 
 #include <boost/range/adaptor/reversed.hpp>
 #include <iostream>
 
-/// @brief Print an given TrackBbLog object in Json format.
-/// @param ObjModelIn TrackBbLog object
+
+/// @brief Print all MemoryTrackLog object inside the Container as Json string
+/// format.
 /// @return The Json string
-string ContainerMemoryTrackLog::printJsonObj(MemoryTrackLog ObjModelIn) {
-  json j;
+string ContainerMemoryTrackLog::printContainerAsJson() {
 
-  j["VarMemoryAddress"] = ObjModelIn.VarMemoryAddress;
-  j["MemoryAddressPointsTo"] = ObjModelIn.MemoryAddressPointsTo;
-  j["Scope"] = ObjModelIn.Scope;
-  j["IsDynamic"] = ObjModelIn.IsDynamic;
-  j["IsFree"] = ObjModelIn.IsFree;
-  j["LineNumber"] = ObjModelIn.LineNumber;
-  j["PointerName"] = ObjModelIn.PointerName;
-  j["FunctionName"] = ObjModelIn.FunctionName;
-  j["SizeToDestiny"] = ObjModelIn.SizeToDestiny;
-  j["SizeOfPrimitive"] = ObjModelIn.SizeOfPrimitive;
+  // Search from bottom/reverse
+  list<map<long, MemoryTrackLog>>::iterator it;
+  std::string JsonString;
 
-  return j.dump().c_str();
+  for (it = this->ContainerLog_.begin(); it != this->ContainerLog_.end();
+       it++) {
+    json j = it->begin()->second;
+    JsonString += j.dump().c_str();
+  }
+
+  return JsonString;
 }
 
-/// @brief Check if two object are equals, i.e., they have the
-/// same atributes.
+
+/// @brief Check if two object are equals, i.e., they have the value in their
+/// attributes
+/// @param ObjMemory1 First MemoryTrackLog object to be compared
+/// @param ObjMemory2 Second MemoryTrackLog object to be compared
+/// @return bool
 bool ContainerMemoryTrackLog::isEqualMemoryTrackObj(MemoryTrackLog ObjMemory1,
                                                     MemoryTrackLog ObjMemory2) {
 
@@ -63,8 +67,12 @@ bool ContainerMemoryTrackLog::isEqualMemoryTrackObj(MemoryTrackLog ObjMemory1,
   return false;
 }
 
+
 /// @brief This replaced the old map2check_alloca function.
-/// Tracking alloca instruction in LLVM-IR, i.e., var decl.
+/// Tracking alloca instruction in LLVM-IR, i.e., variable declaration.
+/// @param Step Current step to track this action
+/// @param ObjectMemory MemoryTrackLog object
+/// @return void
 void ContainerMemoryTrackLog::mapAlloca(long Step,
                                         MemoryTrackLog ObjectMemory) {
   map<long, MemoryTrackLog> MapTmp;
@@ -72,8 +80,12 @@ void ContainerMemoryTrackLog::mapAlloca(long Step,
   this->ContainerLog_.push_back(MapTmp);
 }
 
+
 /// @brief This replaced the old map2check_non_static_alloca function.
-/// Tracking alloca instruction in LLVM-IR, i.e., static var decl.
+/// Tracking alloca instruction in LLVM-IR, i.e., static var declaration.
+/// @param Step Current step to track this action
+/// @param ObjectMemory MemoryTrackLog object
+/// @return void
 void ContainerMemoryTrackLog::mapNonStaticAlloca(long Step,
                                                  MemoryTrackLog ObjectMemory) {
   ObjectMemory.SizeToDestiny =
@@ -81,8 +93,12 @@ void ContainerMemoryTrackLog::mapNonStaticAlloca(long Step,
   this->mapAlloca(Step, ObjectMemory);
 }
 
+
 /// @brief This replaced the old map2check_function function.
-/// Tracking function address in LLVM-IR, i.e., function decl.
+/// Tracking function address in LLVM-IR, i.e., function declaration.
+/// @param Step Current step to track this action
+/// @param ObjectMemory MemoryTrackLog object
+/// @return void
 void ContainerMemoryTrackLog::mapFunctionAddress(long Step,
                                                  MemoryTrackLog ObjectMemory) {
   map<long, MemoryTrackLog> MapTmp;
@@ -90,9 +106,6 @@ void ContainerMemoryTrackLog::mapFunctionAddress(long Step,
   this->ContainerLog_.push_back(MapTmp);
 }
 
-
-
-// From HeapLog Begin ============================
 
 /// @brief This replaced the old map2check_malloc function.
 /// Tracks address that was pass as input to malloc function.
@@ -116,9 +129,8 @@ void ContainerMemoryTrackLog::setMalloc(long Step, long Address, int Size) {
   this->ContainerLog_.push_back(MapTmp);
 }
 
-/// @brief This replaced the old map2check_malloc function.
-/// Tracks address that are resolved during free (this function is
-/// to be used for instrumentation)
+
+/// @brief Tracks address that was pass as input to calloc function.
 /// @param Step Current step of the program analysis
 /// @param Address Address to set up as calloca to alloca
 /// @param Quantity The Size
@@ -129,8 +141,12 @@ void ContainerMemoryTrackLog::setCalloc(long Step, long Address, int Quantity,
   this->setMalloc(Step, Address, Quantity * Size);
 }
 
+
 /// @brief This replaced the old map2check_add_store_pointer function.
-/// Tracking pointer store, i.e., pointer assignment
+/// Tracking pointer store, i.e., pointer assignment.
+/// @param Step Current step to track this action
+/// @param ObjectMemory MemoryTrackLog object
+/// @return void
 void ContainerMemoryTrackLog::mapStorePointer(long Step,
                                               MemoryTrackLog ObjectMemory) {
   // Search from bottom/reverse
@@ -150,12 +166,16 @@ void ContainerMemoryTrackLog::mapStorePointer(long Step,
   }
 }
 
+
 /// @brief This replaced the old map2check_free_resolved_address function.
-/// Tracks address that are resolved during free (this function is to be used for
-/// instrumentation)
-void ContainerMemoryTrackLog::setFree(long Step, MemoryTrackLog ObjectMemory, short int IsNullValid){
-  if(ObjectMemory.VarMemoryAddress == (long)NULL && IsNullValid){
-    return ;
+/// Tracks address that is given as input to a free function.
+/// @param Step Current step to track this action
+/// @param ObjectMemory MemoryTrackLog object
+/// @param IsNullValid Flag to identify if Null address is valid
+void ContainerMemoryTrackLog::setFree(long Step, MemoryTrackLog ObjectMemory,
+                                      short int IsNullValid) {
+  if (ObjectMemory.VarMemoryAddress == (long)NULL && IsNullValid) {
+    return;
   }
 
   // TODO: Add check invalid free

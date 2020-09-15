@@ -38,7 +38,7 @@ class ContainerMemoryTrackLog {
 public:
   // Container actions
   list<map<long, MemoryTrackLog>> ContainerLog_;
-  string printJsonObj(MemoryTrackLog ObjModelIn);
+  string printContainerAsJson();
   MemoryTrackLog searchInContainerLogByAddress(long Address);
   bool isEqualMemoryTrackObj(MemoryTrackLog ObjMemory1,
                              MemoryTrackLog ObjMemory2);

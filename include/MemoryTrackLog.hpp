@@ -19,6 +19,9 @@
 
 #include <string>
 
+#include "../lib/json.hpp"
+using json = nlohmann::json;
+
 using namespace std;
 
 class MemoryTrackLog {
@@ -33,6 +36,15 @@ public:
   string FunctionName;
   int SizeToDestiny;
   int SizeOfPrimitive;
+
+  // string printJsonObj(MemoryTrackLog ObjModelIn);
 };
+
+// Based on https://github.com/nlohmann/json/issues/2175
+NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(MemoryTrackLog, VarMemoryAddress,
+                                   MemoryAddressPointsTo, Scope, IsDynamic,
+                                   IsFree, LineNumber, PointerName,
+                                   FunctionName, SizeToDestiny,
+                                   SizeOfPrimitive);
 
 #endif // __MEMORYTRACKLOG_H_INCLUDED__
