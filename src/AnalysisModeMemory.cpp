@@ -18,17 +18,11 @@
 #include "../include/AnalysisModeMemory.hpp"
 #include <boost/range/adaptor/reversed.hpp>
 
-// This file adopted other Container to analysis so we need to check given as
-// input the needed containers
-
-
-
-/// old map2check_free_resolved_address
-/// Tracks address that are resolved during free (this function is to be used for
-/// instrumentation)
+/// @brief old map2check_free_resolved_address function. 
+/// Check if a given address is valid to be dealallocated.
+/// @param Address to be analyzed
+/// @return bool, TRUE is invalid (BUG was found) and FALSE is valid.
 bool AnalysisModeMemory::freeResolvedAddress(long Address){
-    
-    
     
     if(Address == (long)NULL && this->IsNullValid){
         return false;
@@ -37,10 +31,10 @@ bool AnalysisModeMemory::freeResolvedAddress(long Address){
     if(this->isInvalidFree(Address)){
         return true; 
     }
-
     
     return false;
 }
+
 
 /// @brief This replaced the old is_valid_allocation_address function.
 /// Checking if a given Address is valid in the Alloca Addresses tracked.
@@ -52,7 +46,7 @@ bool AnalysisModeMemory::freeResolvedAddress(long Address){
 /// set the var to 0x13 (if the int has 4 bytes)
 /// @param Address Address to set up as alloca
 /// @param Step Current step of the program analysis
-/// @return bool if is valid or not
+/// @return bool, TRUE is invalid (BUG was found) and FALSE is valid.
 bool AnalysisModeMemory::isValidAllocaAddress(long Address, int Size) {
   // Search from bottom/reverse
   list<map<long, MemoryTrackLog>>::reverse_iterator rit;
@@ -73,7 +67,6 @@ bool AnalysisModeMemory::isValidAllocaAddress(long Address, int Size) {
 }
 
 
-
 /// @brief This replaced the old valid_allocation_log function.
 /// It is to check if all address allocated and tracked
 /// were released at the end of the program, to check this, we iterate
@@ -83,7 +76,8 @@ bool AnalysisModeMemory::isValidAllocaAddress(long Address, int Size) {
 /// if not we return FALSE
 /// @param Step Current step of the program analysis
 /// @param Address Address to set up as alloca
-/// @return map<Error,Address>
+/// @return map<bool,Address>, TRUE is invalid (BUG was found) and FALSE is valid; 
+/// and the invalid Address.
 map<bool, long> AnalysisModeMemory::isAllAllocaAddressValidInTheEnd() {
   long MemTrackAddressError = 0;
   map<bool, long> MapTmp;
@@ -124,7 +118,7 @@ map<bool, long> AnalysisModeMemory::isAllAllocaAddressValidInTheEnd() {
 /// check if the element is not free.
 /// @param Address Address to set up as alloca
 /// @param Size    Size memory
-/// @return bool if is valid or not
+/// @return bool, TRUE is invalid (BUG was found) and FALSE is valid.
 bool AnalysisModeMemory::isValidHeapAddress(long Address, int Size) {
   // Search from bottom/reverse
   list<map<long, MemoryTrackLog>>::reverse_iterator rit;
@@ -141,6 +135,7 @@ bool AnalysisModeMemory::isValidHeapAddress(long Address, int Size) {
   return false;
 }
 
+
 /// @brief This replaced the old is_memcleanup_error function.
 /// A memcleanup error occurs when a memory leak happens but we still have
 /// a pointer that points to the leaked location, so to verify we:
@@ -153,7 +148,7 @@ bool AnalysisModeMemory::isValidHeapAddress(long Address, int Size) {
 /// 4. If loop ends without finding leaked address, then it isn't a memcleanup
 /// error.
 /// @param MemoryAddress to be searched in the list
-/// @return bool to check a memcleanup error 
+/// @return bool, TRUE is invalid (BUG was found) and FALSE is valid.
 bool AnalysisModeMemory::isMemCleanUpError(long MemoryAddress){
     // Search from bottom/reverse
     list<map<long, MemoryTrackLog>> :: reverse_iterator rit; 
@@ -177,13 +172,14 @@ bool AnalysisModeMemory::isMemCleanUpError(long MemoryAddress){
     return false;
 }
 
+
 /// @brief This replaced the old is_deref_error function.
 /// Checking in the container memory if a given address
 /// execute an operation with derefence error:
 /// 1. Where the var memory address is not in the container
 /// 2. If the address already executed an dealallocation - free
 /// @param MemoryAddress to be searched in the list
-/// @return bool as answer
+/// @return bool, TRUE is invalid (BUG was found) and FALSE is valid.
 bool AnalysisModeMemory::isDerefError(long MemoryAddress){
     for(auto item : boost::adaptors::reverse(this->ContainerLog_)){
         if(item.begin()->second.VarMemoryAddress == MemoryAddress){
@@ -205,7 +201,7 @@ bool AnalysisModeMemory::isDerefError(long MemoryAddress){
 /// Checking in the container memory if a given address
 /// execute an invalid free, when that given address was released.
 /// @param MemoryAddress to be searched in the list
-/// @return bool as answer
+/// @return bool, TRUE is invalid (BUG was found) and FALSE is valid.
 bool AnalysisModeMemory::isInvalidFree(long MemoryAddress){
     
     if(MemoryAddress == (long)NULL){
