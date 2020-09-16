@@ -27,7 +27,6 @@ using json = nlohmann::json;
 #include <boost/range/adaptor/reversed.hpp>
 #include <iostream>
 
-
 /// @brief Print all MemoryTrackLog object inside the Container as Json string
 /// format.
 /// @return The Json string
@@ -47,6 +46,29 @@ string ContainerMemoryTrackLog::printContainerAsJson() {
 }
 
 
+/// @brief Searching in reverse order in the container list by a given address.
+/// @param Address to be searched in the container.
+/// @return A MemoryTrackLog object that has the address.
+MemoryTrackLog
+ContainerMemoryTrackLog::searchInContainerLogByAddress(long Address) {
+
+  for (auto item : boost::adaptors::reverse(this->ContainerLog_)) {
+    if (item.begin()->second.VarMemoryAddress == Address) {
+      return item.begin()->second;
+    }
+  }
+
+  MemoryTrackLog t; // default object and empty
+  t.MemoryAddressPointsTo = 0;
+  t.MemoryAddressPointsTo = 0;
+  t.FunctionName = "NULL";
+  t.IsDynamic = false;
+  t.IsFree = true;
+  t.Scope = -1; // Indicates default object
+  return t;
+}
+
+
 /// @brief Check if two object are equals, i.e., they have the value in their
 /// attributes
 /// @param ObjMemory1 First MemoryTrackLog object to be compared
@@ -59,14 +81,14 @@ bool ContainerMemoryTrackLog::isEqualMemoryTrackObj(MemoryTrackLog ObjMemory1,
       ObjMemory1.MemoryAddressPointsTo == ObjMemory2.MemoryAddressPointsTo &&
       ObjMemory1.Scope == ObjMemory2.Scope &&
       ObjMemory1.IsDynamic == ObjMemory2.IsDynamic &&
-      ObjMemory1.IsFree == ObjMemory2.IsFree) {
+      ObjMemory1.IsFree == ObjMemory2.IsFree && 
+      ObjMemory1.LineNumber == ObjMemory2.LineNumber) {
 
     return true;
   }
 
   return false;
 }
-
 
 /// @brief This replaced the old map2check_alloca function.
 /// Tracking alloca instruction in LLVM-IR, i.e., variable declaration.
@@ -80,7 +102,6 @@ void ContainerMemoryTrackLog::mapAlloca(long Step,
   this->ContainerLog_.push_back(MapTmp);
 }
 
-
 /// @brief This replaced the old map2check_non_static_alloca function.
 /// Tracking alloca instruction in LLVM-IR, i.e., static var declaration.
 /// @param Step Current step to track this action
@@ -93,7 +114,6 @@ void ContainerMemoryTrackLog::mapNonStaticAlloca(long Step,
   this->mapAlloca(Step, ObjectMemory);
 }
 
-
 /// @brief This replaced the old map2check_function function.
 /// Tracking function address in LLVM-IR, i.e., function declaration.
 /// @param Step Current step to track this action
@@ -105,7 +125,6 @@ void ContainerMemoryTrackLog::mapFunctionAddress(long Step,
   MapTmp.insert(pair<long, MemoryTrackLog>(++Step, ObjectMemory));
   this->ContainerLog_.push_back(MapTmp);
 }
-
 
 /// @brief This replaced the old map2check_malloc function.
 /// Tracks address that was pass as input to malloc function.
@@ -129,7 +148,6 @@ void ContainerMemoryTrackLog::setMalloc(long Step, long Address, int Size) {
   this->ContainerLog_.push_back(MapTmp);
 }
 
-
 /// @brief Tracks address that was pass as input to calloc function.
 /// @param Step Current step of the program analysis
 /// @param Address Address to set up as calloca to alloca
@@ -140,7 +158,6 @@ void ContainerMemoryTrackLog::setCalloc(long Step, long Address, int Quantity,
                                         int Size) {
   this->setMalloc(Step, Address, Quantity * Size);
 }
-
 
 /// @brief This replaced the old map2check_add_store_pointer function.
 /// Tracking pointer store, i.e., pointer assignment.
@@ -161,11 +178,11 @@ void ContainerMemoryTrackLog::mapStorePointer(long Step,
         map<long, MemoryTrackLog> MapTmp;
         MapTmp.insert(pair<long, MemoryTrackLog>(++Step, ObjectMemory));
         this->ContainerLog_.push_back(MapTmp);
+        break;
       }
     }
   }
 }
-
 
 /// @brief This replaced the old map2check_free_resolved_address function.
 /// Tracks address that is given as input to a free function.

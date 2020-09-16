@@ -6,7 +6,7 @@ add_executable(
   unit_tests
   AnalysisModeAssert_test.cpp
   AnalysisModeOverflow_test.cpp 
-  # containerMemoryTrackLog_test.cpp 
+  containerMemoryTrackLog_test.cpp 
   containerNonDetLog_test.cpp
   containerTrackBbLog_test.cpp
   nondetlog_test.cpp
