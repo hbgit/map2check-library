@@ -18,6 +18,9 @@
 #define __TRACKBBLOG_H_INCLUDED__
 
 #include <string>
+#include "../lib/json.hpp"
+
+using json = nlohmann::json;
 using namespace std;
 
 class TrackBbLog {
@@ -25,5 +28,7 @@ class TrackBbLog {
         long Line;
         string FunctName;
 };
+
+NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(TrackBbLog, Line, FunctName);
 
 #endif // __TRACKBBLOG_H_INCLUDED__ 

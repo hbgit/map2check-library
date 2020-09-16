@@ -31,7 +31,7 @@ class ContainerTrackBbLog {
     public:
         list<map<long, TrackBbLog>> ContainerLog_;
         bool isInTrackedBbLog(long LineNumber);
-        string printJsonObj(TrackBbLog ObjModelIn);
+        string printContainerAsJson();
 };
 
 #endif // __CONTAINERTRACKBBLOG_H_INCLUDED__ 
