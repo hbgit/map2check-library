@@ -10,6 +10,7 @@ add_executable(
   containerNonDetLog_test.cpp
   containerTrackBbLog_test.cpp
   nondetlog_test.cpp
+  TrackBbLog_test.cpp
 )
 
 target_link_libraries(
