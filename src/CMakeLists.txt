@@ -7,17 +7,15 @@ file(GLOB SOURCES "*.cpp")
 add_library(map2check STATIC ${SOURCES})
 
 list(APPEND MAP2CHECK_C_LIB "")
-#list(APPEND MAP2CHECK_C_LIB "ContainerAllocaLog")
-#list(APPEND MAP2CHECK_C_LIB "ContainerHeapLog")
+list(APPEND MAP2CHECK_C_LIB "AnalysisModeAssert")
+list(APPEND MAP2CHECK_C_LIB "AnalysisModeMemory")
+list(APPEND MAP2CHECK_C_LIB "AnalysisModeOverflow")
 list(APPEND MAP2CHECK_C_LIB "ContainerMemoryTrackLog")
 list(APPEND MAP2CHECK_C_LIB "ContainerNonDetLog")
 list(APPEND MAP2CHECK_C_LIB "ContainerTrackBbLog")
 list(APPEND MAP2CHECK_C_LIB "NonDetGenKlee")
 list(APPEND MAP2CHECK_C_LIB "NonDetGenLibFuzzer")
 list(APPEND MAP2CHECK_C_LIB "NondetLog")
-list(APPEND MAP2CHECK_C_LIB "AnalysisModeAssert")
-list(APPEND MAP2CHECK_C_LIB "AnalysisModeOverflow")
-list(APPEND MAP2CHECK_C_LIB "AnalysisModeMemory")
 
 
 # Generating lib as bc to LLVM

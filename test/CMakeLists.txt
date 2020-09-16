@@ -3,13 +3,13 @@ project (TestLibrary)
 include_directories(${PROJECT_SOURCE_DIR}/include)
 
 add_executable(
-  unit_tests  
-  nondetlog_test.cpp
+  unit_tests
+  AnalysisModeAssert_test.cpp
+  AnalysisModeOverflow_test.cpp 
+  # containerMemoryTrackLog_test.cpp 
   containerNonDetLog_test.cpp
   containerTrackBbLog_test.cpp
-  # containerMemoryTrackLog_test.cpp  
-  AnalysisModeAssert_test.cpp
-  AnalysisModeOverflow_test.cpp
+  nondetlog_test.cpp
 )
 
 target_link_libraries(

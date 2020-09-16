@@ -23,7 +23,7 @@ TEST(ContainerTrackBbLog, JsonGen)
     MapTmp.insert(pair<long, TrackBbLog>(2,TrLog));
     CntrTrackBb.ContainerLog_.push_back(MapTmp);
 
-    string JsonTxt = CntrTrackBb.printJsonObj(TrLog);
+    string JsonTxt = CntrTrackBb.printContainerAsJson();
 
     EXPECT_GE(JsonTxt.length(), 2);
 }
