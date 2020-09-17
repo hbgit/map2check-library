@@ -26,16 +26,16 @@ using namespace std;
 
 class MemoryTrackLog {
 public:
-  long VarMemoryAddress;
-  long MemoryAddressPointsTo;
-  int Scope;
-  bool IsDynamic;
-  bool IsFree;
-  unsigned LineNumber;
-  string PointerName;
-  string FunctionName;
-  int SizeToDestiny;
-  int SizeOfPrimitive;
+  long VarMemoryAddress = 0;
+  long MemoryAddressPointsTo = 0;
+  int Scope = -1;
+  bool IsDynamic = false;
+  bool IsFree = false;
+  unsigned LineNumber = -1;
+  string PointerName = "";
+  string FunctionName = "";
+  int SizeToDestiny = -1;
+  int SizeOfPrimitive = -1;
 
   // string printJsonObj(MemoryTrackLog ObjModelIn);
 };

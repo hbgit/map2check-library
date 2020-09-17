@@ -138,10 +138,12 @@ void ContainerMemoryTrackLog::setMalloc(long Step, long Address, int Size) {
   if (AllocaTmp.VarMemoryAddress != 0) {
     AllocaTmp.SizeToDestiny = Size;
     AllocaTmp.IsFree = false;
+    AllocaTmp.IsDynamic = true;
   } else {
     AllocaTmp.VarMemoryAddress = Address;
     AllocaTmp.SizeToDestiny = Size;
     AllocaTmp.IsFree = false;
+    AllocaTmp.IsDynamic = true;
   }
   map<long, MemoryTrackLog> MapTmp;
   MapTmp.insert(pair<long, MemoryTrackLog>(++Step, AllocaTmp));
@@ -180,6 +182,7 @@ void ContainerMemoryTrackLog::mapStorePointer(long Step,
         this->ContainerLog_.push_back(MapTmp);
         break;
       }
+      break;
     }
   }
 }
