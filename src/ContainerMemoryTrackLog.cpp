@@ -179,6 +179,7 @@ void ContainerMemoryTrackLog::mapStorePointer(long Step,
       if (!this->isEqualMemoryTrackObj(rit->begin()->second, ObjectMemory)) {
         map<long, MemoryTrackLog> MapTmp;
         MapTmp.insert(pair<long, MemoryTrackLog>(++Step, ObjectMemory));
+        cout << ObjectMemory.IsDynamic << endl;
         this->ContainerLog_.push_back(MapTmp);
         break;
       }

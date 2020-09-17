@@ -29,9 +29,7 @@ private:
   list<map<long, MemoryTrackLog>> ContainerLog_;
 
 public:
-  AnalysisModeMemory(list<map<long, MemoryTrackLog>> CntrContainerLog_) {
-    this->ContainerLog_ = CntrContainerLog_;
-  }
+  AnalysisModeMemory(list<map<long, MemoryTrackLog>> CntrContainerLog_);
 
   bool IsNullValid;
   bool IsCheckMemCleanUp;

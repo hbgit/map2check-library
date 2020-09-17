@@ -5,6 +5,7 @@ include_directories(${PROJECT_SOURCE_DIR}/include)
 add_executable(
   unit_tests
   AnalysisModeAssert_test.cpp
+  AnalysisModeMemory_test.cpp
   AnalysisModeOverflow_test.cpp 
   containerMemoryTrackLog_test.cpp 
   containerNonDetLog_test.cpp

@@ -18,6 +18,16 @@
 #include "../include/AnalysisModeMemory.hpp"
 #include <boost/range/adaptor/reversed.hpp>
 
+#include <set>
+#include <iostream>
+
+
+
+AnalysisModeMemory::AnalysisModeMemory(list<map<long, MemoryTrackLog>> CntrContainerLog_) {
+    this->ContainerLog_ = CntrContainerLog_;
+  }
+
+
 /// @brief old map2check_free_resolved_address function. 
 /// Check if a given address is valid to be dealallocated.
 /// @param Address to be analyzed
@@ -72,8 +82,7 @@ bool AnalysisModeMemory::isValidAllocaAddress(long Address, int Size) {
 /// were released at the end of the program, to check this, we iterate
 /// over all elements starting from bottom of allocation log, if the
 /// address of the current item is not Free, we iterate from the top
-/// if we find that the address was released, then we go on
-/// if not we return FALSE
+/// if we find that the address was released.
 /// @param Step Current step of the program analysis
 /// @param Address Address to set up as alloca
 /// @return map<bool,Address>, TRUE is invalid (BUG was found) and FALSE is valid; 
@@ -81,13 +90,18 @@ bool AnalysisModeMemory::isValidAllocaAddress(long Address, int Size) {
 map<bool, long> AnalysisModeMemory::isAllAllocaAddressValidInTheEnd() {
   long MemTrackAddressError = 0;
   map<bool, long> MapTmp;
+  set<int> SetOfAddressChecked;
 
   // Search from bottom/reverse
   list<map<long, MemoryTrackLog>>::reverse_iterator rit;
 
   for (rit = this->ContainerLog_.rbegin(); rit != this->ContainerLog_.rend();
        rit++) {
-    if (rit->begin()->second.IsFree == false) {
+      const bool IsIn = SetOfAddressChecked.find(rit->begin()->second.VarMemoryAddress) != SetOfAddressChecked.end();
+      //cout << rit->begin()->second.VarMemoryAddress << endl;
+      //cout << rit->begin()->second.IsFree << endl;
+    
+    if (rit->begin()->second.IsFree == false && !IsIn) {      
       bool ReleasedFound = false;
       MemTrackAddressError = rit->begin()->second.VarMemoryAddress;
       // Search from top
@@ -95,16 +109,18 @@ map<bool, long> AnalysisModeMemory::isAllAllocaAddressValidInTheEnd() {
         if (MemTrackAddressError == item.begin()->second.VarMemoryAddress &&
             item.begin()->second.IsFree) {
           ReleasedFound = true;
+          SetOfAddressChecked.insert(rit->begin()->second.VarMemoryAddress);
         }
       }
 
       if (ReleasedFound == false) {
-        MapTmp.insert(pair<bool, long>(false, MemTrackAddressError));
+        MapTmp.insert(pair<bool, long>(true, MemTrackAddressError));
         return MapTmp;
       }
-    }
+    }    
+    
   }
-  MapTmp.insert(pair<bool, long>(true, 0));
+  MapTmp.insert(pair<bool, long>(false, 0));
   return MapTmp;
 }
 
@@ -157,13 +173,17 @@ bool AnalysisModeMemory::isMemCleanUpError(long MemoryAddress){
         rit != this->ContainerLog_.rend(); rit++){            
             if(rit->begin()->second.MemoryAddressPointsTo == MemoryAddress){
                bool error = true;
-               for(auto item : boost::adaptors::reverse(this->ContainerLog_)){
-                   if(rit->begin()->second.VarMemoryAddress == item.begin()->second.VarMemoryAddress){
-                       error = item.begin()->second.MemoryAddressPointsTo == MemoryAddress ? 
+               
+               //for(auto item : boost::adaptors::reverse(this->ContainerLog_)){
+                list<map<long, MemoryTrackLog>> :: reverse_iterator Fromrit; 
+                for(Fromrit = rit; rit != this->ContainerLog_.rend(); rit++){
+                   if(rit->begin()->second.VarMemoryAddress == Fromrit->begin()->second.VarMemoryAddress){
+                       error = Fromrit->begin()->second.MemoryAddressPointsTo == MemoryAddress ? 
                                true : false;
                         break;
                    }
                }
+
                if(error){
                    return true;
                }
@@ -193,7 +213,7 @@ bool AnalysisModeMemory::isDerefError(long MemoryAddress){
             }
         }
     }
-    return false;
+    return true;
 }
 
 
