@@ -25,8 +25,9 @@ using namespace std;
 
 class TrackBbLog {
     public:
-        long Line;
-        string FunctName;
+        long Step = 0;
+        long Line = -1;
+        string FunctName = "";
 };
 
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(TrackBbLog, Line, FunctName);

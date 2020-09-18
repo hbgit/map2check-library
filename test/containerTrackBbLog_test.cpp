@@ -6,7 +6,7 @@
 TEST(ContainerTrackBbLog, ContainerList)
 {
     ContainerTrackBbLog CntrTrackBb;
-    map<long, TrackBbLog> MapTmp;
+    TrackBbLog MapTmp;
     CntrTrackBb.ContainerLog_.push_back(MapTmp);
 
     EXPECT_TRUE(CntrTrackBb.ContainerLog_.size() == 1);
@@ -19,9 +19,7 @@ TEST(ContainerTrackBbLog, JsonGen)
     TrLog.Line = 12;
     TrLog.FunctName = "foo";
 
-    map<long, TrackBbLog> MapTmp;
-    MapTmp.insert(pair<long, TrackBbLog>(2,TrLog));
-    CntrTrackBb.ContainerLog_.push_back(MapTmp);
+    CntrTrackBb.ContainerLog_.push_back(TrLog);
 
     string JsonTxt = CntrTrackBb.printContainerAsJson();
 
@@ -35,9 +33,7 @@ TEST(ContainerTrackBbLog, CheckLine)
     TrLog.Line = 12;
     TrLog.FunctName = "foo";
 
-    map<long, TrackBbLog> MapTmp;
-    MapTmp.insert(pair<long, TrackBbLog>(2,TrLog));
-    CntrTrackBb.ContainerLog_.push_back(MapTmp);
+    CntrTrackBb.ContainerLog_.push_back(TrLog);
 
     EXPECT_EQ(CntrTrackBb.isInTrackedBbLog(12), true);
 }

@@ -29,7 +29,7 @@ using json = nlohmann::json;
 
 class ContainerTrackBbLog {
     public:
-        list<map<long, TrackBbLog>> ContainerLog_;
+        list<TrackBbLog> ContainerLog_;
         bool isInTrackedBbLog(long LineNumber);
         string printContainerAsJson();
 };

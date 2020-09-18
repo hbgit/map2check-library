@@ -22,12 +22,12 @@
 /// @return The Json string
 string ContainerTrackBbLog::printContainerAsJson() {
 
-  list<map<long, TrackBbLog>>::iterator it;
+  list<TrackBbLog>::iterator it;
   std::string JsonString;
 
   for (it = this->ContainerLog_.begin(); it != this->ContainerLog_.end();
        it++) {
-    json j = it->begin()->second;
+    json j = *it;
     JsonString += j.dump().c_str();
   }
 
@@ -39,7 +39,7 @@ string ContainerTrackBbLog::printContainerAsJson() {
 /// @return bool
 bool ContainerTrackBbLog::isInTrackedBbLog(long LineNumber) {
   for (auto item : this->ContainerLog_) {
-    if (item.begin()->second.Line == LineNumber) {
+    if (item.Line == LineNumber) {
       return true;
     }
   }

@@ -1,9 +1,6 @@
 #include "../include/TrackBbLog.hpp"
 
 #include "gtest/gtest.h"
-#include "../lib/json.hpp"
-
-using json = nlohmann::json;
 
 TEST(TrackBbLog, Object)
 {
