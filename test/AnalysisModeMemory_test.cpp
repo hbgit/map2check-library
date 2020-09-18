@@ -20,6 +20,7 @@ TEST(AnalysisModeMemory, isValidAllocaAddress)
     
 
     MtTmp.setMalloc();
+    MtTmp.SizeToDestiny = 4;
     CntrMt.mapAlloca(MtTmp);
 
     AnalysisModeMemory aM = AnalysisModeMemory(CntrMt.ContainerLog_);
