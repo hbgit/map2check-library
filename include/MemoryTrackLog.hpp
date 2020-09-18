@@ -26,7 +26,7 @@ using namespace std;
 
 class MemoryTrackLog {
 public:
-  long Step;
+  long Step = -1;
   long VarMemoryAddress = 0;
   long MemoryAddressPointsTo = 0;
   int Scope = -1;

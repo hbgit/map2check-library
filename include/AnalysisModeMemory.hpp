@@ -26,10 +26,10 @@ using namespace std;
 
 class AnalysisModeMemory {
 private:
-  list<map<long, MemoryTrackLog>> ContainerLog_;
+  list<MemoryTrackLog> ContainerLog_;
 
 public:
-  AnalysisModeMemory(list<map<long, MemoryTrackLog>> CntrContainerLog_);
+  AnalysisModeMemory(list<MemoryTrackLog> CntrContainerLog_);
 
   bool IsNullValid;
   bool IsCheckMemCleanUp;

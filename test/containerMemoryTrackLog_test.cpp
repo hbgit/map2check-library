@@ -6,7 +6,7 @@
 TEST(ContainerMemoryTrackLog, ContainerList)
 {
     ContainerMemoryTrackLog CntrMt;
-    map<long, MemoryTrackLog> MapTmp;
+    MemoryTrackLog MapTmp;
     CntrMt.ContainerLog_.push_back(MapTmp);
 
     EXPECT_TRUE(CntrMt.ContainerLog_.size() == 1);
@@ -24,14 +24,12 @@ TEST(ContainerMemoryTrackLog, JsonGen)
     MtTmp.IsFree = false;
     MtTmp.LineNumber = 13;
     MtTmp.Scope = 0;
-
-    map<long, MemoryTrackLog> MapTmp;
-    MapTmp.insert(pair<long, MemoryTrackLog>(2,MtTmp));
-    CntrMt.ContainerLog_.push_back(MapTmp);
+    
+    CntrMt.ContainerLog_.push_back(MtTmp);
 
     string JsonTxt = CntrMt.printContainerAsJson();
 
-    EXPECT_GE(JsonTxt.length(), 2);
+    EXPECT_GE(JsonTxt.length(), 1);
 }
 
 
@@ -48,49 +46,15 @@ TEST(ContainerMemoryTrackLog, searchInContainerLogByAddress)
     MtTmp.LineNumber = 13;
     MtTmp.Scope = 0;
 
-    map<long, MemoryTrackLog> MapTmp;
-    MapTmp.insert(pair<long, MemoryTrackLog>(2,MtTmp));
-    CntrMt.ContainerLog_.push_back(MapTmp);
+    CntrMt.ContainerLog_.push_back(MtTmp);
 
     EXPECT_EQ(CntrMt.searchInContainerLogByAddress(1012).IsFree, false);
 
-    MtTmp.IsFree = true;
-    map<long, MemoryTrackLog> MapTmp2;
-    MapTmp2.insert(pair<long, MemoryTrackLog>(5,MtTmp));
-    CntrMt.ContainerLog_.push_back(MapTmp2);
+    MtTmp.IsFree = true;    
+    MtTmp.Step = 5;
+    CntrMt.ContainerLog_.push_back(MtTmp);
     
     EXPECT_EQ(CntrMt.searchInContainerLogByAddress(1012).IsFree, true);
-}
-
-
-TEST(ContainerMemoryTrackLog, isEqualMemoryTrackObj)
-{
-    ContainerMemoryTrackLog CntrMt;
-
-    MemoryTrackLog MtTmp;
-    MtTmp.MemoryAddressPointsTo = 1024;
-    MtTmp.VarMemoryAddress = 1012;    
-    MtTmp.IsDynamic = true;
-    MtTmp.IsFree = false;
-    MtTmp.LineNumber = 13;
-    MtTmp.Scope = 0;
-
-    MemoryTrackLog MtTmp2;
-    MtTmp2.MemoryAddressPointsTo = 1024;
-    MtTmp2.VarMemoryAddress = 1012;    
-    MtTmp2.IsDynamic = true;
-    MtTmp2.IsFree = false;
-    MtTmp2.LineNumber = 13;
-    MtTmp2.Scope = 0;
-    
-    // True
-    EXPECT_EQ(CntrMt.isEqualMemoryTrackObj(MtTmp, MtTmp2), true);
-
-    MtTmp2.IsDynamic = false;
-    MtTmp2.IsFree = true;
-
-    // False
-    EXPECT_EQ(CntrMt.isEqualMemoryTrackObj(MtTmp, MtTmp2), false);
 }
 
 
@@ -104,12 +68,10 @@ TEST(ContainerMemoryTrackLog, mapAlloca)
     MtTmp.LineNumber = 13;
     MtTmp.Scope = 0;
 
-    map<long, MemoryTrackLog> MapTmp;
-    MapTmp.insert(pair<long, MemoryTrackLog>(2,MtTmp));
-    CntrMt.mapAlloca(2, MtTmp);
+    CntrMt.mapAlloca(MtTmp);
 
-    EXPECT_EQ(CntrMt.searchInContainerLogByAddress(1012).Scope, 0);
-    EXPECT_EQ(CntrMt.searchInContainerLogByAddress(1212).Scope, -1);
+    EXPECT_EQ(CntrMt.searchInContainerLogByAddress(1012).Step, 0);
+    EXPECT_EQ(CntrMt.searchInContainerLogByAddress(1212).Step, -1);
 }
 
 
@@ -125,12 +87,10 @@ TEST(ContainerMemoryTrackLog, mapNonStaticAlloca)
     MtTmp.SizeOfPrimitive = 4;
     MtTmp.SizeToDestiny = 4;
 
-    map<long, MemoryTrackLog> MapTmp;
-    MapTmp.insert(pair<long, MemoryTrackLog>(2,MtTmp));
-    CntrMt.mapNonStaticAlloca(2, MtTmp);
+    CntrMt.mapNonStaticAlloca(MtTmp);
 
-    EXPECT_EQ(CntrMt.searchInContainerLogByAddress(1012).Scope, 0);
-    EXPECT_EQ(CntrMt.searchInContainerLogByAddress(1212).Scope, -1);
+    EXPECT_EQ(CntrMt.searchInContainerLogByAddress(1012).Step, 0);
+    EXPECT_EQ(CntrMt.searchInContainerLogByAddress(1212).Step, -1);
 }
 
 
@@ -146,12 +106,10 @@ TEST(ContainerMemoryTrackLog, mapFunctionAddress)
     MtTmp.SizeOfPrimitive = 4;
     MtTmp.SizeToDestiny = 4;
 
-    map<long, MemoryTrackLog> MapTmp;
-    MapTmp.insert(pair<long, MemoryTrackLog>(2,MtTmp));
-    CntrMt.mapFunctionAddress(2, MtTmp);
+    CntrMt.mapFunctionAddress(MtTmp);
 
-    EXPECT_EQ(CntrMt.searchInContainerLogByAddress(1012).Scope, 0);
-    EXPECT_EQ(CntrMt.searchInContainerLogByAddress(1212).Scope, -1);
+    EXPECT_EQ(CntrMt.searchInContainerLogByAddress(1012).Step, 0);
+    EXPECT_EQ(CntrMt.searchInContainerLogByAddress(1212).Step, -1);
 }
 
 
@@ -159,6 +117,7 @@ TEST(ContainerMemoryTrackLog, mapStorePointer)
 {
     ContainerMemoryTrackLog CntrMt;
     MemoryTrackLog MtTmp;
+    MtTmp.Step = 1;
     MtTmp.MemoryAddressPointsTo = 1024;
     MtTmp.VarMemoryAddress = 1012;
     MtTmp.FunctionName = "foo";        
@@ -167,15 +126,14 @@ TEST(ContainerMemoryTrackLog, mapStorePointer)
     MtTmp.SizeOfPrimitive = 4;
     MtTmp.SizeToDestiny = 4;
 
-    map<long, MemoryTrackLog> MapTmp;
-    MapTmp.insert(pair<long, MemoryTrackLog>(2,MtTmp));
-    CntrMt.mapAlloca(2, MtTmp);
+    CntrMt.mapAlloca(MtTmp);
 
     //cout << CntrMt.printContainerAsJson() << CntrMt.ContainerLog_.size() << endl;
     //cout << "-----------------------------" << endl;
    
     MtTmp.LineNumber = 20;
-    CntrMt.mapStorePointer(3, MtTmp);
+    MtTmp.Step = 3;
+    CntrMt.mapStorePointer(MtTmp);
 
     //cout << CntrMt.printContainerAsJson() << CntrMt.ContainerLog_.size() << endl;
     //cout << "-----------------------------" << endl;
@@ -184,143 +142,10 @@ TEST(ContainerMemoryTrackLog, mapStorePointer)
     EXPECT_EQ(CntrMt.searchInContainerLogByAddress(1012).LineNumber, 20);
 
     MtTmp.LineNumber = 20;
-    CntrMt.mapStorePointer(3, MtTmp); // not add in the container
+    CntrMt.mapStorePointer(MtTmp); // not add in the container
     //cout << CntrMt.printContainerAsJson() << CntrMt.ContainerLog_.size() << endl;
     //cout << "-----------------------------" << endl;
 
     EXPECT_TRUE(CntrMt.ContainerLog_.size() == 2);
     EXPECT_EQ(CntrMt.searchInContainerLogByAddress(1212).Scope, -1);
 }
-
-
-TEST(ContainerMemoryTrackLog, setMalloc)
-{
-    ContainerMemoryTrackLog CntrMt;
-    MemoryTrackLog MtTmp;
-    MtTmp.MemoryAddressPointsTo = 1024;
-    MtTmp.VarMemoryAddress = 1012;
-    MtTmp.FunctionName = "foo";        
-    MtTmp.LineNumber = 13;
-    MtTmp.Scope = 0;
-    MtTmp.SizeOfPrimitive = 4;
-    MtTmp.SizeToDestiny = 4;
-    
-    CntrMt.mapAlloca(2, MtTmp);
-    EXPECT_EQ(CntrMt.searchInContainerLogByAddress(1012).IsDynamic, false);
-    
-    CntrMt.setMalloc(3, 1012, 4);
-    EXPECT_EQ(CntrMt.searchInContainerLogByAddress(1012).IsDynamic, true);
-}
-
-
-TEST(ContainerMemoryTrackLog, setCalloc)
-{
-    ContainerMemoryTrackLog CntrMt;
-    MemoryTrackLog MtTmp;
-    MtTmp.MemoryAddressPointsTo = 1024;
-    MtTmp.VarMemoryAddress = 1012;
-    MtTmp.FunctionName = "foo";        
-    MtTmp.LineNumber = 13;
-    MtTmp.Scope = 0;
-    MtTmp.SizeOfPrimitive = 4;
-    MtTmp.SizeToDestiny = 4;
-    
-    CntrMt.mapAlloca(2, MtTmp);
-    EXPECT_EQ(CntrMt.searchInContainerLogByAddress(1012).IsDynamic, false);
-    
-    CntrMt.setCalloc(3, 1012, 4, 4);
-    EXPECT_EQ(CntrMt.searchInContainerLogByAddress(1012).IsDynamic, true);
-    EXPECT_EQ(CntrMt.searchInContainerLogByAddress(1012).SizeToDestiny, 16);
-}
-
-
-TEST(ContainerMemoryTrackLog, setFree)
-{
-    ContainerMemoryTrackLog CntrMt;
-    MemoryTrackLog MtTmp;
-    MtTmp.MemoryAddressPointsTo = 1024;
-    MtTmp.VarMemoryAddress = 1012;
-    MtTmp.FunctionName = "foo";        
-    MtTmp.LineNumber = 13;
-    MtTmp.Scope = 0;
-    MtTmp.SizeOfPrimitive = 4;
-    MtTmp.SizeToDestiny = 4;
-    
-    CntrMt.mapAlloca(2, MtTmp);
-    EXPECT_EQ(CntrMt.searchInContainerLogByAddress(1012).IsDynamic, false);
-    EXPECT_EQ(CntrMt.searchInContainerLogByAddress(1012).IsFree, false);
-    
-    CntrMt.setMalloc(3, 1012, 4);
-    EXPECT_EQ(CntrMt.searchInContainerLogByAddress(1012).IsDynamic, true);
-    EXPECT_EQ(CntrMt.searchInContainerLogByAddress(1012).IsFree, false);
-
-    CntrMt.setFree(4, MtTmp, 0);
-    EXPECT_EQ(CntrMt.searchInContainerLogByAddress(1012).IsDynamic, false);
-    EXPECT_EQ(CntrMt.searchInContainerLogByAddress(1012).IsFree, true);
-}
-
-/*
-TEST(ContainerMemoryTrackLog, IsMemCleanUpError)
-{
-    ContainerMemoryTrackLog CntrMt;
-    MemoryTrackLog MtTmp;
-    MtTmp.MemoryAddressPointsTo = 1024;
-    MtTmp.VarMemoryAddress = 1012;
-    MtTmp.FunctionName = "foo";
-    MtTmp.PointerName = "ptr";
-    MtTmp.IsDynamic = true;
-    MtTmp.IsFree = false;
-    MtTmp.LineNumber = 13;
-    MtTmp.Scope = 0;
-
-    map<long, MemoryTrackLog> MapTmp;
-    MapTmp.insert(pair<long, MemoryTrackLog>(2,MtTmp));
-    CntrMt.ContainerLog_.push_back(MapTmp);
-    
-    EXPECT_EQ(CntrMt.isMemCleanUpError(1024), true);
-    EXPECT_EQ(CntrMt.isMemCleanUpError(1012), false);
-}
-
-TEST(ContainerMemoryTrackLog, IsDerefError)
-{
-    ContainerMemoryTrackLog CntrMt;
-    MemoryTrackLog MtTmp;
-    MtTmp.MemoryAddressPointsTo = 1024;
-    MtTmp.VarMemoryAddress = 1012;
-    MtTmp.FunctionName = "foo";
-    MtTmp.PointerName = "ptr";
-    MtTmp.IsDynamic = true;
-    MtTmp.IsFree = true;
-    MtTmp.LineNumber = 13;
-    MtTmp.Scope = 0;
-
-    map<long, MemoryTrackLog> MapTmp;
-    MapTmp.insert(pair<long, MemoryTrackLog>(2,MtTmp));
-    CntrMt.ContainerLog_.push_back(MapTmp);
-    
-    EXPECT_EQ(CntrMt.isDerefError(1012), false);
-    EXPECT_EQ(CntrMt.isDerefError(1024), true);
-    EXPECT_EQ(CntrMt.isDerefError(4000), false);
-}
-
-TEST(ContainerMemoryTrackLog, IsInvalidFree)
-{
-    ContainerMemoryTrackLog CntrMt;
-    MemoryTrackLog MtTmp;
-    MtTmp.MemoryAddressPointsTo = 1024;
-    MtTmp.VarMemoryAddress = 1012;
-    MtTmp.FunctionName = "foo";
-    MtTmp.PointerName = "ptr";
-    MtTmp.IsDynamic = true;
-    MtTmp.IsFree = true;
-    MtTmp.LineNumber = 13;
-    MtTmp.Scope = 0;
-
-    map<long, MemoryTrackLog> MapTmp;
-    MapTmp.insert(pair<long, MemoryTrackLog>(2,MtTmp));
-    CntrMt.ContainerLog_.push_back(MapTmp);
-    
-    EXPECT_EQ(CntrMt.isInvalidFree((long)NULL), false);
-    EXPECT_EQ(CntrMt.isInvalidFree(1024), true);
-    
-}*/

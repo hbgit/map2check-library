@@ -9,15 +9,18 @@ TEST(AnalysisModeMemory, isValidAllocaAddress)
 {
     ContainerMemoryTrackLog CntrMt;
     MemoryTrackLog MtTmp;
+    MtTmp.Step = 1;
     MtTmp.MemoryAddressPointsTo = 1024;
     MtTmp.VarMemoryAddress = 1012;
     MtTmp.FunctionName = "foo";        
     MtTmp.LineNumber = 13;
     MtTmp.Scope = 0;    
     MtTmp.SizeToDestiny = 0;
-    CntrMt.mapAlloca(2, MtTmp);
-    CntrMt.setMalloc(3, 1012, 4);
+    CntrMt.mapAlloca(MtTmp);
+    
 
+    MtTmp.setMalloc();
+    CntrMt.mapAlloca(MtTmp);
 
     AnalysisModeMemory aM = AnalysisModeMemory(CntrMt.ContainerLog_);
     // insede the valid heap range
@@ -30,22 +33,26 @@ TEST(AnalysisModeMemory, isAllAllocaAddressValidInTheEnd)
 {
     ContainerMemoryTrackLog CntrMt;
     MemoryTrackLog MtTmp;
+    MtTmp.Step = 1;
     MtTmp.MemoryAddressPointsTo = 1024;
     MtTmp.VarMemoryAddress = 1012;
     MtTmp.FunctionName = "foo";        
     MtTmp.LineNumber = 13;
     MtTmp.Scope = 0;    
     MtTmp.SizeToDestiny = 0;
-    CntrMt.mapAlloca(2, MtTmp);
-    CntrMt.setMalloc(3, 1012, 4);
+    CntrMt.mapAlloca(MtTmp);
+    MtTmp.Step = 2;
+    MtTmp.setMalloc();
+    CntrMt.mapAlloca(MtTmp);
 
     MemoryTrackLog MtTmp2;
     MtTmp2.MemoryAddressPointsTo = 1728;
     MtTmp2.VarMemoryAddress = 1144;
     MtTmp2.FunctionName = "foo";        
     MtTmp2.LineNumber = 17;
-    CntrMt.mapAlloca(3, MtTmp2);
-    CntrMt.setMalloc(4, 1144, 4);
+    CntrMt.mapAlloca(MtTmp2);
+    MtTmp2.setMalloc();
+    CntrMt.mapAlloca(MtTmp2);
 
 
     AnalysisModeMemory aM = AnalysisModeMemory(CntrMt.ContainerLog_);
@@ -56,8 +63,11 @@ TEST(AnalysisModeMemory, isAllAllocaAddressValidInTheEnd)
     EXPECT_EQ(Ans.begin()->second, 1144);
 
     //true
-    CntrMt.setFree(5, MtTmp, 0);
-    CntrMt.setFree(6, MtTmp2, 0);
+    MtTmp.setFree();
+    CntrMt.mapAlloca(MtTmp);
+    MtTmp2.setFree();
+    CntrMt.mapAlloca(MtTmp2);
+
     //cout << CntrMt.printContainerAsJson() << endl;
     AnalysisModeMemory aM2 = AnalysisModeMemory(CntrMt.ContainerLog_);
     map<bool, long> Ans2 = aM2.isAllAllocaAddressValidInTheEnd();
@@ -71,13 +81,14 @@ TEST(AnalysisModeMemory, isValidHeapAddress)
 {
     ContainerMemoryTrackLog CntrMt;
     MemoryTrackLog MtTmp;
+    MtTmp.Step = 1;
     MtTmp.MemoryAddressPointsTo = 1024;
     MtTmp.VarMemoryAddress = 1012;
     MtTmp.FunctionName = "foo";        
     MtTmp.LineNumber = 13;
     MtTmp.Scope = 0;    
     MtTmp.SizeToDestiny = 4;
-    CntrMt.mapAlloca(2, MtTmp);
+    CntrMt.mapAlloca(MtTmp);
 
     AnalysisModeMemory aM = AnalysisModeMemory(CntrMt.ContainerLog_);
     
@@ -97,11 +108,13 @@ TEST(AnalysisModeMemory, isMemCleanUpError)
     MtTmp.LineNumber = 13;
     MtTmp.Scope = 0;    
     MtTmp.SizeToDestiny = 0;
-    CntrMt.mapAlloca(2, MtTmp);
-    CntrMt.setMalloc(3, 1012, 4);
-    MtTmp.IsDynamic = true;
+    CntrMt.mapAlloca(MtTmp);
+    MtTmp.setMalloc();
+    CntrMt.mapAlloca(MtTmp);
+    
     MtTmp.SizeToDestiny = 4;
-    CntrMt.mapStorePointer(4, MtTmp);
+    MtTmp.Step += MtTmp.Step;
+    CntrMt.mapStorePointer(MtTmp);
 
 
     AnalysisModeMemory aM = AnalysisModeMemory(CntrMt.ContainerLog_);
@@ -126,18 +139,20 @@ TEST(AnalysisModeMemory, isDerefError)
     MtTmp.Scope = 0;    
     MtTmp.SizeToDestiny = 4;
     
-    CntrMt.mapAlloca(2, MtTmp);
+    CntrMt.mapAlloca(MtTmp);
     AnalysisModeMemory aM = AnalysisModeMemory(CntrMt.ContainerLog_);    
     EXPECT_EQ(aM.isDerefError(1012), false);
 
-    MtTmp.IsDynamic = true;
+    MtTmp.setMalloc();
+    CntrMt.mapAlloca(MtTmp);
     MtTmp.SizeToDestiny = 4;
-    CntrMt.setMalloc(3, 1024, 4);
+    
     AnalysisModeMemory aM2 = AnalysisModeMemory(CntrMt.ContainerLog_);    
     EXPECT_EQ(aM2.isDerefError(1024), false);
     EXPECT_EQ(aM2.isDerefError(1728), true);
 
-    CntrMt.setFree(4, MtTmp, 0);
+    MtTmp.setFree();
+    CntrMt.mapAlloca(MtTmp);
     AnalysisModeMemory aM3 = AnalysisModeMemory(CntrMt.ContainerLog_);    
     EXPECT_EQ(aM3.isDerefError(1024), true);
 
@@ -157,17 +172,19 @@ TEST(AnalysisModeMemory, isInvalidFree)
     MtTmp.FunctionName = "foo";        
     MtTmp.LineNumber = 13;
     MtTmp.Scope = 0;    
+    MtTmp.SizeToDestiny = 4;    
+    CntrMt.mapAlloca(MtTmp);
+
+    MtTmp.setMalloc();
     MtTmp.SizeToDestiny = 4;
+    CntrMt.mapAlloca(MtTmp);
     
-    CntrMt.mapAlloca(2, MtTmp);    
-    MtTmp.IsDynamic = true;
-    MtTmp.SizeToDestiny = 4;
-    CntrMt.setMalloc(3, 1012, 4);  
     AnalysisModeMemory aM2 = AnalysisModeMemory(CntrMt.ContainerLog_);
     cout << CntrMt.printContainerAsJson() << endl; 
     EXPECT_EQ(aM2.isInvalidFree(1024), false);
 
-    CntrMt.setFree(4, MtTmp, 0);
+    MtTmp.setFree();
+    CntrMt.mapAlloca(MtTmp);
     AnalysisModeMemory aM3 = AnalysisModeMemory(CntrMt.ContainerLog_);    
     EXPECT_EQ(aM3.isDerefError(1024), true);
 }

@@ -23,7 +23,7 @@
 
 
 
-AnalysisModeMemory::AnalysisModeMemory(list<map<long, MemoryTrackLog>> CntrContainerLog_) {
+AnalysisModeMemory::AnalysisModeMemory(list<MemoryTrackLog> CntrContainerLog_) {
     this->ContainerLog_ = CntrContainerLog_;
   }
 
@@ -59,15 +59,15 @@ bool AnalysisModeMemory::freeResolvedAddress(long Address){
 /// @return bool, TRUE is invalid (BUG was found) and FALSE is valid.
 bool AnalysisModeMemory::isValidAllocaAddress(long Address, int Size) {
   // Search from bottom/reverse
-  list<map<long, MemoryTrackLog>>::reverse_iterator rit;
+  list<MemoryTrackLog>::reverse_iterator rit;
 
   for (rit = this->ContainerLog_.rbegin(); rit != this->ContainerLog_.rend();
        rit++) {
-    long RangeAddress = rit->begin()->second.VarMemoryAddress +
-                        (rit->begin()->second.SizeToDestiny - Size) + 1;
-    if (rit->begin()->second.VarMemoryAddress <= Address &&
+    long RangeAddress = rit->VarMemoryAddress +
+                        (rit->SizeToDestiny - Size) + 1;
+    if (rit->VarMemoryAddress <= Address &&
         Address < RangeAddress) {
-      if (rit->begin()->second.IsFree) {
+      if (rit->IsFree) {
         return false;
       }
       return true;
@@ -93,23 +93,23 @@ map<bool, long> AnalysisModeMemory::isAllAllocaAddressValidInTheEnd() {
   set<int> SetOfAddressChecked;
 
   // Search from bottom/reverse
-  list<map<long, MemoryTrackLog>>::reverse_iterator rit;
+  list<MemoryTrackLog>::reverse_iterator rit;
 
   for (rit = this->ContainerLog_.rbegin(); rit != this->ContainerLog_.rend();
        rit++) {
-      const bool IsIn = SetOfAddressChecked.find(rit->begin()->second.VarMemoryAddress) != SetOfAddressChecked.end();
+      const bool IsIn = SetOfAddressChecked.find(rit->VarMemoryAddress) != SetOfAddressChecked.end();
       //cout << rit->begin()->second.VarMemoryAddress << endl;
       //cout << rit->begin()->second.IsFree << endl;
     
-    if (rit->begin()->second.IsFree == false && !IsIn) {      
+    if (rit->IsFree == false && !IsIn) {      
       bool ReleasedFound = false;
-      MemTrackAddressError = rit->begin()->second.VarMemoryAddress;
+      MemTrackAddressError = rit->VarMemoryAddress;
       // Search from top
       for (auto item : this->ContainerLog_) {
-        if (MemTrackAddressError == item.begin()->second.VarMemoryAddress &&
-            item.begin()->second.IsFree) {
+        if (MemTrackAddressError == item.VarMemoryAddress &&
+            item.IsFree) {
           ReleasedFound = true;
-          SetOfAddressChecked.insert(rit->begin()->second.VarMemoryAddress);
+          SetOfAddressChecked.insert(rit->VarMemoryAddress);
         }
       }
 
@@ -137,13 +137,13 @@ map<bool, long> AnalysisModeMemory::isAllAllocaAddressValidInTheEnd() {
 /// @return bool, TRUE is invalid (BUG was found) and FALSE is valid.
 bool AnalysisModeMemory::isValidHeapAddress(long Address, int Size) {
   // Search from bottom/reverse
-  list<map<long, MemoryTrackLog>>::reverse_iterator rit;
+  list<MemoryTrackLog>::reverse_iterator rit;
 
   for (rit = this->ContainerLog_.rbegin(); rit != this->ContainerLog_.rend();
        rit++) {
-    long RangeAddress = (long)rit->begin()->second.VarMemoryAddress +
-                        (rit->begin()->second.SizeToDestiny - Size) + 1;
-    if (rit->begin()->second.VarMemoryAddress <= Address &&
+    long RangeAddress = (long)rit->VarMemoryAddress +
+                        (rit->SizeToDestiny - Size) + 1;
+    if (rit->VarMemoryAddress <= Address &&
         (long)Address < RangeAddress) {
       return true;
     }
@@ -167,18 +167,18 @@ bool AnalysisModeMemory::isValidHeapAddress(long Address, int Size) {
 /// @return bool, TRUE is invalid (BUG was found) and FALSE is valid.
 bool AnalysisModeMemory::isMemCleanUpError(long MemoryAddress){
     // Search from bottom/reverse
-    list<map<long, MemoryTrackLog>> :: reverse_iterator rit; 
+    list<MemoryTrackLog> :: reverse_iterator rit; 
     
     for(rit = this->ContainerLog_.rbegin(); 
         rit != this->ContainerLog_.rend(); rit++){            
-            if(rit->begin()->second.MemoryAddressPointsTo == MemoryAddress){
+            if(rit->MemoryAddressPointsTo == MemoryAddress){
                bool error = true;
                
                //for(auto item : boost::adaptors::reverse(this->ContainerLog_)){
-                list<map<long, MemoryTrackLog>> :: reverse_iterator Fromrit; 
+                list<MemoryTrackLog> :: reverse_iterator Fromrit; 
                 for(Fromrit = rit; rit != this->ContainerLog_.rend(); rit++){
-                   if(rit->begin()->second.VarMemoryAddress == Fromrit->begin()->second.VarMemoryAddress){
-                       error = Fromrit->begin()->second.MemoryAddressPointsTo == MemoryAddress ? 
+                   if(rit->VarMemoryAddress == Fromrit->VarMemoryAddress){
+                       error = Fromrit->MemoryAddressPointsTo == MemoryAddress ? 
                                true : false;
                         break;
                    }
@@ -202,11 +202,11 @@ bool AnalysisModeMemory::isMemCleanUpError(long MemoryAddress){
 /// @return bool, TRUE is invalid (BUG was found) and FALSE is valid.
 bool AnalysisModeMemory::isDerefError(long MemoryAddress){
     for(auto item : boost::adaptors::reverse(this->ContainerLog_)){
-        if(item.begin()->second.VarMemoryAddress == MemoryAddress){
+        if(item.VarMemoryAddress == MemoryAddress){
             return false;
         }
-        if(item.begin()->second.MemoryAddressPointsTo == MemoryAddress){
-            if(item.begin()->second.IsFree || !item.begin()->second.IsDynamic){
+        if(item.MemoryAddressPointsTo == MemoryAddress){
+            if(item.IsFree || !item.IsDynamic){
                 return true;
             }else{
                 return false;
@@ -229,8 +229,8 @@ bool AnalysisModeMemory::isInvalidFree(long MemoryAddress){
     }
     
     for(auto item : boost::adaptors::reverse(this->ContainerLog_)){
-        if(item.begin()->second.MemoryAddressPointsTo == MemoryAddress){
-            if(item.begin()->second.IsFree || !item.begin()->second.IsDynamic){
+        if(item.MemoryAddressPointsTo == MemoryAddress){
+            if(item.IsFree || !item.IsDynamic){
                 return true;
             }else{
                 return false;
