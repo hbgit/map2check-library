@@ -24,8 +24,8 @@
 
 class ContainerNonDetLog {   
     public:
-        list<map<long, NonDetLog>> ContainerLog_;        
-        string printJsonObj(NonDetLog ObjModelIn);
+        list<NonDetLog> ContainerLog_;        
+        string printContainerAsJson();
 };
 
 

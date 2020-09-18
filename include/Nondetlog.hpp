@@ -21,13 +21,15 @@ using namespace std;
  * nondet function calls in the program analysis.
  */
 class NonDetLog {
-public:    
-    unsigned Line;
-    unsigned Scope;
+public:  
+    long Step = 0;
+    unsigned Line = -1;
+    unsigned Scope = -1;
     boost::variant<int, unsigned int, long, char, double, float> Value;
-    string FunctionName;     
+    string FunctionName = "";     
     
     string getTypeValue(boost::variant<int, unsigned int, long, char, double, float> Value);
+    string printJsonObj();
 };
 
 #endif // __NONDETLOG_H_INCLUDED__ 

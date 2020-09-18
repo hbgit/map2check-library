@@ -92,3 +92,14 @@ TEST(NonDetLog, NonDetLog_long)
     EXPECT_EQ (nondet.FunctionName, "test");
 }
 
+TEST(NonDetLog, printJsonObj)
+{
+    NonDetLog nondet;
+    nondet.Line = 12;    
+    nondet.Scope = 0;    
+    nondet.Value = INT_MAX;    
+    nondet.FunctionName = "test";
+    
+    EXPECT_GE(nondet.printJsonObj().size(), 2);
+}
+

@@ -16,36 +16,24 @@
 
 #include "../include/ContainerNonDetLog.hpp"
 
-#include "../lib/json.hpp"
-using json = nlohmann::json;
 
-#include <boost/variant/get.hpp>
+/// @brief Print all MemoryTrackLog object inside the Container as Json string
+/// format.
+/// @return The Json string
+string ContainerNonDetLog::printContainerAsJson() {
 
+  // Search from bottom/reverse
+  list<NonDetLog>::iterator it;
+  std::string JsonString;
 
-string ContainerNonDetLog::printJsonObj(NonDetLog ObjModelIn){
-    json j;
+  for (it = this->ContainerLog_.begin(); it != this->ContainerLog_.end();
+       it++) {
+    JsonString += it->printJsonObj();;
+  }
 
-    j["Line"] = ObjModelIn.Line;
-    j["FunctName"] = ObjModelIn.FunctionName;
-    j["Scope"] = ObjModelIn.Scope;
-    j["Type"] = ObjModelIn.getTypeValue(ObjModelIn.Value);
-
-    if(ObjModelIn.Value.type() == typeid(int)){
-        j["Value"] = boost::get<int>(ObjModelIn.Value);  
-    }else if(ObjModelIn.Value.type() == typeid(unsigned)){
-        j["Value"] = boost::get<unsigned>(ObjModelIn.Value); 
-    }else if(ObjModelIn.Value.type() == typeid(long)){
-        j["Value"] = boost::get<long>(ObjModelIn.Value); 
-    }else if(ObjModelIn.Value.type() == typeid(char)){
-        j["Value"] = boost::get<char>(ObjModelIn.Value);  
-    }else if(ObjModelIn.Value.type() == typeid(double)){
-        j["Value"] = boost::get<double>(ObjModelIn.Value);  
-    }else if(ObjModelIn.Value.type() == typeid(float)){
-        j["Value"] = boost::get<float>(ObjModelIn.Value);  
-    }   
-    
-    return j.dump().c_str();
+  return JsonString;
 }
+
 
 // Here is the explicit instanciation
 // template string ContainerNonDetLog::printJsonObj(NonDetLog ObjModelIn, int TypeId); 

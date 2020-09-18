@@ -11,6 +11,12 @@
 
 #include "../include/Nondetlog.hpp"
 
+#include "../lib/json.hpp"
+using json = nlohmann::json;
+
+#include <boost/variant/get.hpp>
+
+
 /**
  * @brief  Identify the variable type from NonDetLog value
  * @return typeofvalue      Returns the variable type as string
@@ -38,4 +44,31 @@ string NonDetLog::getTypeValue(boost::variant<int, unsigned int, long, char, dou
     }
     
     return typeofvalue;
+}
+
+
+string NonDetLog::printJsonObj(){
+    json j;
+
+    j["Step"] = this->Step;
+    j["Line"] = this->Line;
+    j["FunctName"] = this->FunctionName;
+    j["Scope"] = this->Scope;
+    j["Type"] = this->getTypeValue(this->Value);
+
+    if(this->Value.type() == typeid(int)){
+        j["Value"] = boost::get<int>(this->Value);  
+    }else if(this->Value.type() == typeid(unsigned)){
+        j["Value"] = boost::get<unsigned>(this->Value); 
+    }else if(this->Value.type() == typeid(long)){
+        j["Value"] = boost::get<long>(this->Value); 
+    }else if(this->Value.type() == typeid(char)){
+        j["Value"] = boost::get<char>(this->Value);  
+    }else if(this->Value.type() == typeid(double)){
+        j["Value"] = boost::get<double>(this->Value);  
+    }else if(this->Value.type() == typeid(float)){
+        j["Value"] = boost::get<float>(this->Value);  
+    }   
+    
+    return j.dump().c_str();
 }
