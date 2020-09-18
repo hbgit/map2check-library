@@ -23,8 +23,8 @@ using namespace std;
 
 class AnalysisModeAssert {
     public:
-        unsigned LineNumber;
-        string FunctionName;
+        unsigned LineNumber = -1;
+        string FunctionName = "";
 
         bool checkAssert(int Expression);
 };

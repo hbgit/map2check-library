@@ -31,6 +31,8 @@ private:
 public:
   AnalysisModeMemory(list<MemoryTrackLog> CntrContainerLog_);
 
+  unsigned LineNumber = -1;
+  string FunctionName = "";
   bool IsNullValid;
   bool IsCheckMemCleanUp;
 
