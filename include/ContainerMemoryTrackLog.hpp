@@ -37,24 +37,16 @@ enum MemoryAddressStatus {
 class ContainerMemoryTrackLog {
 public:
   // Container actions
-  list<map<long, MemoryTrackLog>> ContainerLog_;
+  list<MemoryTrackLog> ContainerLog_;
   string printContainerAsJson();
   MemoryTrackLog searchInContainerLogByAddress(long Address);
-  bool isEqualMemoryTrackObj(MemoryTrackLog ObjMemory1,
-                             MemoryTrackLog ObjMemory2);
 
   // Map tracking actions
-  void mapAlloca(long Step, MemoryTrackLog ObjectMemory);
-  void mapNonStaticAlloca(long Step, MemoryTrackLog ObjectMemory);
-  void mapFunctionAddress(long Step, MemoryTrackLog ObjectMemory);
-  void mapStorePointer(long Step, MemoryTrackLog ObjectMemory);
+  void mapAlloca(MemoryTrackLog ObjectMemory);
+  void mapNonStaticAlloca(MemoryTrackLog ObjectMemory);
+  void mapFunctionAddress(MemoryTrackLog ObjectMemory);
+  void mapStorePointer(MemoryTrackLog ObjectMemory);
   
-  // Functions from heap memory
-  void setMalloc(long Step, long Address, int Size);
-  void setCalloc(long Step, long Address, int Quantity, int Size);
-  // NOTE: realloc is modelling by set free and then execute a new malloc  
-  void setFree(long Step, MemoryTrackLog ObjectMemory,
-                     short int IsNullValid);
 };
 
 #endif // __CONTAINERMEMORYTRACKLOG_H_INCLUDED__

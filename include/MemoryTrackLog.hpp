@@ -26,6 +26,7 @@ using namespace std;
 
 class MemoryTrackLog {
 public:
+  long Step;
   long VarMemoryAddress = 0;
   long MemoryAddressPointsTo = 0;
   int Scope = -1;
@@ -36,10 +37,18 @@ public:
   string FunctionName = "";
   int SizeToDestiny = -1;
   int SizeOfPrimitive = -1;
+  short int IsNullValid = 0;
 
-  // string printJsonObj(MemoryTrackLog ObjModelIn);
+  void setMalloc();
+  void setCalloc(int Quantity);
+  // NOTE: realloc is modelling by set free and then execute a new malloc  
+  void setFree();
+  bool isEqualMemoryTrackObj(MemoryTrackLog ObjMemory1,
+                             MemoryTrackLog ObjMemory2);
 };
 
+
+// string printJsonObj(MemoryTrackLog ObjModelIn);
 // Based on https://github.com/nlohmann/json/issues/2175
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(MemoryTrackLog, VarMemoryAddress,
                                    MemoryAddressPointsTo, Scope, IsDynamic,
