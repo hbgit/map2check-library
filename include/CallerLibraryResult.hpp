@@ -51,6 +51,8 @@ string FunctionNamePrpChecked;
 VerificationResultName VerificationResult;
 ViolatedProperty PropertyChecked;
 
+long CurrentStep = 0;
+
 /// @brief Print all data gathering from code instrumentation, such as,
 /// property location, and values adopting in the program verification.
 /// @return The Json string

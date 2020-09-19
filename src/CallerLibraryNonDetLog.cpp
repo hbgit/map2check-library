@@ -36,6 +36,7 @@ extern "C" void map2checkStoreNonDetLog(
     int Line, unsigned Scope,
     boost::variant<int, unsigned int, long, char, double, float> Value,
     const char *FunctionName) {
+  GlobalNonDetLog.Step = ++CurrentStep;
   GlobalNonDetLog.Line = Line;
   GlobalNonDetLog.Scope = Scope;
   GlobalNonDetLog.Value = Value;
