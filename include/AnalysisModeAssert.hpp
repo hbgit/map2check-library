@@ -23,6 +23,7 @@ using namespace std;
 
 class AnalysisModeAssert {
     public:
+        long Step = 0;
         unsigned LineNumber = -1;
         string FunctionName = "";
 
