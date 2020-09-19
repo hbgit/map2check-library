@@ -23,7 +23,6 @@
 #include <sys/types.h>
 
 NonDetLog GlobalNonDetLog;
-ContainerNonDetLog GlobalCntrNonDetLog;
 
 /// @brief Set nondet values generation using KLEE
 /// @return Void
@@ -41,8 +40,7 @@ extern "C" void map2checkStoreNonDetLog(
   GlobalNonDetLog.Scope = Scope;
   GlobalNonDetLog.Value = Value;
   GlobalNonDetLog.FunctionName = *FunctionName;
-  GlobalCntrNonDetLog.ContainerLog_.push_back(GlobalNonDetLog);
-  ResultCntrNonDetLog = GlobalCntrNonDetLog;
+  ResultCntrNonDetLog.ContainerLog_.push_back(GlobalNonDetLog);
 }
 
 extern "C" int map2checkGenNonDet_int() {
