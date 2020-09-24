@@ -31,7 +31,7 @@ extern "C" void map2check_assert(int Condition, int LineNumber, const char *Func
         VerificationResult = FALSE;
         PropertyChecked = OVERFLOW;
         FunctionNamePrpChecked = CheckAssert.FunctionName;
-        map2checkPrintJsonCheckResult(COVERFLOW);
+        map2checkPrintJsonCheckResult(CREACHABILITY);
         abort();
     }
 }
