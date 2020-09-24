@@ -42,7 +42,7 @@ extern int __map2check_main__();
 /// @brief Modelling an assume function to be adopted by LibFuzzer
 /// @param int an expression to be analyzed
 /// @return void
-void nondetAssume(int Expr) {  
+void libFuzzerNonDetAssume(int Expr) {  
   if (!Expr) {
     // pthread_exit(NULL);
   }

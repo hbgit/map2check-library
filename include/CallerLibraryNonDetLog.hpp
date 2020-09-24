@@ -34,6 +34,14 @@ extern "C" void map2checkSetNonDetGenKlee();
 
 extern "C" void map2checkSetNonDetGenLibFuzzer();
 
+void nondet_assume(int expr);
+
+extern "C" void map2check_assume(int expr);
+
+extern "C" void map2check_crab_assume(char expr);
+
+extern "C" void map2check_assume_loop(char expr);
+
 extern "C" void map2checkStoreNonDetLog(int Line, unsigned Scope, boost::variant<int, unsigned int, long, char, double, float> Value, const char *FunctionName);
 
 extern "C" int map2checkGenNonDet_int();

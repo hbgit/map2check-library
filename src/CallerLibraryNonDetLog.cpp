@@ -28,9 +28,11 @@ NonDetLog GlobalNonDetLog;
 /// @return Void
 extern "C" void map2checkSetNonDetGenKlee() { TypeGenValue = KLEE; }
 
+
 /// @brief Set nondet values generation using LibFuzzer
 /// @return Void
 extern "C" void map2checkSetNonDetGenLibFuzzer() { TypeGenValue = LIBFUZZER; }
+
 
 extern "C" void map2checkStoreNonDetLog(
     int Line, unsigned Scope,
@@ -43,6 +45,30 @@ extern "C" void map2checkStoreNonDetLog(
   GlobalNonDetLog.FunctionName = *FunctionName;
   ResultCntrNonDetLog.ContainerLog_.push_back(GlobalNonDetLog);
 }
+
+
+void nondet_assume(int expr){
+  if (TypeGenValue == KLEE) {
+    kleeNondetAssume(expr);
+  }else if (TypeGenValue == LIBFUZZER) {
+    libFuzzerNonDetAssume(expr);
+  }
+}
+
+extern "C" void map2check_assume(int expr){
+  nondet_assume(expr);
+}
+
+
+extern "C" void map2check_crab_assume(char expr){
+  nondet_assume((int)expr);
+}
+
+
+extern "C" void map2check_assume_loop(char expr){
+  nondet_assume((int)expr);
+}
+
 
 extern "C" int map2checkGenNonDet_int() {
   if (TypeGenValue == LIBFUZZER) {
