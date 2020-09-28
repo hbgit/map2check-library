@@ -192,7 +192,7 @@ bool AnalysisModeMemory::isMemCleanUpError(long MemoryAddress){
     return false;
 }
 
-
+// TODO(hbgit): Could be removed?
 /// @brief This replaced the old is_deref_error function.
 /// Checking in the container memory if a given address
 /// execute an operation with derefence error:
