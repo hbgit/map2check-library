@@ -19,6 +19,8 @@
 
 using json = nlohmann::json;
 
+long CurrentStep = 0;
+
 /// @brief Print all data gathering from code instrumentation, such as,
 /// property location, and values adopting in the program verification.
 /// @return The Json string
@@ -54,4 +56,12 @@ extern "C" void map2check_success() {
   VerificationResult = TRUE;
   map2checkPrintJsonCheckResult(CNONE);
   abort();
+}
+
+extern "C"  void incrCurrentStep(){
+  CurrentStep++;
+}
+
+extern "C" long getCurrentStep(){
+  return CurrentStep;
 }

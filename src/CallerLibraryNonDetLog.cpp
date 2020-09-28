@@ -19,6 +19,9 @@
 #include "../include/CallerLibraryNonDetLog.hpp"
 #include "../include/NonDetGenKlee.hpp"
 #include "../include/NonDetGenLibFuzzer.hpp"
+
+#include "../include/CallerLibraryResult.hpp"
+
 #include <cstddef>
 #include <sys/types.h>
 
@@ -38,11 +41,13 @@ extern "C" void map2checkStoreNonDetLog(
     int Line, unsigned Scope,
     boost::variant<int, unsigned int, long, char, double, float> Value,
     const char *FunctionName) {
-  GlobalNonDetLog.Step = ++CurrentStep;
+  incrCurrentStep();
+  GlobalNonDetLog.Step = getCurrentStep();
   GlobalNonDetLog.Line = Line;
   GlobalNonDetLog.Scope = Scope;
   GlobalNonDetLog.Value = Value;
   GlobalNonDetLog.FunctionName = *FunctionName;
+
   ResultCntrNonDetLog.ContainerLog_.push_back(GlobalNonDetLog);
 }
 

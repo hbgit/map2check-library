@@ -26,7 +26,8 @@ extern "C" void map2checkMap_Alloca(const char *VarName, void *PtrAddres,
                                     int Size, int SizeOfPrimitive,
                                     int LineNumber, int Scope) {
   MemoryTrackLog MemTrackObj;
-  MemTrackObj.Step = CurrentStep;
+  incrCurrentStep();
+  MemTrackObj.Step = getCurrentStep();
   MemTrackObj.PointerName = *VarName;
   MemTrackObj.VarMemoryAddress = (long)PtrAddres;
   MemTrackObj.SizeToDestiny = Size;
@@ -44,7 +45,8 @@ extern "C" void map2checkMap_NonStaticAlloca(const char *VarName,
                                              int SizeOfPrimitive,
                                              int LineNumber, int Scope) {
   MemoryTrackLog MemTrackObj;
-  MemTrackObj.Step = CurrentStep;
+  incrCurrentStep();
+  MemTrackObj.Step = getCurrentStep();
   MemTrackObj.PointerName = *VarName;
   MemTrackObj.VarMemoryAddress = (long)PtrAddres;
   MemTrackObj.SizeToDestiny = Size;
@@ -60,7 +62,8 @@ extern "C" void map2checkMap_NonStaticAlloca(const char *VarName,
 extern "C" void map2checkMap_FunctionAddress(const char *VarName,
                                              void *PtrAddres) {
   MemoryTrackLog MemTrackObj;
-  MemTrackObj.Step = CurrentStep;
+  incrCurrentStep();
+  MemTrackObj.Step = getCurrentStep();
   MemTrackObj.PointerName = *VarName;
   MemTrackObj.VarMemoryAddress = (long)PtrAddres;
 
@@ -74,7 +77,8 @@ extern "C" void map2checkMap_StorePointer(void *VarAddres, void *Value,
                                           int LineNumber,
                                           const char *FunctionName) {
   MemoryTrackLog MemTrackObj;
-  MemTrackObj.Step = CurrentStep;
+  incrCurrentStep();
+  MemTrackObj.Step = getCurrentStep();
   MemTrackObj.PointerName = *VarName;
   MemTrackObj.VarMemoryAddress = (long)VarAddres;
   MemTrackObj.MemoryAddressPointsTo = (long)Value;
@@ -91,7 +95,8 @@ extern "C" void map2checkMap_Free(const char *VarName, void *PtrAddres,
                                   unsigned Scope, unsigned LineNumber,
                                   const char *FunctionName) {
   MemoryTrackLog MemTrackObj;
-  MemTrackObj.Step = CurrentStep;
+  incrCurrentStep();
+  MemTrackObj.Step = getCurrentStep();
   MemTrackObj.PointerName = *VarName;
   MemTrackObj.VarMemoryAddress = (long)PtrAddres;
   MemTrackObj.LineNumber = LineNumber;
@@ -106,7 +111,8 @@ extern "C" void map2checkMap_Free(const char *VarName, void *PtrAddres,
 /// @return The Json string
 extern "C" void map2checkMap_Malloc(void *PtrAddres, int Size) {
   MemoryTrackLog MemTrackObj;
-  MemTrackObj.Step = CurrentStep;
+  incrCurrentStep();
+  MemTrackObj.Step = getCurrentStep();
   MemTrackObj.VarMemoryAddress = (long)PtrAddres;
   MemTrackObj.SizeToDestiny = Size;
   MemTrackObj.setMalloc();
@@ -118,7 +124,8 @@ extern "C" void map2checkMap_Malloc(void *PtrAddres, int Size) {
 /// @return The Json string
 extern "C" void map2checkMap_Calloc(void *PtrAddres, int Quantity, int Size) {
   MemoryTrackLog MemTrackObj;
-  MemTrackObj.Step = CurrentStep;
+  incrCurrentStep();
+  MemTrackObj.Step = getCurrentStep();
   MemTrackObj.VarMemoryAddress = (long)PtrAddres;
   MemTrackObj.SizeToDestiny = Size;
   MemTrackObj.setCalloc(Quantity);

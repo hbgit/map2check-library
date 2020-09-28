@@ -22,7 +22,8 @@
 extern "C" void map2check_assert(int Condition, int LineNumber, const char *FunctionName){
     AnalysisModeAssert CheckAssert;
 
-    CheckAssert.Step = ++CurrentStep;
+    incrCurrentStep();
+    CheckAssert.Step = getCurrentStep();
     CheckAssert.LineNumber = LineNumber;
     CheckAssert.FunctionName = FunctionName;
     

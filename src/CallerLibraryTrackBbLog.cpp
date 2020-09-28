@@ -25,7 +25,8 @@ extern "C" bool map2checkIsInTrackedBb(unsigned LineNumber){
 }
 
 extern "C" void map2checkAddInTrackedBb(unsigned LineNumber, const char *FunctionName){
-    GlobalTrackBbLog.Step = ++CurrentStep;
+    incrCurrentStep();
+    GlobalTrackBbLog.Step = getCurrentStep();
     GlobalTrackBbLog.Line = LineNumber;
     GlobalTrackBbLog.FunctName = FunctionName;
     ResultCntrTrackBbLog.ContainerLog_.push_back(GlobalTrackBbLog);

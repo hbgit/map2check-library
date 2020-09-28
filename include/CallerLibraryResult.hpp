@@ -42,17 +42,17 @@ enum PropertyType {
 enum VerificationResultName { FALSE, TRUE, UNKNOWN };
 
 // Objects to performs the program analysis
-ContainerNonDetLog ResultCntrNonDetLog;
-ContainerTrackBbLog ResultCntrTrackBbLog;
-ContainerMemoryTrackLog ResultCntrMemoryLog;
+extern ContainerNonDetLog ResultCntrNonDetLog;
+extern ContainerTrackBbLog ResultCntrTrackBbLog;
+extern ContainerMemoryTrackLog ResultCntrMemoryLog;
 
 // Variables of the verification result
-unsigned LineNumberOfPropertyChecked;
-string FunctionNamePrpChecked;
-VerificationResultName VerificationResult;
-ViolatedProperty PropertyChecked;
+extern unsigned LineNumberOfPropertyChecked;
+extern string FunctionNamePrpChecked;
+extern VerificationResultName VerificationResult;
+extern ViolatedProperty PropertyChecked;
 
-long CurrentStep = 0;
+extern long CurrentStep;
 
 /// @brief Print all data gathering from code instrumentation, such as,
 /// property location, and values adopting in the program verification.
@@ -60,3 +60,7 @@ long CurrentStep = 0;
 extern "C" const char *map2checkPrintJsonCheckResult(PropertyType PropertyChecked);
 
 extern "C" void map2check_success();
+
+extern "C" void incrCurrentStep();
+
+extern "C" long getCurrentStep();
