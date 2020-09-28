@@ -35,7 +35,8 @@ enum PropertyType {
   COVERFLOW,
   CMEMSAFETY,
   CREACHABILITY,
-  CCONCURRENCY
+  CCONCURRENCY,
+  CNONE
 };
 
 enum VerificationResultName { FALSE, TRUE, UNKNOWN };
@@ -57,3 +58,5 @@ long CurrentStep = 0;
 /// property location, and values adopting in the program verification.
 /// @return The Json string
 extern "C" const char *map2checkPrintJsonCheckResult(PropertyType PropertyChecked);
+
+extern "C" void map2check_success();

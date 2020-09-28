@@ -22,27 +22,36 @@ using json = nlohmann::json;
 /// @brief Print all data gathering from code instrumentation, such as,
 /// property location, and values adopting in the program verification.
 /// @return The Json string
-extern "C" const char *map2checkPrintJsonCheckResult(PropertyType PropertyChecked) {
-    json VarJson;
+extern "C" const char *
+map2checkPrintJsonCheckResult(PropertyType PropertyChecked) {
+  json VarJson;
 
-    string TmpJson;
+  string TmpJson;
 
-    VarJson["VerificationResult"] = VerificationResult;
+  VarJson["VerificationResult"] = VerificationResult;
+
+  if (PropertyChecked != CNONE) {
     VarJson["ViolatedProperty"] = PropertyChecked;
     VarJson["LineNumProperty"] = LineNumberOfPropertyChecked;
     VarJson["FunctionName"] = FunctionNamePrpChecked;
+  }
 
-    // Print NonDetValues
-    VarJson["ValuesTracked"] = ResultCntrNonDetLog.printContainerAsJson();
+  // Print NonDetValues
+  VarJson["ValuesTracked"] = ResultCntrNonDetLog.printContainerAsJson();
 
-    // Print Tracked Basic Block
-    VarJson["BasicBlocks"] = ResultCntrTrackBbLog.printContainerAsJson();
+  // Print Tracked Basic Block
+  VarJson["BasicBlocks"] = ResultCntrTrackBbLog.printContainerAsJson();
 
-    // Print Memory Tracked if it was performed    
-    if(PropertyChecked == CMEMSAFETY){
-        VarJson["MemoryTracked"] = ResultCntrMemoryLog.printContainerAsJson();
-    }
+  // Print Memory Tracked if it was performed
+  if (PropertyChecked == CMEMSAFETY) {
+    VarJson["MemoryTracked"] = ResultCntrMemoryLog.printContainerAsJson();
+  }
 
-    return VarJson.dump().c_str();
+  return VarJson.dump().c_str();
+}
 
+extern "C" void map2check_success() {
+  VerificationResult = TRUE;
+  map2checkPrintJsonCheckResult(CNONE);
+  abort();
 }
