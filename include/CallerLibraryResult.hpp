@@ -15,6 +15,9 @@
 ///
 //===----------------------------------------------------------------------===//
 
+#ifndef __CALLERLIBRARYRESULT_H_INCLUDED__
+#define __CALLERLIBRARYRESULT_H_INCLUDED__
+
 #include "../include/ContainerNonDetLog.hpp"
 #include "../include/ContainerTrackBbLog.hpp" 
 #include "../include/ContainerMemoryTrackLog.hpp"
@@ -28,7 +31,8 @@ enum ViolatedProperty {
   MEMSAFETY_MEMTRACK,
   MEMSAFETY_MEMCLEANUP,
   REACHABILITY,
-  CONCURRENCY
+  CONCURRENCY,
+  NONE
 };
 
 enum PropertyType {
@@ -47,7 +51,8 @@ extern ContainerTrackBbLog ResultCntrTrackBbLog;
 extern ContainerMemoryTrackLog ResultCntrMemoryLog;
 
 // Variables of the verification result
-extern unsigned LineNumberOfPropertyChecked;
+extern long LineNumberOfPropertyChecked;
+extern string JsonFinalResult;
 extern string FunctionNamePrpChecked;
 extern VerificationResultName VerificationResult;
 extern ViolatedProperty PropertyChecked;
@@ -57,10 +62,12 @@ extern long CurrentStep;
 /// @brief Print all data gathering from code instrumentation, such as,
 /// property location, and values adopting in the program verification.
 /// @return The Json string
-extern "C" const char *map2checkPrintJsonCheckResult(PropertyType PropertyChecked);
+extern "C" void map2checkPrintJsonCheckResult(PropertyType PropertyChecked);
 
 extern "C" void map2check_success();
 
 extern "C" void incrCurrentStep();
 
 extern "C" long getCurrentStep();
+
+#endif // __CALLERLIBRARYRESULT_H_INCLUDED__ 

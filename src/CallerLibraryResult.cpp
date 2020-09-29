@@ -17,23 +17,53 @@
 
 #include "../include/CallerLibraryResult.hpp"
 
+#include <iostream>
+
+using namespace std;
+
 using json = nlohmann::json;
 
+// Initialize global variables
 long CurrentStep = 0;
+long LineNumberOfPropertyChecked = -1;
+string JsonFinalResult = "NONE";
+string FunctionNamePrpChecked = "NONE";
+VerificationResultName VerificationResult = UNKNOWN;
+ViolatedProperty PropertyChecked = NONE;
+
+ContainerNonDetLog ResultCntrNonDetLog;
+ContainerTrackBbLog ResultCntrTrackBbLog;
+ContainerMemoryTrackLog ResultCntrMemoryLog;
+
+// Handling with enums
+const char *ToEnum_VerificationResultName[] = {"FALSE", "TRUE", "UNKNOWN"};
+const char *ToEnum_ViolatedProperty[] = {"OVERFLOW",
+                                         "MEMSAFETY_FREE",
+                                         "MEMSAFETY_DEREF",
+                                         "MEMSAFETY_MEMTRACK",
+                                         "MEMSAFETY_MEMCLEANUP",
+                                         "REACHABILITY",
+                                         "CONCURRENCY",
+                                         "NONE"};
 
 /// @brief Print all data gathering from code instrumentation, such as,
 /// property location, and values adopting in the program verification.
 /// @return The Json string
-extern "C" const char *
-map2checkPrintJsonCheckResult(PropertyType PropertyChecked) {
+extern "C" void
+map2checkPrintJsonCheckResult(PropertyType PropertyCheckedTyped) {
   json VarJson;
 
   string TmpJson;
 
-  VarJson["VerificationResult"] = VerificationResult;
+  if (PropertyCheckedTyped == CNONE) {
+    VarJson["VerificationResult"] = ToEnum_VerificationResultName[TRUE];
+  } else {
+    VarJson["VerificationResult"] =
+        ToEnum_VerificationResultName[VerificationResult];
+  }
 
-  if (PropertyChecked != CNONE) {
-    VarJson["ViolatedProperty"] = PropertyChecked;
+  if (PropertyCheckedTyped != CNONE && VerificationResult != TRUE) {
+    VarJson["ViolatedProperty"] = ToEnum_ViolatedProperty[PropertyChecked];
     VarJson["LineNumProperty"] = LineNumberOfPropertyChecked;
     VarJson["FunctionName"] = FunctionNamePrpChecked;
   }
@@ -45,11 +75,13 @@ map2checkPrintJsonCheckResult(PropertyType PropertyChecked) {
   VarJson["BasicBlocks"] = ResultCntrTrackBbLog.printContainerAsJson();
 
   // Print Memory Tracked if it was performed
-  if (PropertyChecked == CMEMSAFETY) {
+  if (PropertyCheckedTyped == CMEMSAFETY) {
     VarJson["MemoryTracked"] = ResultCntrMemoryLog.printContainerAsJson();
   }
 
-  return VarJson.dump().c_str();
+  JsonFinalResult = VarJson.dump();
+  cout << JsonFinalResult << endl;
+  // const char * s = VarJson.dump().c_str();
 }
 
 extern "C" void map2check_success() {
@@ -58,10 +90,6 @@ extern "C" void map2check_success() {
   abort();
 }
 
-extern "C"  void incrCurrentStep(){
-  CurrentStep++;
-}
+extern "C" void incrCurrentStep() { CurrentStep++; }
 
-extern "C" long getCurrentStep(){
-  return CurrentStep;
-}
+extern "C" long getCurrentStep() { return CurrentStep; }
