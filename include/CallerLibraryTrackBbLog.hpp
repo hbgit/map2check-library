@@ -18,8 +18,6 @@
 
 #include "../include/TrackBbLog.hpp"
 
-TrackBbLog GlobalTrackBbLog;
-
 
 extern "C" bool map2checkIsInTrackedBb(unsigned LineNumber);
 
