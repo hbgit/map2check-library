@@ -4,6 +4,7 @@
 #include <limits.h>
 #include <stdlib.h>
 
+
 int __map2check_main__() {
   
   int v = genericKleeNonDetGen<int>();
@@ -12,6 +13,11 @@ int __map2check_main__() {
     assert(0);
   }
 
+  return 0;
+}
+
+int main(){
+  __map2check_main__();
   return 0;
 }
 

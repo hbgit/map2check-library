@@ -27,7 +27,7 @@ build_debug()
     cmake .. -DCMAKE_CXX_COMPILER=/usr/bin/clang++-8 -DCMAKE_INSTALL_PREFIX=../release-library/ -DENABLE_TEST=ON -DENABLE_COVCODE=ON -DBUILD_DOC=OFF
     cmake --build . -- VERBOSE=1 
     
-    #libfuzzer
+    # libfuzzer test
     clang++-8 ../test/codefuzz_test.cpp -fsanitize=address,fuzzer -g -fprofile-instr-generate -fcoverage-mapping src/libmap2check.a    
     ./a.out 2> out.fuzz 
     cat out.fuzz | grep -c "a.out: ../test/codefuzz_test.cpp:52"
@@ -38,6 +38,18 @@ build_debug()
         echo ">>> LibFuzzer ERROR"
         exit 1
     fi
+    # libfuzzer test by using Caller
+    clang++-8 ../test/codefuzz_by_caller_test.cpp -fsanitize=address,fuzzer -g -fprofile-instr-generate -fcoverage-mapping src/libmap2check.a    
+    ./a.out 2> out.fuzz 
+    cat out.fuzz | grep ERROR
+    if [ $? -eq 0 ]; 
+    then
+        echo ">>> LibFuzzer OKAY"
+    else
+        echo ">>> LibFuzzer ERROR"
+        exit 1
+    fi
+
     # Unit Testing
     cd test
     LLVM_PROFILE_FILE="map2check.profraw" ./unit_tests
@@ -45,18 +57,22 @@ build_debug()
     llvm-cov-8 report ./unit_tests -instr-profile=map2check.profdata
     llvm-cov-8 export -format=lcov ./unit_tests -instr-profile=map2check.profdata > lcov.info
 
-    #klee
-    cd ..
-    clang++-8 -c -emit-llvm -O0 -Xclang -disable-O0-optnone ../test/codeklee_test.cpp
-    llvm-link-8 codeklee_test.bc src/NonDetGenKlee.bc > fullprogram.bc
+    # klee
+    # cd ..
+    # clang++-8 -c -emit-llvm -O0 -Xclang -disable-O0-optnone ../test/codeklee_test.cpp
+    # llvm-link-8 codeklee_test.bc src/NonDetGenKlee.bc > fullprogram.bc
 
-    if [ $istravis -eq 0 ]; then
-	    echo ">> Travis build is OFF"
-        cd ..
-        ./run_klee_test.sh
-    else
-        echo ">> Travis build is ON"
-    fi
+    # # klee by caller 
+    # clang++-8 -c -emit-llvm -O0 -Xclang -disable-O0-optnone ../test/codeklee_by_caller_test.cpp
+    # llvm-link-8 codeklee_by_caller_test.bc src/libmap2check_klee.bc > fullprogram_2.bc
+
+    # if [ $istravis -eq 0 ]; then
+	#     echo ">> Travis build is OFF"
+    #     cd ..
+    #     ./run_klee_test.sh
+    # else
+    #     echo ">> Travis build is ON"
+    # fi
 
 }
 

@@ -16,9 +16,7 @@
 ///
 //===----------------------------------------------------------------------===//
 
-#include "../include/CallerLibraryResult.hpp"
-#include "../include/ContainerMemoryTrackLog.hpp"
-#include "../include/MemoryTrackLog.hpp"
+#include "../include/CallerLibraryMemoryTrackLog.hpp"
 
 /// @brief TODO
 /// @return The Json string
@@ -28,7 +26,7 @@ extern "C" void map2checkMap_Alloca(const char *VarName, void *PtrAddres,
   MemoryTrackLog MemTrackObj;
   incrCurrentStep();
   MemTrackObj.Step = getCurrentStep();
-  MemTrackObj.PointerName = *VarName;
+  MemTrackObj.PointerName = VarName;
   MemTrackObj.VarMemoryAddress = (long)PtrAddres;
   MemTrackObj.SizeToDestiny = Size;
   MemTrackObj.SizeOfPrimitive = SizeOfPrimitive;

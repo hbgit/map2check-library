@@ -37,7 +37,7 @@ unsigned long countString = 1;
 
 int MaxNumSlotData = 57;
 
-extern int __map2check_main__();
+//extern "C" int __map2check_main__();
 
 /// @brief Modelling an assume function to be adopted by LibFuzzer
 /// @param int an expression to be analyzed

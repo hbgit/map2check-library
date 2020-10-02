@@ -22,17 +22,6 @@
 #include <bits/c++config.h>
 #include <boost/variant.hpp>
 
-enum TypeNonDetGen {
-  KLEE,
-  LIBFUZZER
-};
-
-TypeNonDetGen TypeGenValue;
-
-extern "C" void map2checkSetNonDetGenKlee();
-
-extern "C" void map2checkSetNonDetGenLibFuzzer();
-
 void nondet_assume(int expr);
 
 extern "C" void map2check_assume(int expr);

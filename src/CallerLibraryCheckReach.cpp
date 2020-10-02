@@ -18,6 +18,7 @@
 #include "../include/CallerLibraryResult.hpp"
 #include "../include/AnalysisModeAssert.hpp"
 
+#include <assert.h> 
 
 extern "C" void map2check_assert(int Condition, int LineNumber, const char *FunctionName){
     AnalysisModeAssert CheckAssert;
@@ -30,9 +31,10 @@ extern "C" void map2check_assert(int Condition, int LineNumber, const char *Func
     if(!CheckAssert.checkAssert(Condition)){
         LineNumberOfPropertyChecked = CheckAssert.LineNumber;
         VerificationResult = FALSE;
-        PropertyChecked = OVERFLOW;
+        PropertyChecked = REACHABILITY;
         FunctionNamePrpChecked = CheckAssert.FunctionName;
         map2checkPrintJsonCheckResult(CREACHABILITY);
-        abort();
+        //abort();
+        assert(0);
     }
 }

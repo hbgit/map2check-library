@@ -33,8 +33,8 @@ public:
   bool IsDynamic = false;
   bool IsFree = false;
   unsigned LineNumber = -1;
-  string PointerName = "";
-  string FunctionName = "";
+  string PointerName = "NONE";
+  string FunctionName = "NONE";
   int SizeToDestiny = -1;
   int SizeOfPrimitive = -1;
   short int IsNullValid = 0;
@@ -50,10 +50,10 @@ public:
 
 // string printJsonObj(MemoryTrackLog ObjModelIn);
 // Based on https://github.com/nlohmann/json/issues/2175
-NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(MemoryTrackLog, VarMemoryAddress,
+NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(MemoryTrackLog, Step, VarMemoryAddress,
                                    MemoryAddressPointsTo, Scope, IsDynamic,
                                    IsFree, LineNumber, PointerName,
                                    FunctionName, SizeToDestiny,
-                                   SizeOfPrimitive);
+                                   SizeOfPrimitive, IsNullValid);
 
 #endif // __MEMORYTRACKLOG_H_INCLUDED__

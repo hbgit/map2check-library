@@ -33,18 +33,54 @@ using json = nlohmann::json;
 string ContainerMemoryTrackLog::printContainerAsJson() {
 
   // Search from bottom/reverse
-  list<MemoryTrackLog>::iterator it;
-  std::string JsonString;
+  // std::cout << "MEM =====" << std::endl;
+  // NOTE: It was not adopted dump() method to print json
+  // because an bug in the KLEE
+  list<MemoryTrackLog>::iterator it;  
+  std::string JsonString = "{\"MemoryTracked\":[";
 
   for (it = this->ContainerLog_.begin(); it != this->ContainerLog_.end();
        it++) {
+
     json j = *it;
-    JsonString += j.dump().c_str();
+    int CountItems = 0;
+    string Comma = ",";
+     JsonString += "{";
+
+    // the same code as range for
+    for (auto &el : j.items()) {
+      //std::cout << el.key() << " : " << el.value() << "\n";
+      //printf("%s", el.key().c_str());
+      // {"FunctName":"main","Line":18}
+      JsonString += "\"" + string(el.key().c_str()) + "\":";
+      CountItems ++;
+
+      if(CountItems == j.size()){
+        Comma = "";
+      }
+
+      if(el.value().is_number() || el.value().is_string()){
+        JsonString += string(el.value().dump().c_str()) + Comma;
+      }else{
+        JsonString += "\"" + string(el.value().dump().c_str()) + "\"" + Comma;
+      }
+            
+    }
+
+    JsonString += "}";
+
+    list<MemoryTrackLog>::iterator tmp = it;
+    if(++tmp != this->ContainerLog_.end()){
+      JsonString += ",";
+    }
+    
   }
 
+  JsonString += "]}\n";
+
+  // std::cout << "JsonString \n";
   return JsonString;
 }
-
 
 /// @brief Searching in reverse order in the container list by a given address.
 /// @param Address to be searched in the container.
@@ -62,7 +98,6 @@ ContainerMemoryTrackLog::searchInContainerLogByAddress(long Address) {
   return t;
 }
 
-
 /// @brief This replaced the old map2check_alloca function.
 /// Tracking alloca instruction in LLVM-IR, i.e., variable declaration.
 /// @param Step Current step to track this action
@@ -73,7 +108,6 @@ void ContainerMemoryTrackLog::mapAlloca(MemoryTrackLog ObjectMemory) {
   this->ContainerLog_.push_back(ObjectMemory);
 }
 
-
 /// @brief This replaced the old map2check_non_static_alloca function.
 /// Tracking alloca instruction in LLVM-IR, i.e., static var declaration.
 /// @param Step Current step to track this action
@@ -81,10 +115,9 @@ void ContainerMemoryTrackLog::mapAlloca(MemoryTrackLog ObjectMemory) {
 /// @return void
 void ContainerMemoryTrackLog::mapNonStaticAlloca(MemoryTrackLog ObjectMemory) {
   ObjectMemory.SizeToDestiny =
-      ObjectMemory.SizeToDestiny * ObjectMemory.SizeOfPrimitive;  
+      ObjectMemory.SizeToDestiny * ObjectMemory.SizeOfPrimitive;
   this->mapAlloca(ObjectMemory);
 }
-
 
 /// @brief This replaced the old map2check_function function.
 /// Tracking function address in LLVM-IR, i.e., function declaration.
@@ -94,7 +127,6 @@ void ContainerMemoryTrackLog::mapNonStaticAlloca(MemoryTrackLog ObjectMemory) {
 void ContainerMemoryTrackLog::mapFunctionAddress(MemoryTrackLog ObjectMemory) {
   this->mapAlloca(ObjectMemory);
 }
-
 
 /// @brief This replaced the old map2check_add_store_pointer function.
 /// Tracking pointer store, i.e., pointer assignment.
@@ -108,8 +140,7 @@ void ContainerMemoryTrackLog::mapStorePointer(MemoryTrackLog ObjectMemory) {
   for (rit = this->ContainerLog_.rbegin(); rit != this->ContainerLog_.rend();
        rit++) {
 
-    if (rit->VarMemoryAddress ==
-        ObjectMemory.VarMemoryAddress) {          
+    if (rit->VarMemoryAddress == ObjectMemory.VarMemoryAddress) {
       if (!ObjectMemory.isEqualMemoryTrackObj(*rit, ObjectMemory)) {
         this->mapAlloca(ObjectMemory);
         break;
@@ -118,4 +149,3 @@ void ContainerMemoryTrackLog::mapStorePointer(MemoryTrackLog ObjectMemory) {
     }
   }
 }
-

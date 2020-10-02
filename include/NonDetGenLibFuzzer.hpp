@@ -35,6 +35,8 @@ union DoublePattern
    double real;
 };
 
+extern int __map2check_main__();
+
 extern "C" int LLVMFuzzerTestOneInput(const uint8_t *Data, size_t Size);
 
 void libFuzzerNonDetAssume(int Expr);

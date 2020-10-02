@@ -16,12 +16,17 @@
 //===----------------------------------------------------------------------===//
 
 #include "../include/CallerLibraryResult.hpp"
+#include "../include/MemoryTrackLog.hpp"
+#include "../include/TrackBbLog.hpp"
+//#include "../include/JsonUtils.hpp"
 
-#include <iostream>
+//#include <iostream>
 
-using namespace std;
+#include <stdio.h>
 
-using json = nlohmann::json;
+// using namespace std;
+
+// using json = nlohmann::json;
 
 // Initialize global variables
 long CurrentStep = 0;
@@ -46,18 +51,103 @@ const char *ToEnum_ViolatedProperty[] = {"OVERFLOW",
                                          "CONCURRENCY",
                                          "NONE"};
 
+string printAllContainerAsJson() {
+  
+  list<TrackBbLog>::iterator it;
+  std::string JsonString = "{\"BasicBlocks\":[";
+
+  for (it = ResultCntrTrackBbLog.ContainerLog_.begin(); it != ResultCntrTrackBbLog.ContainerLog_.end();
+       it++) {
+
+    json j = *it;
+    int CountItems = 0;
+    string Comma = ",";
+    JsonString += "{";
+
+    for (auto &el : j.items()) {
+
+      JsonString += "\"" + string(el.key().c_str()) + "\":";
+      CountItems++;
+
+      if (CountItems == j.size()) {
+        Comma = "";
+      }
+
+      if (el.value().is_number() || el.value().is_string()) {
+        JsonString += string(el.value().dump().c_str()) + Comma;
+      } else {
+        JsonString += "\"" + string(el.value().dump().c_str()) + "\"" + Comma;
+      }
+    }
+
+    JsonString += "}";
+
+    list<TrackBbLog>::iterator tmp = it;
+    if (++tmp != ResultCntrTrackBbLog.ContainerLog_.end()) {
+      JsonString += ",";
+    }
+  }
+
+  JsonString += "],\n";
+
+  //////////////////////////////////////////////////////
+
+  list<MemoryTrackLog>::iterator it2;
+  JsonString += "\"MemoryTracked\":[";
+
+  for (it2 = ResultCntrMemoryLog.ContainerLog_.begin(); it2 != ResultCntrMemoryLog.ContainerLog_.end();
+       it2++) {
+
+    json j = *it2;
+    int CountItems = 0;
+    string Comma = ",";
+    JsonString += "{";
+
+    for (auto &el : j.items()) {
+
+      JsonString += "\"" + string(el.key().c_str()) + "\":";
+      CountItems++;
+
+      if (CountItems == j.size()) {
+        Comma = "";
+      }
+
+      if (el.value().is_number() || el.value().is_string()) {
+        JsonString += string(el.value().dump().c_str()) + Comma;
+      } else {
+        JsonString += "\"" + string(el.value().dump().c_str()) + "\"" + Comma;
+      }
+    }
+
+    JsonString += "}";
+
+    list<MemoryTrackLog>::iterator tmp = it2;
+    if (++tmp != ResultCntrMemoryLog.ContainerLog_.end()) {
+      JsonString += ",";
+    }
+  }
+
+  JsonString += "]}\n";
+
+  return JsonString;
+}
+
 /// @brief Print all data gathering from code instrumentation, such as,
 /// property location, and values adopting in the program verification.
 /// @return The Json string
 extern "C" void
 map2checkPrintJsonCheckResult(PropertyType PropertyCheckedTyped) {
-  json VarJson;
 
-  string TmpJson;
+  /* json VarJson;
+  JsonUtils js;
+
+
+  // string TmpJson;
 
   if (PropertyCheckedTyped == CNONE) {
     VarJson["VerificationResult"] = ToEnum_VerificationResultName[TRUE];
-  } else {
+  }
+  else {
     VarJson["VerificationResult"] =
         ToEnum_VerificationResultName[VerificationResult];
   }
@@ -66,22 +156,29 @@ map2checkPrintJsonCheckResult(PropertyType PropertyCheckedTyped) {
     VarJson["ViolatedProperty"] = ToEnum_ViolatedProperty[PropertyChecked];
     VarJson["LineNumProperty"] = LineNumberOfPropertyChecked;
     VarJson["FunctionName"] = FunctionNamePrpChecked;
-  }
+  } */
 
   // Print NonDetValues
-  VarJson["ValuesTracked"] = ResultCntrNonDetLog.printContainerAsJson();
+  // VarJson["ValuesTracked"] = ResultCntrNonDetLog.printContainerAsJson();
 
-  // Print Tracked Basic Block
-  VarJson["BasicBlocks"] = ResultCntrTrackBbLog.printContainerAsJson();
+  // // Print Tracked Basic Block
+  // VarJson["BasicBlocks"] = ResultCntrTrackBbLog.printContainerAsJson();
+  // printf("%s \n", ResultCntrTrackBbLog.printContainerAsJson().c_str());
 
   // Print Memory Tracked if it was performed
-  if (PropertyCheckedTyped == CMEMSAFETY) {
-    VarJson["MemoryTracked"] = ResultCntrMemoryLog.printContainerAsJson();
-  }
+  // if (PropertyCheckedTyped == CMEMSAFETY) {
+  //   VarJson["MemoryTracked"] = ResultCntrMemoryLog.printContainerAsJson();
+  // }
+  // printf("%s \n", ResultCntrMemoryLog.printContainerAsJson().c_str());
 
-  JsonFinalResult = VarJson.dump();
-  cout << JsonFinalResult << endl;
+  // JsonFinalResult = VarJson.dump();
+
   // const char * s = VarJson.dump().c_str();
+  // ResultCntrTrackBbLog.printContainerAsJson();
+
+  printf("%s \n", printAllContainerAsJson().c_str());
+
+  printf("<<<<<<\t\t\t\t>>>>>>\n");
 }
 
 extern "C" void map2check_success() {

@@ -22,7 +22,7 @@
 #include "../include/ContainerTrackBbLog.hpp" 
 #include "../include/ContainerMemoryTrackLog.hpp"
 
-#include "../lib/json.hpp"
+//#include "../lib/json.hpp"
 
 enum ViolatedProperty {
   OVERFLOW,
@@ -69,5 +69,7 @@ extern "C" void map2check_success();
 extern "C" void incrCurrentStep();
 
 extern "C" long getCurrentStep();
+
+string printAllContainerAsJson();
 
 #endif // __CALLERLIBRARYRESULT_H_INCLUDED__ 

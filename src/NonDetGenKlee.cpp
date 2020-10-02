@@ -20,14 +20,15 @@
 
 using namespace std;
 
-extern int __map2check_main__();
 // This to avoid that Clang mangles the name https://groups.google.com/g/llvm-dev/c/31ImqM_DVIs?pli=1
 // https://en.wikipedia.org/wiki/Name_mangling#Name_mangling_in_C.2B.2B
+//extern "C" int __map2check_main__();
 extern "C" void klee_assume(int);
 extern "C" void klee_make_symbolic(void *addr, size_t nbytes, const char *name);
 
-
-int main() { return __map2check_main__(); }
+void kleeNondetAssume(int Expr){
+    klee_assume(Expr);
+}
 
 
 template <typename T>

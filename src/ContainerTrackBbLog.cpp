@@ -17,22 +17,65 @@
 
 #include "../include/ContainerTrackBbLog.hpp"
 
+#include <iostream>
+
 /// @brief Print an given TrackBbLog object in Json format.
 /// @param ObjModelIn TrackBbLog object
 /// @return The Json string
 string ContainerTrackBbLog::printContainerAsJson() {
-
   list<TrackBbLog>::iterator it;
-  std::string JsonString;
+  std::string JsonString = "{\"BasicBlocks\":[";
 
   for (it = this->ContainerLog_.begin(); it != this->ContainerLog_.end();
        it++) {
+
     json j = *it;
-    JsonString += j.dump().c_str();
+    int CountItems = 0;
+    string Comma = ",";
+    JsonString += "{";
+
+    for (auto &el : j.items()) {
+
+      JsonString += "\"" + string(el.key().c_str()) + "\":";
+      CountItems++;
+
+      if (CountItems == j.size()) {
+        Comma = "";
+      }
+
+      if (el.value().is_number() || el.value().is_string()) {
+        JsonString += string(el.value().dump().c_str()) + Comma;
+      } else {
+        JsonString += "\"" + string(el.value().dump().c_str()) + "\"" + Comma;
+      }
+    }
+
+    JsonString += "}";
+
+    list<TrackBbLog>::iterator tmp = it;
+    if (++tmp != this->ContainerLog_.end()) {
+      JsonString += ",";
+    }
   }
+
+  JsonString += "]}\n";
 
   return JsonString;
 }
+// void ContainerTrackBbLog::printContainerAsJson() {
+
+//   list<TrackBbLog>::iterator it;
+//   std::string JsonString;
+
+//   for (it = this->ContainerLog_.begin(); it != this->ContainerLog_.end();
+//        it++) {
+//     json j = *it;
+//     JsonString += j.dump().c_str();
+//     //JsonString += j;
+//   }
+//   std::cout << JsonString << std::endl;
+//   //return JsonString;
+// }
 
 /// @brief Check if a given Line Number is in the Track Basic Block Log.
 /// @param LineNumber line number
