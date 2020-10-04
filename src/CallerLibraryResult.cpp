@@ -14,10 +14,10 @@
 /// which performs the programa analysis by map2check tool.
 ///
 //===----------------------------------------------------------------------===//
-
+ 
 #include "../include/CallerLibraryResult.hpp"
 #include "../include/MemoryTrackLog.hpp"
-#include "../include/TrackBbLog.hpp"
+#include "../include/TrackBbLog.hpp" 
 //#include "../include/JsonUtils.hpp"
 
 //#include <iostream>
@@ -51,6 +51,8 @@ const char *ToEnum_ViolatedProperty[] = {"OVERFLOW",
                                          "CONCURRENCY",
                                          "NONE"};
 
+
+
 string printAllContainerAsJson() {
   
   list<TrackBbLog>::iterator it;
@@ -60,6 +62,7 @@ string printAllContainerAsJson() {
        it++) {
 
     json j = *it;
+
     int CountItems = 0;
     string Comma = ",";
     JsonString += "{";
@@ -84,6 +87,50 @@ string printAllContainerAsJson() {
 
     list<TrackBbLog>::iterator tmp = it;
     if (++tmp != ResultCntrTrackBbLog.ContainerLog_.end()) {
+      JsonString += ",";
+    }
+  }
+
+  JsonString += "],\n";
+
+  //////////////////////////////////////////////////////
+  
+  list<NonDetLog>::iterator it3;
+  
+  JsonString += "{\"NonDetValues\":[";
+
+  //for (auto it3 : ResultCntrNonDetLog.ContainerLog_) {
+  for (it3 = ResultCntrNonDetLog.ContainerLog_.begin(); it3 != ResultCntrNonDetLog.ContainerLog_.end();
+       it3++) {
+
+    json j = *it3;
+    int CountItems = 0;
+    string Comma = ",";
+    JsonString += "{";
+
+    for (auto &el : j.items()) {
+
+      JsonString += "\"" + string(el.key().c_str()) + "\":";
+      CountItems++;
+
+      if (CountItems == j.size()) {
+        Comma = "";
+      }
+      // printf("%s \n", el.key().c_str());
+      //printf("%s \n", el.value().type_name());
+
+      if (el.value().is_number() || el.value().is_string()) {
+        printf("%s \n", el.value().dump().c_str());
+        JsonString += string(el.value().dump().c_str()) + Comma;
+      } else {
+        JsonString += "\"" + string(el.value().dump().c_str()) + "\"" + Comma;
+      }
+    }
+
+    JsonString += "}";
+
+    list<NonDetLog>::iterator tmp = it3;
+    if (++tmp != ResultCntrNonDetLog.ContainerLog_.end()) {
       JsonString += ",";
     }
   }
@@ -131,6 +178,7 @@ string printAllContainerAsJson() {
 
   return JsonString;
 }
+
 
 /// @brief Print all data gathering from code instrumentation, such as,
 /// property location, and values adopting in the program verification.

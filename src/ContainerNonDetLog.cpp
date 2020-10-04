@@ -17,22 +17,26 @@
 #include "../include/ContainerNonDetLog.hpp"
 
 
+//template ContainerNonDetLog<int>;
+
+
 /// @brief Print all MemoryTrackLog object inside the Container as Json string
 /// format.
 /// @return The Json string
-string ContainerNonDetLog::printContainerAsJson() {
+// string ContainerNonDetLog::printContainerAsJson() {
 
-  // Search from bottom/reverse
-  list<NonDetLog>::iterator it;
-  std::string JsonString;
+//   // Search from bottom/reverse
+//   list<NonDetLog>::iterator it;
+//   std::string JsonString;
 
-  for (it = this->ContainerLog_.begin(); it != this->ContainerLog_.end();
-       it++) {
-    JsonString += it->printJsonObj();;
-  }
+//   for (it = this->ContainerLog_.begin(); it != this->ContainerLog_.end();
+//        it++) {
+//     JsonString += it->printJsonObj();;
+//   }
 
-  return JsonString;
-}
+//   return JsonString;
+// }
+
 
 
 // Here is the explicit instanciation

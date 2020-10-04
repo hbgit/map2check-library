@@ -12,10 +12,13 @@ extern "C" int __map2check_main__() {
 
 extern "C" void klee_assume(int);
 
+#include <stdio.h>
+
 int main(){
   
   unsigned int vuint = map2checkGenNonDet_unsigned();  
-  map2checkStoreNonDetLog(29, 0, vuint, "foo");
+  //printf("%d \n", vuint);
+  map2checkStoreNonDetLogUnsignedInt(29, 0, vuint, "foo");
   map2checkAddInTrackedBb(18, "main");
   void * p = &vuint;
   map2checkMap_Alloca("a", p, 12, 4, 18, 0);

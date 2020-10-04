@@ -16,20 +16,28 @@
 
 using namespace std; 
 
+#include "../lib/json.hpp"
+using json = nlohmann::json;
+
 /**
  * @brief Modelling the object to store the data from
  * nondet function calls in the program analysis.
  */
+ 
 class NonDetLog {
 public:  
     long Step = 0;
     unsigned Line = -1;
     unsigned Scope = -1;
-    boost::variant<int, unsigned int, long, char, double, float> Value;
+    //boost::variant<int, unsigned int, long, char, double, float> Value;
+    string Value;
     string FunctionName = "";     
     
-    string getTypeValue(boost::variant<int, unsigned int, long, char, double, float> Value);
-    string printJsonObj();
+    //string getTypeValue(boost::variant<int, unsigned int, long, char, double, float> Value);
+    //json printJsonObj();
+       
 };
 
+
+NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(NonDetLog, Step, Line, Scope, Value, FunctionName);
 #endif // __NONDETLOG_H_INCLUDED__ 

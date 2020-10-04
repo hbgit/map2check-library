@@ -25,8 +25,9 @@
 class ContainerNonDetLog {   
     public:
         list<NonDetLog> ContainerLog_;        
-        string printContainerAsJson();
+        //string printContainerAsJson();
 };
+
 
 
 #endif // __CONTAINERNONDETLOG_H_INCLUDED__ 

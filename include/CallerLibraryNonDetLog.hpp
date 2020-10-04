@@ -30,7 +30,17 @@ extern "C" void map2check_crab_assume(char expr);
 
 extern "C" void map2check_assume_loop(char expr);
 
-extern "C" void map2checkStoreNonDetLog(int Line, unsigned Scope, boost::variant<int, unsigned int, long, char, double, float> Value, const char *FunctionName);
+extern "C" void map2checkStoreNonDetLogInt(int Line, unsigned Scope, int Value, const char *FunctionName);
+
+extern "C" void map2checkStoreNonDetLogUnsignedInt(int Line, unsigned Scope, unsigned int Value, const char *FunctionName);
+
+extern "C" void map2checkStoreNonDetLogLong(int Line, unsigned Scope, long Value, const char *FunctionName);
+
+extern "C" void map2checkStoreNonDetLogChar(int Line, unsigned Scope, char Value, const char *FunctionName);
+
+extern "C" void map2checkStoreNonDetLogDouble(int Line, unsigned Scope, double Value, const char *FunctionName);
+
+extern "C" void map2checkStoreNonDetLogFloat(int Line, unsigned Scope, float Value, const char *FunctionName);
 
 extern "C" int map2checkGenNonDet_int();
 

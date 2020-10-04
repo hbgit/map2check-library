@@ -45,6 +45,8 @@ enum PropertyType {
 
 enum VerificationResultName { FALSE, TRUE, UNKNOWN };
 
+//template ContainerNonDetLog<unsigned int>;
+
 // Objects to performs the program analysis
 extern ContainerNonDetLog ResultCntrNonDetLog;
 extern ContainerTrackBbLog ResultCntrTrackBbLog;
