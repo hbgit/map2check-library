@@ -30,7 +30,7 @@ public:
     unsigned Line = -1;
     unsigned Scope = -1;
     //boost::variant<int, unsigned int, long, char, double, float> Value;
-    string Value;
+    unsigned int Value;
     string FunctionName = "";     
     
     //string getTypeValue(boost::variant<int, unsigned int, long, char, double, float> Value);

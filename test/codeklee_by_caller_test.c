@@ -1,7 +1,7 @@
 #include "../include/CallerLibraryResult.hpp"
 #include "../include/CallerLibraryTrackBbLog.hpp"
 #include "../include/CallerLibraryMemoryTrackLog.hpp"
-#include "../include/CallerLibraryNonDetLog.hpp"
+#include "../include/CallerLibraryNonDetLogKlee.hpp"
 #include "../include/CallerLibraryCheckReach.hpp"
 
 int k =24;
@@ -25,7 +25,7 @@ int main(){
   map2checkMap_Alloca("b", p, 12, 4, 18, 0);
   
   map2check_assert(vuint == 12, 33, "main");
-  map2check_assert(vuint == 15, 33, "main");
+  //map2check_assert(vuint == 15, 33, "main");
   
   //map2check_assert(vuint == UINT_MAX, 33, "main");
 

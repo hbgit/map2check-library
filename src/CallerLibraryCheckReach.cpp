@@ -28,6 +28,7 @@ extern "C" void map2check_assert(int Condition, int LineNumber, const char *Func
     CheckAssert.LineNumber = LineNumber;
     CheckAssert.FunctionName = FunctionName;
     
+    //vuint == 12
     if(!CheckAssert.checkAssert(Condition)){
         LineNumberOfPropertyChecked = CheckAssert.LineNumber;
         VerificationResult = FALSE;

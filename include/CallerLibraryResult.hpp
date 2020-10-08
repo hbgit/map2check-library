@@ -74,4 +74,6 @@ extern "C" long getCurrentStep();
 
 string printAllContainerAsJson();
 
+void resetCntrs();
+
 #endif // __CALLERLIBRARYRESULT_H_INCLUDED__ 

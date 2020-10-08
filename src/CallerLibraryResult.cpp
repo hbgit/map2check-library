@@ -53,6 +53,12 @@ const char *ToEnum_ViolatedProperty[] = {"OVERFLOW",
 
 
 
+void resetCntrs(){
+  ResultCntrNonDetLog.ContainerLog_.clear();
+  ResultCntrTrackBbLog.ContainerLog_.clear();
+  ResultCntrMemoryLog.ContainerLog_.clear();
+}
+
 string printAllContainerAsJson() {
   
   list<TrackBbLog>::iterator it;
@@ -120,7 +126,7 @@ string printAllContainerAsJson() {
       //printf("%s \n", el.value().type_name());
 
       if (el.value().is_number() || el.value().is_string()) {
-        printf("%s \n", el.value().dump().c_str());
+        // printf("%s \n", el.value().dump().c_str());
         JsonString += string(el.value().dump().c_str()) + Comma;
       } else {
         JsonString += "\"" + string(el.value().dump().c_str()) + "\"" + Comma;

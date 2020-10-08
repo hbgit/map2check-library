@@ -16,7 +16,7 @@
 ///
 //===----------------------------------------------------------------------===//
 
-#include "../include/CallerLibraryNonDetLog.hpp"
+#include "../include/CallerLibraryNonDetLogKlee.hpp"
 #include "../include/NonDetGenKlee.hpp"
 
 #include "../include/CallerLibraryResult.hpp"
@@ -26,10 +26,14 @@
 #include <sys/types.h>
 
 #include <string>
+#include <iostream>
+#include <fstream>
 
 #include <boost/variant/get.hpp>
 
-#include <stdio.h>
+//#include <stdio.h>
+
+unsigned int GA;
 
 // extern "C" int __map2check_main__();
 
@@ -47,27 +51,31 @@ void storeNonDetLog(int Line, unsigned Scope, T Value,
   NonDetLogObj.Step = getCurrentStep();
   NonDetLogObj.Line = Line;
   NonDetLogObj.Scope = Scope; 
-  string s = std::to_string(12);  
-  NonDetLogObj.Value = s; 
+  //unsigned int t = Value;
+  NonDetLogObj.Value = Value;
   NonDetLogObj.FunctionName = FunctionName;
 
   ResultCntrNonDetLog.ContainerLog_.push_back(NonDetLogObj);
 }
 
-extern "C" void map2checkStoreNonDetLogInt(
-    int Line, unsigned Scope,
-    int Value,
-    const char *FunctionName) {
+// extern "C" void map2checkStoreNonDetLogInt(
+//     int Line, unsigned Scope,
+//     int Value,
+//     const char *FunctionName) {
   
-  storeNonDetLog<int>(Line, Scope, Value, FunctionName);
-}
+//   storeNonDetLog<int>(Line, Scope, Value, FunctionName);
+// }
 
 extern "C" void map2checkStoreNonDetLogUnsignedInt(
     int Line, unsigned Scope,
     unsigned int Value,
     const char *FunctionName) {
+  //void * t = &Value;
   
+  //unsigned int * t = (unsigned int *)Value;
+  //printf("%d \n", *t);
   storeNonDetLog<unsigned int>(Line, Scope, Value, FunctionName);
+  //storeNonDetLog<unsigned int>(Line, Scope, *(unsigned int *)Value, FunctionName);
   // NonDetLog NonDetLogObj; 
 
   // incrCurrentStep();
@@ -84,37 +92,37 @@ extern "C" void map2checkStoreNonDetLogUnsignedInt(
   // ResultCntrNonDetLog.ContainerLog_.push_back(NonDetLogObj);
 }
 
-extern "C" void map2checkStoreNonDetLogLong(
-    int Line, unsigned Scope,
-    long Value,
-    const char *FunctionName) {
+// extern "C" void map2checkStoreNonDetLogLong(
+//     int Line, unsigned Scope,
+//     long Value,
+//     const char *FunctionName) {
   
-  storeNonDetLog<long>(Line, Scope, Value, FunctionName);
-}
+//   storeNonDetLog<long>(Line, Scope, Value, FunctionName);
+// }
 
-extern "C" void map2checkStoreNonDetLogChar(
-    int Line, unsigned Scope,
-    char Value,
-    const char *FunctionName) {
+// extern "C" void map2checkStoreNonDetLogChar(
+//     int Line, unsigned Scope,
+//     char Value,
+//     const char *FunctionName) {
   
-  storeNonDetLog<char>(Line, Scope, Value, FunctionName);
-}
+//   storeNonDetLog<char>(Line, Scope, Value, FunctionName);
+// }
 
-extern "C" void map2checkStoreNonDetLogDouble(
-    int Line, unsigned Scope,
-    double Value,
-    const char *FunctionName) {
+// extern "C" void map2checkStoreNonDetLogDouble(
+//     int Line, unsigned Scope,
+//     double Value,
+//     const char *FunctionName) {
   
-  storeNonDetLog<double>(Line, Scope, Value, FunctionName);
-}
+//   storeNonDetLog<double>(Line, Scope, Value, FunctionName);
+// }
 
-extern "C" void map2checkStoreNonDetLogFloat(
-    int Line, unsigned Scope,
-    float Value,
-    const char *FunctionName) {
+// extern "C" void map2checkStoreNonDetLogFloat(
+//     int Line, unsigned Scope,
+//     float Value,
+//     const char *FunctionName) {
   
-  storeNonDetLog<float>(Line, Scope, Value, FunctionName);
-}
+//   storeNonDetLog<float>(Line, Scope, Value, FunctionName);
+// }
 
 void nondet_assume(int expr) { kleeNondetAssume(expr); }
 

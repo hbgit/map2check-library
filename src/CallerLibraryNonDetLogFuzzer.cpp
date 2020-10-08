@@ -16,7 +16,7 @@
 ///
 //===----------------------------------------------------------------------===//
 
-#include "../include/CallerLibraryNonDetLog.hpp"
+#include "../include/CallerLibraryNonDetLogFuzzer.hpp"
 #include "../include/NonDetGenLibFuzzer.hpp"
 
 #include "../include/CallerLibraryResult.hpp"
@@ -36,74 +36,62 @@ void storeNonDetLog(int Line, unsigned Scope, T Value,
   NonDetLogObj.Step = getCurrentStep();
   NonDetLogObj.Line = Line;
   NonDetLogObj.Scope = Scope;  
-  NonDetLogObj.Value = to_string(Value); 
-  NonDetLogObj.FunctionName = *FunctionName;
+  NonDetLogObj.Value = Value; 
+  NonDetLogObj.FunctionName = FunctionName;
 
 
   ResultCntrNonDetLog.ContainerLog_.push_back(NonDetLogObj);
   
 }
 
-template void storeNonDetLog(int Line, unsigned Scope, int Value,
-                             const char *FunctionName);
-template void storeNonDetLog(int Line, unsigned Scope, unsigned int Value,
-                             const char *FunctionName);
-template void storeNonDetLog(int Line, unsigned Scope, long Value,
-                             const char *FunctionName);
-template void storeNonDetLog(int Line, unsigned Scope, char Value,
-                             const char *FunctionName);
-template void storeNonDetLog(int Line, unsigned Scope, double Value,
-                             const char *FunctionName);
-template void storeNonDetLog(int Line, unsigned Scope, float Value,
-                             const char *FunctionName);
 
-extern "C" void map2checkStoreNonDetLogInt(
-    int Line, unsigned Scope,
-    int Value,
-    const char *FunctionName) {
+// extern "C" void map2checkStoreNonDetLogInt(
+//     int Line, unsigned Scope,
+//     int Value,
+//     const char *FunctionName) {
   
-  storeNonDetLog(Line, Scope, Value, FunctionName);
-}
+//   storeNonDetLog(Line, Scope, Value, FunctionName);
+// }
 
 extern "C" void map2checkStoreNonDetLogUnsignedInt(
     int Line, unsigned Scope,
     unsigned int Value,
     const char *FunctionName) {
   
-  storeNonDetLog(Line, Scope, Value, FunctionName);
+  storeNonDetLog<unsigned int>(Line, Scope, Value, FunctionName);
 }
 
-extern "C" void map2checkStoreNonDetLogLong(
-    int Line, unsigned Scope,
-    long Value,
-    const char *FunctionName) {
+// extern "C" void map2checkStoreNonDetLogLong(
+//     int Line, unsigned Scope,
+//     long Value,
+//     const char *FunctionName) {
   
-  storeNonDetLog(Line, Scope, Value, FunctionName);
-}
+//   storeNonDetLog(Line, Scope, Value, FunctionName);
+// }
 
-extern "C" void map2checkStoreNonDetLogChar(
-    int Line, unsigned Scope,
-    char Value,
-    const char *FunctionName) {
+// extern "C" void map2checkStoreNonDetLogChar(
+//     int Line, unsigned Scope,
+//     char Value,
+//     const char *FunctionName) {
   
-  storeNonDetLog(Line, Scope, Value, FunctionName);
-}
+//   storeNonDetLog(Line, Scope, Value, FunctionName);
+// }
 
-extern "C" void map2checkStoreNonDetLogDouble(
-    int Line, unsigned Scope,
-    double Value,
-    const char *FunctionName) {
+// extern "C" void map2checkStoreNonDetLogDouble(
+//     int Line, unsigned Scope,
+//     double Value,
+//     const char *FunctionName) {
   
-  storeNonDetLog(Line, Scope, Value, FunctionName);
-}
+//   storeNonDetLog(Line, Scope, Value, FunctionName);
+// }
 
-extern "C" void map2checkStoreNonDetLogFloat(
-    int Line, unsigned Scope,
-    float Value,
-    const char *FunctionName) {
+// extern "C" void map2checkStoreNonDetLogFloat(
+//     int Line, unsigned Scope,
+//     float Value,
+//     const char *FunctionName) {
   
-  storeNonDetLog(Line, Scope, Value, FunctionName);
-}
+//   storeNonDetLog(Line, Scope, Value, FunctionName);
+// }
 
 void nondet_assume(int expr) { libFuzzerNonDetAssume(expr); }
 
