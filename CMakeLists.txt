@@ -28,14 +28,15 @@ option(ENABLE_COVCODE "Code coverage" OFF)
 # Doxygen Build
 option(BUILD_DOC "Build Documentation" OFF)
 
+set(CMAKE_C_COMPILER "/usr/bin/clang-8")
 set(CMAKE_CXX_COMPILER "/usr/bin/clang++-8")
-set(CMAKE_CXX_STANDARD 11)
+set(CMAKE_C_STANDARD 99)
 
 # libfuzzer -fsanitize=address,fuzzer -g
 
 if(ENABLE_COVCODE) 
   message(">> Enabling coverage code ")
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fprofile-instr-generate -fcoverage-mapping")  
+  set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fprofile-instr-generate -fcoverage-mapping")  
 endif()
 
 # The following folder will be included

@@ -1,28 +1,18 @@
 project (TestLibrary)
 
-include_directories(${PROJECT_SOURCE_DIR}/include)
+include_directories(${PROJECT_SOURCE_DIR}/include/nondet)
+#file(GLOB_RECURSE HEADER_FILES ${PROJECT_SOURCE_DIR}/include/*.h)
 
 add_executable(
-  unit_tests
-  CallerLibraryResult_test.cpp 
+  unit_tests  
+  test_lib.cpp
+  nondetlog_test.cpp 
 )
-
-# add_executable(
-#   unit_tests
-#   AnalysisModeAssert_test.cpp
-#   AnalysisModeMemory_test.cpp
-#   AnalysisModeOverflow_test.cpp
-#   CallerLibraryResult_test.cpp 
-#   containerMemoryTrackLog_test.cpp 
-#   containerNonDetLog_test.cpp
-#   containerTrackBbLog_test.cpp
-#   nondetlog_test.cpp
-#   TrackBbLog_test.cpp
-# )
 
 target_link_libraries(
   unit_tests
   gtest_main
+  ${HEADER_FILES} 
   ${CMAKE_BINARY_DIR}/src/libmap2check.a
 )
 

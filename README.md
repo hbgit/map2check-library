@@ -1,5 +1,5 @@
 # Map2Check-Library
-C++ library to support Map2Check Tool.
+C library to support Map2Check Tool.
 
 [![License](https://img.shields.io/badge/license-GPL--3-lighgreen)](../master/LICENSE)
 [![Build Status](https://travis-ci.org/hbgit/map2check-library.svg?branch=master)](https://travis-ci.org/hbgit/map2check-library)
