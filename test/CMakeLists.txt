@@ -7,12 +7,12 @@ add_executable(
   unit_tests  
   test_lib.cpp
   nondetlog_test.cpp 
+  container_nondet_test.cpp
 )
 
 target_link_libraries(
   unit_tests
-  gtest_main
-  ${HEADER_FILES} 
+  gtest_main  
   ${CMAKE_BINARY_DIR}/src/libmap2check.a
 )
 
