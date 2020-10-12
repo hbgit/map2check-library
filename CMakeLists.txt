@@ -19,7 +19,8 @@
 # cmake --build . -- VERBOSE=1
 
 cmake_minimum_required(VERSION 3.5)
-project(LibMap2Check)
+project(LibMap2Check VERSION 1.0.0 DESCRIPTION "C Map2Check library to track and generate verification conditions")
+
 
 #set(CMAKE_BUILD_TYPE Debug)
 

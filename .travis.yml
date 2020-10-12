@@ -1,5 +1,5 @@
 dist: focal
-language: cpp
+language: c
 
 services:
 - docker

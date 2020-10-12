@@ -1,33 +1,26 @@
-#include "../include/CallerLibraryResult.hpp"
-#include "../include/CallerLibraryTrackBbLog.hpp"
-#include "../include/CallerLibraryMemoryTrackLog.hpp"
-#include "../include/CallerLibraryNonDetLogKlee.hpp"
-#include "../include/CallerLibraryCheckReach.hpp"
+#include <assert.h>
+#include <stdlib.h>
 
-int k =24;
+#include "../include/nondet/nondetlog.h"
 
-extern "C" int __map2check_main__() {
-  return 0;
-}
-
-extern "C" void klee_assume(int);
+extern void klee_assume(int);
+extern void klee_make_symbolic(void *addr, size_t nbytes, const char *name);
 
 #include <stdio.h>
 
 int main(){
   
-  unsigned int vuint = map2checkGenNonDet_unsigned();  
+  int vuint;  
+  klee_make_symbolic(&vuint, sizeof(vuint), "non_det_");
   //printf("%d \n", vuint);
-  map2checkStoreNonDetLogUnsignedInt(29, 0, vuint, "foo");
-  map2checkAddInTrackedBb(18, "main");
-  void * p = &vuint;
-  map2checkMap_Alloca("a", p, 12, 4, 18, 0);
-  map2checkMap_Alloca("b", p, 12, 4, 18, 0);
-  
-  map2check_assert(vuint == 12, 33, "main");
-  //map2check_assert(vuint == 15, 33, "main");
-  
-  //map2check_assert(vuint == UINT_MAX, 33, "main");
+  // BUG from KLEE, the vunit value is not int
+  //const char * tmp = map2check_convert_int_to_string(vuint);
+  non_det_log_t *obj = map2check_save_nondet_log_int(1, 12, 0, INT_ID, &vuint, "foo");
+
+  if(vuint == 12){
+    print_obj_as_json(*obj);
+    assert(0);
+  }
 
   return 0;
 }

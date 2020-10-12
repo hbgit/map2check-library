@@ -1,37 +1,52 @@
 [
 {
-  "directory": "/mnt/9e4daa88-9e4f-4a65-85c9-dd4d195cbb1c/Documents/Projects/map2check-library/build/src",
-  "command": "/usr/bin/clang++-8   -I/mnt/9e4daa88-9e4f-4a65-85c9-dd4d195cbb1c/Documents/Projects/map2check-library/src/../include  -O3 -DNDEBUG   -std=gnu++11 -o CMakeFiles/map2check.dir/CallerLibrary.cpp.o -c /mnt/9e4daa88-9e4f-4a65-85c9-dd4d195cbb1c/Documents/Projects/map2check-library/src/CallerLibrary.cpp",
-  "file": "/mnt/9e4daa88-9e4f-4a65-85c9-dd4d195cbb1c/Documents/Projects/map2check-library/src/CallerLibrary.cpp"
+  "directory": "/home/hrocha/Documents/Projects/map2check-library/build/src",
+  "command": "/usr/bin/clang-8   -fprofile-instr-generate -fcoverage-mapping   -std=gnu99 -o CMakeFiles/map2check.dir/__/lib/json-maker.c.o   -c /home/hrocha/Documents/Projects/map2check-library/lib/json-maker.c",
+  "file": "/home/hrocha/Documents/Projects/map2check-library/lib/json-maker.c"
 },
 {
-  "directory": "/mnt/9e4daa88-9e4f-4a65-85c9-dd4d195cbb1c/Documents/Projects/map2check-library/build/src",
-  "command": "/usr/bin/clang++-8   -I/mnt/9e4daa88-9e4f-4a65-85c9-dd4d195cbb1c/Documents/Projects/map2check-library/src/../include  -O3 -DNDEBUG   -std=gnu++11 -o CMakeFiles/map2check.dir/Container.cpp.o -c /mnt/9e4daa88-9e4f-4a65-85c9-dd4d195cbb1c/Documents/Projects/map2check-library/src/Container.cpp",
-  "file": "/mnt/9e4daa88-9e4f-4a65-85c9-dd4d195cbb1c/Documents/Projects/map2check-library/src/Container.cpp"
+  "directory": "/home/hrocha/Documents/Projects/map2check-library/build/src",
+  "command": "/usr/bin/clang-8   -fprofile-instr-generate -fcoverage-mapping   -std=gnu99 -o CMakeFiles/map2check.dir/__/lib/to_string/ftoa.c.o   -c /home/hrocha/Documents/Projects/map2check-library/lib/to_string/ftoa.c",
+  "file": "/home/hrocha/Documents/Projects/map2check-library/lib/to_string/ftoa.c"
 },
 {
-  "directory": "/mnt/9e4daa88-9e4f-4a65-85c9-dd4d195cbb1c/Documents/Projects/map2check-library/build/googletest-build/googlemock",
-  "command": "/usr/bin/clang++-8   -isystem /mnt/9e4daa88-9e4f-4a65-85c9-dd4d195cbb1c/Documents/Projects/map2check-library/build/googletest-src/googlemock/include -isystem /mnt/9e4daa88-9e4f-4a65-85c9-dd4d195cbb1c/Documents/Projects/map2check-library/build/googletest-src/googlemock -isystem /mnt/9e4daa88-9e4f-4a65-85c9-dd4d195cbb1c/Documents/Projects/map2check-library/build/googletest-src/googletest/include -isystem /mnt/9e4daa88-9e4f-4a65-85c9-dd4d195cbb1c/Documents/Projects/map2check-library/build/googletest-src/googletest  -O3 -DNDEBUG   -Wall -Wshadow -Werror -Wconversion -DGTEST_HAS_PTHREAD=1 -fexceptions -W -Wpointer-arith -Wreturn-type -Wcast-qual -Wwrite-strings -Wswitch -Wunused-parameter -Wcast-align -Wchar-subscripts -Winline -Wredundant-decls -std=c++11 -o CMakeFiles/gmock_main.dir/src/gmock_main.cc.o -c /mnt/9e4daa88-9e4f-4a65-85c9-dd4d195cbb1c/Documents/Projects/map2check-library/build/googletest-src/googlemock/src/gmock_main.cc",
-  "file": "/mnt/9e4daa88-9e4f-4a65-85c9-dd4d195cbb1c/Documents/Projects/map2check-library/build/googletest-src/googlemock/src/gmock_main.cc"
+  "directory": "/home/hrocha/Documents/Projects/map2check-library/build/src",
+  "command": "/usr/bin/clang-8   -fprofile-instr-generate -fcoverage-mapping   -std=gnu99 -o CMakeFiles/map2check.dir/nondet/container_nondet.c.o   -c /home/hrocha/Documents/Projects/map2check-library/src/nondet/container_nondet.c",
+  "file": "/home/hrocha/Documents/Projects/map2check-library/src/nondet/container_nondet.c"
 },
 {
-  "directory": "/mnt/9e4daa88-9e4f-4a65-85c9-dd4d195cbb1c/Documents/Projects/map2check-library/build/googletest-build/googlemock",
-  "command": "/usr/bin/clang++-8   -I/mnt/9e4daa88-9e4f-4a65-85c9-dd4d195cbb1c/Documents/Projects/map2check-library/build/googletest-src/googlemock/include -I/mnt/9e4daa88-9e4f-4a65-85c9-dd4d195cbb1c/Documents/Projects/map2check-library/build/googletest-src/googlemock -isystem /mnt/9e4daa88-9e4f-4a65-85c9-dd4d195cbb1c/Documents/Projects/map2check-library/build/googletest-src/googletest/include -isystem /mnt/9e4daa88-9e4f-4a65-85c9-dd4d195cbb1c/Documents/Projects/map2check-library/build/googletest-src/googletest  -O3 -DNDEBUG   -Wall -Wshadow -Werror -Wconversion -DGTEST_HAS_PTHREAD=1 -fexceptions -W -Wpointer-arith -Wreturn-type -Wcast-qual -Wwrite-strings -Wswitch -Wunused-parameter -Wcast-align -Wchar-subscripts -Winline -Wredundant-decls -std=c++11 -o CMakeFiles/gmock.dir/src/gmock-all.cc.o -c /mnt/9e4daa88-9e4f-4a65-85c9-dd4d195cbb1c/Documents/Projects/map2check-library/build/googletest-src/googlemock/src/gmock-all.cc",
-  "file": "/mnt/9e4daa88-9e4f-4a65-85c9-dd4d195cbb1c/Documents/Projects/map2check-library/build/googletest-src/googlemock/src/gmock-all.cc"
+  "directory": "/home/hrocha/Documents/Projects/map2check-library/build/src",
+  "command": "/usr/bin/clang-8   -fprofile-instr-generate -fcoverage-mapping   -std=gnu99 -o CMakeFiles/map2check.dir/nondet/nondetlog.c.o   -c /home/hrocha/Documents/Projects/map2check-library/src/nondet/nondetlog.c",
+  "file": "/home/hrocha/Documents/Projects/map2check-library/src/nondet/nondetlog.c"
 },
 {
-  "directory": "/mnt/9e4daa88-9e4f-4a65-85c9-dd4d195cbb1c/Documents/Projects/map2check-library/build/googletest-build/googletest",
-  "command": "/usr/bin/clang++-8   -isystem /mnt/9e4daa88-9e4f-4a65-85c9-dd4d195cbb1c/Documents/Projects/map2check-library/build/googletest-src/googletest/include -isystem /mnt/9e4daa88-9e4f-4a65-85c9-dd4d195cbb1c/Documents/Projects/map2check-library/build/googletest-src/googletest  -O3 -DNDEBUG   -Wall -Wshadow -Werror -Wconversion -DGTEST_HAS_PTHREAD=1 -fexceptions -W -Wpointer-arith -Wreturn-type -Wcast-qual -Wwrite-strings -Wswitch -Wunused-parameter -Wcast-align -Wchar-subscripts -Winline -Wredundant-decls -std=c++11 -o CMakeFiles/gtest_main.dir/src/gtest_main.cc.o -c /mnt/9e4daa88-9e4f-4a65-85c9-dd4d195cbb1c/Documents/Projects/map2check-library/build/googletest-src/googletest/src/gtest_main.cc",
-  "file": "/mnt/9e4daa88-9e4f-4a65-85c9-dd4d195cbb1c/Documents/Projects/map2check-library/build/googletest-src/googletest/src/gtest_main.cc"
+  "directory": "/home/hrocha/Documents/Projects/map2check-library/build/googletest-build/googlemock",
+  "command": "/usr/bin/clang++-8   -isystem /home/hrocha/Documents/Projects/map2check-library/build/googletest-src/googlemock/include -isystem /home/hrocha/Documents/Projects/map2check-library/build/googletest-src/googlemock -isystem /home/hrocha/Documents/Projects/map2check-library/build/googletest-src/googletest/include -isystem /home/hrocha/Documents/Projects/map2check-library/build/googletest-src/googletest    -O3 -DNDEBUG   -Wall -Wshadow -Werror -Wconversion -DGTEST_HAS_PTHREAD=1 -fexceptions -W -Wpointer-arith -Wreturn-type -Wcast-qual -Wwrite-strings -Wswitch -Wunused-parameter -Wcast-align -Wchar-subscripts -Winline -Wredundant-decls -std=c++11 -o CMakeFiles/gmock_main.dir/src/gmock_main.cc.o -c /home/hrocha/Documents/Projects/map2check-library/build/googletest-src/googlemock/src/gmock_main.cc",
+  "file": "/home/hrocha/Documents/Projects/map2check-library/build/googletest-src/googlemock/src/gmock_main.cc"
 },
 {
-  "directory": "/mnt/9e4daa88-9e4f-4a65-85c9-dd4d195cbb1c/Documents/Projects/map2check-library/build/googletest-build/googletest",
-  "command": "/usr/bin/clang++-8   -I/mnt/9e4daa88-9e4f-4a65-85c9-dd4d195cbb1c/Documents/Projects/map2check-library/build/googletest-src/googletest/include -I/mnt/9e4daa88-9e4f-4a65-85c9-dd4d195cbb1c/Documents/Projects/map2check-library/build/googletest-src/googletest  -O3 -DNDEBUG   -Wall -Wshadow -Werror -Wconversion -DGTEST_HAS_PTHREAD=1 -fexceptions -W -Wpointer-arith -Wreturn-type -Wcast-qual -Wwrite-strings -Wswitch -Wunused-parameter -Wcast-align -Wchar-subscripts -Winline -Wredundant-decls -std=c++11 -o CMakeFiles/gtest.dir/src/gtest-all.cc.o -c /mnt/9e4daa88-9e4f-4a65-85c9-dd4d195cbb1c/Documents/Projects/map2check-library/build/googletest-src/googletest/src/gtest-all.cc",
-  "file": "/mnt/9e4daa88-9e4f-4a65-85c9-dd4d195cbb1c/Documents/Projects/map2check-library/build/googletest-src/googletest/src/gtest-all.cc"
+  "directory": "/home/hrocha/Documents/Projects/map2check-library/build/googletest-build/googlemock",
+  "command": "/usr/bin/clang++-8   -I/home/hrocha/Documents/Projects/map2check-library/build/googletest-src/googlemock/include -I/home/hrocha/Documents/Projects/map2check-library/build/googletest-src/googlemock -isystem /home/hrocha/Documents/Projects/map2check-library/build/googletest-src/googletest/include -isystem /home/hrocha/Documents/Projects/map2check-library/build/googletest-src/googletest    -O3 -DNDEBUG   -Wall -Wshadow -Werror -Wconversion -DGTEST_HAS_PTHREAD=1 -fexceptions -W -Wpointer-arith -Wreturn-type -Wcast-qual -Wwrite-strings -Wswitch -Wunused-parameter -Wcast-align -Wchar-subscripts -Winline -Wredundant-decls -std=c++11 -o CMakeFiles/gmock.dir/src/gmock-all.cc.o -c /home/hrocha/Documents/Projects/map2check-library/build/googletest-src/googlemock/src/gmock-all.cc",
+  "file": "/home/hrocha/Documents/Projects/map2check-library/build/googletest-src/googlemock/src/gmock-all.cc"
 },
 {
-  "directory": "/mnt/9e4daa88-9e4f-4a65-85c9-dd4d195cbb1c/Documents/Projects/map2check-library/build/test",
-  "command": "/usr/bin/clang++-8   -I/mnt/9e4daa88-9e4f-4a65-85c9-dd4d195cbb1c/Documents/Projects/map2check-library/test/header -isystem /mnt/9e4daa88-9e4f-4a65-85c9-dd4d195cbb1c/Documents/Projects/map2check-library/build/googletest-src/googletest/include -isystem /mnt/9e4daa88-9e4f-4a65-85c9-dd4d195cbb1c/Documents/Projects/map2check-library/build/googletest-src/googletest  -O3 -DNDEBUG   -std=gnu++11 -o CMakeFiles/unit_tests.dir/nondetlog_test.cpp.o -c /mnt/9e4daa88-9e4f-4a65-85c9-dd4d195cbb1c/Documents/Projects/map2check-library/test/nondetlog_test.cpp",
-  "file": "/mnt/9e4daa88-9e4f-4a65-85c9-dd4d195cbb1c/Documents/Projects/map2check-library/test/nondetlog_test.cpp"
+  "directory": "/home/hrocha/Documents/Projects/map2check-library/build/googletest-build/googletest",
+  "command": "/usr/bin/clang++-8   -isystem /home/hrocha/Documents/Projects/map2check-library/build/googletest-src/googletest/include -isystem /home/hrocha/Documents/Projects/map2check-library/build/googletest-src/googletest    -O3 -DNDEBUG   -Wall -Wshadow -Werror -Wconversion -DGTEST_HAS_PTHREAD=1 -fexceptions -W -Wpointer-arith -Wreturn-type -Wcast-qual -Wwrite-strings -Wswitch -Wunused-parameter -Wcast-align -Wchar-subscripts -Winline -Wredundant-decls -std=c++11 -o CMakeFiles/gtest_main.dir/src/gtest_main.cc.o -c /home/hrocha/Documents/Projects/map2check-library/build/googletest-src/googletest/src/gtest_main.cc",
+  "file": "/home/hrocha/Documents/Projects/map2check-library/build/googletest-src/googletest/src/gtest_main.cc"
+},
+{
+  "directory": "/home/hrocha/Documents/Projects/map2check-library/build/googletest-build/googletest",
+  "command": "/usr/bin/clang++-8   -I/home/hrocha/Documents/Projects/map2check-library/build/googletest-src/googletest/include -I/home/hrocha/Documents/Projects/map2check-library/build/googletest-src/googletest    -O3 -DNDEBUG   -Wall -Wshadow -Werror -Wconversion -DGTEST_HAS_PTHREAD=1 -fexceptions -W -Wpointer-arith -Wreturn-type -Wcast-qual -Wwrite-strings -Wswitch -Wunused-parameter -Wcast-align -Wchar-subscripts -Winline -Wredundant-decls -std=c++11 -o CMakeFiles/gtest.dir/src/gtest-all.cc.o -c /home/hrocha/Documents/Projects/map2check-library/build/googletest-src/googletest/src/gtest-all.cc",
+  "file": "/home/hrocha/Documents/Projects/map2check-library/build/googletest-src/googletest/src/gtest-all.cc"
+},
+{
+  "directory": "/home/hrocha/Documents/Projects/map2check-library/build/test",
+  "command": "/usr/bin/clang++-8   -I/home/hrocha/Documents/Projects/map2check-library/test/include/nondet -isystem /home/hrocha/Documents/Projects/map2check-library/build/googletest-src/googletest/include -isystem /home/hrocha/Documents/Projects/map2check-library/build/googletest-src/googletest    -fprofile-instr-generate -fcoverage-mapping -O3 -DNDEBUG   -o CMakeFiles/unit_tests.dir/test_lib.cpp.o -c /home/hrocha/Documents/Projects/map2check-library/test/test_lib.cpp",
+  "file": "/home/hrocha/Documents/Projects/map2check-library/test/test_lib.cpp"
+},
+{
+  "directory": "/home/hrocha/Documents/Projects/map2check-library/build/test",
+  "command": "/usr/bin/clang++-8   -I/home/hrocha/Documents/Projects/map2check-library/test/include/nondet -isystem /home/hrocha/Documents/Projects/map2check-library/build/googletest-src/googletest/include -isystem /home/hrocha/Documents/Projects/map2check-library/build/googletest-src/googletest    -fprofile-instr-generate -fcoverage-mapping -O3 -DNDEBUG   -o CMakeFiles/unit_tests.dir/nondetlog_test.cpp.o -c /home/hrocha/Documents/Projects/map2check-library/test/nondetlog_test.cpp",
+  "file": "/home/hrocha/Documents/Projects/map2check-library/test/nondetlog_test.cpp"
 }
 ]

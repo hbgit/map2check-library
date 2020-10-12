@@ -9,11 +9,10 @@
 ===----------------------------------------------------------------------=== */
 ///
 /// \file
-/// This file contains the declaration of the nondet object,  
+/// This file contains the declaration of the nondet object,
 /// which modelling the nondet object.
 ///
 //===----------------------------------------------------------------------===//
-
 
 #ifndef __NONDETLOG_H_INCLUDED__
 #define __NONDETLOG_H_INCLUDED__
@@ -27,24 +26,32 @@ enum var_type_t { INT_ID, UNIT_ID, LONG_ID, CHAR_ID, DOUBLE_ID, FLOAT_ID };
  * nondet function calls in the program analysis.
  */
 
+union Data {
+   int * i;
+   float f;
+   double * d;
+   char str[20];
+};
+
 typedef struct _non_det_log {
   TAILQ_ENTRY(_non_det_log) pointers;
   long step;
   int line;
   int scope;
   enum var_type_t type_var;
-  void *value;
-  char function_name[255];
-  
+  union Data value;
+  const char *function_name;
+
 } non_det_log_t;
 
 const char *print_obj_as_json(non_det_log_t obj);
 
-non_det_log_t * create_nondet(long step,
-  int line,
-  int scope,
-  enum var_type_t type_var,
-  void *value,
-  char function_name);
+non_det_log_t *map2check_save_nondet_log_int(long step, int line, int scope,
+                             enum var_type_t type_var, int * value,
+                             const char * function_name);
+
+non_det_log_t *map2check_save_nondet_log_double(long step, int line, int scope,
+                             enum var_type_t type_var, double * value,
+                             const char * function_name);
 
 #endif // __NONDETLOG_H_INCLUDED__

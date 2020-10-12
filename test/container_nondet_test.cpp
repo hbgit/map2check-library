@@ -10,14 +10,14 @@ extern "C" {
 TEST(ContainerNonDetLog, ContainerNonDetLog_init)
 {
     non_det_log_t *obj = create_nondet(1, 12, 0,
-                             INT_ID, (void *)12,
-                             (char)(size_t)"foo");
+                             INT_ID, "12",
+                             "foo");
     
     init_container_nondet();
     insert_tail_container_nondet(obj);
     non_det_log_t *obj2 = create_nondet(2, 24, 0,
-                             INT_ID, (void *)12,
-                             (char)(size_t)"foo");
+                             INT_ID, "144",
+                             "foo");
     
     insert_tail_container_nondet(obj2);
     
