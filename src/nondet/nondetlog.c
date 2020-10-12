@@ -41,17 +41,16 @@ const char *print_obj_as_json(non_det_log_t obj) {
     //int myInt1 = (int)obj.value.i[0] | ( (int)obj.value.i[1] << 8 ) | ( (int)obj.value.i[2] << 16 ) | ( (int)obj.value.i[3] << 24 );
     //int v = *(char *)obj.value.i;
     dest = json_int(dest, "value", *(char *)obj.value.i);
-  }
-  // else if (obj.type_var == UNIT_ID) {
-  //   dest = json_uint(dest, "value", (unsigned int)(size_t)obj.value);
-  // } else if (obj.type_var == LONG_ID) {
-  //   dest = json_long(dest, "value", (long)(size_t)obj.value);
-  // } else if (obj.type_var == CHAR_ID) {
-  //   dest = json_str(dest, "value", (const char *)(size_t)obj.value);
-  // } else if (obj.type_var == FLOAT_ID) {
-  //   dest = json_double(dest, "value", (float)(size_t)obj.value);
-  else if (obj.type_var == DOUBLE_ID) {
-    //printf(">>>>> %lf \n", *obj.value.d);
+  } else if (obj.type_var == UNIT_ID) {
+    dest = json_uint(dest, "value", *obj.value.u);
+  } else if (obj.type_var == LONG_ID) {
+    dest = json_long(dest, "value", *obj.value.l);
+  } else if (obj.type_var == CHAR_ID) {
+    const char * result = obj.value.c;
+    dest = json_str(dest, "value", result);
+  } else if (obj.type_var == FLOAT_ID) {
+    dest = json_double(dest, "value", *obj.value.f);
+  }else if (obj.type_var == DOUBLE_ID) {    
     dest = json_double(dest, "value", *obj.value.d);
   }
 
@@ -95,6 +94,71 @@ non_det_log_t *map2check_save_nondet_log_int(long step, int line, int scope,
 
   return obj;
 }
+
+non_det_log_t *map2check_save_nondet_log_uint(long step, int line, int scope,
+                             enum var_type_t type_var, unsigned int *value,
+                             const char *function_name) {
+
+  non_det_log_t *obj = (non_det_log_t *)malloc(sizeof(non_det_log_t));
+  
+  obj->line = line;
+  obj->step = step;
+  obj->scope = scope;
+  obj->type_var = type_var;
+  obj->value.u = value;
+  obj->function_name = function_name;
+
+  return obj;
+}
+
+non_det_log_t *map2check_save_nondet_log_long(long step, int line, int scope,
+                             enum var_type_t type_var, long *value,
+                             const char *function_name) {
+
+  non_det_log_t *obj = (non_det_log_t *)malloc(sizeof(non_det_log_t));
+  
+  obj->line = line;
+  obj->step = step;
+  obj->scope = scope;
+  obj->type_var = type_var;
+  obj->value.l = value;
+  obj->function_name = function_name;
+
+  return obj;
+}
+
+non_det_log_t *map2check_save_nondet_log_char(long step, int line, int scope,
+                             enum var_type_t type_var, char *value,
+                             const char *function_name) {
+
+  non_det_log_t *obj = (non_det_log_t *)malloc(sizeof(non_det_log_t));
+  
+  obj->line = line;
+  obj->step = step;
+  obj->scope = scope;
+  obj->type_var = type_var;
+  obj->value.c = value;
+  obj->function_name = function_name;
+
+  return obj;
+}
+
+non_det_log_t *map2check_save_nondet_log_float(long step, int line, int scope,
+                             enum var_type_t type_var, float *value,
+                             const char *function_name) {
+
+  non_det_log_t *obj = (non_det_log_t *)malloc(sizeof(non_det_log_t));
+  
+  obj->line = line;
+  obj->step = step;
+  obj->scope = scope;
+  obj->type_var = type_var;
+  obj->value.f = value;
+  obj->function_name = function_name;
+
+  return obj;
+}
+
 
 non_det_log_t *map2check_save_nondet_log_double(long step, int line, int scope,
                              enum var_type_t type_var, double *value,
