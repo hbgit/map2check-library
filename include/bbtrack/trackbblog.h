@@ -20,7 +20,7 @@
 #include <sys/queue.h>
 
 typedef struct _bbtrack_log {
-  TAILQ_ENTRY(_non_det_log) pointers;
+  TAILQ_ENTRY(_bbtrack_log) pointers;
   long step;
   int line;
   const char *function_name;

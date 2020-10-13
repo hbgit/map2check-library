@@ -56,6 +56,7 @@ genBCFiles("nondet")
 # < bbtrack > package
 set(MAP2CHECK_BC_files "")
 list(APPEND MAP2CHECK_BC_files "trackbblog")
+list(APPEND MAP2CHECK_BC_files "container_trackbb")
 message(${MAP2CHECK_BC_files})
 genBCFiles("bbtrack")
 

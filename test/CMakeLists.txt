@@ -9,6 +9,7 @@ add_executable(
   nondetlog_test.cpp 
   container_nondet_test.cpp
   trackbblog_test.cpp
+  container_trackbb_test.cpp
 )
 
 target_link_libraries(
