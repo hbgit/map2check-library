@@ -22,7 +22,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-const char *print_obj_as_json(non_det_log_t obj) {
+char * print_obj_as_json(non_det_log_t *obj) {
 
   // buff
   // Initial setting up to generate json
@@ -30,28 +30,28 @@ const char *print_obj_as_json(non_det_log_t obj) {
   char *dest = buff;
 
   dest = json_objOpen(dest, NULL);
-  dest = json_long(dest, "step", obj.step);
-  dest = json_int(dest, "line", obj.line);
-  dest = json_int(dest, "scope", obj.scope);
-  dest = json_str(dest, "function_name", obj.function_name);
-  dest = json_int(dest, "type", obj.type_var);
+  dest = json_long(dest, "step", obj->step);
+  dest = json_int(dest, "line", obj->line);
+  dest = json_int(dest, "scope", obj->scope);
+  dest = json_str(dest, "function_name", obj->function_name);
+  dest = json_int(dest, "type", obj->type_var);
   
-  if (obj.type_var == INT_ID) {
+  if (obj->type_var == INT_ID) {
     //uint32_t myInt1 = (uint8_t)obj.value.i[0] + (uint8_t)(obj.value.i[1] << 8) + (uint8_t)(obj.value.i[2] << 16) + (uint8_t)(obj.value.i[3] << 24);
     //int myInt1 = (int)obj.value.i[0] | ( (int)obj.value.i[1] << 8 ) | ( (int)obj.value.i[2] << 16 ) | ( (int)obj.value.i[3] << 24 );
     //int v = *(char *)obj.value.i;
-    dest = json_int(dest, "value", *(char *)obj.value.i);
-  } else if (obj.type_var == UNIT_ID) {
-    dest = json_uint(dest, "value", *obj.value.u);
-  } else if (obj.type_var == LONG_ID) {
-    dest = json_long(dest, "value", *obj.value.l);
-  } else if (obj.type_var == CHAR_ID) {
-    const char * result = obj.value.c;
+    dest = json_int(dest, "value", *obj->value.i);
+  } else if (obj->type_var == UNIT_ID) {
+    dest = json_uint(dest, "value", *obj->value.u);
+  } else if (obj->type_var == LONG_ID) {
+    dest = json_long(dest, "value", *obj->value.l);
+  } else if (obj->type_var == CHAR_ID) {
+    const char * result = obj->value.c;
     dest = json_str(dest, "value", result);
-  } else if (obj.type_var == FLOAT_ID) {
-    dest = json_double(dest, "value", *obj.value.f);
-  }else if (obj.type_var == DOUBLE_ID) {    
-    dest = json_double(dest, "value", *obj.value.d);
+  } else if (obj->type_var == FLOAT_ID) {
+    dest = json_double(dest, "value", *obj->value.f);
+  }else if (obj->type_var == DOUBLE_ID) {    
+    dest = json_double(dest, "value", *obj->value.d);
   }
 
   // Close json and check generation
@@ -66,16 +66,13 @@ const char *print_obj_as_json(non_det_log_t obj) {
             " Max: ", (int)sizeof buff - 1);
     exit(1);
   }
-  puts(buff);
+  //puts(buff);
 
-  FILE *fp;
-  fp = fopen("result_map2check_json.json", "w+");
-  fputs(buff, fp);
-  //fprintf(fp,"%s",buff);
-  fclose(fp);
-
-  const char *result = buff;
-  return result;
+  //const char *result = buff;
+  //return result;
+  char * r = malloc(sizeof(buff));
+  strcpy(r, buff);
+  return r;
 }
 
 

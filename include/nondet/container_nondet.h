@@ -25,11 +25,11 @@ TAILQ_HEAD(nondet_list, _non_det_log);
 struct nondet_list container_nondets;
 
 //for TAILQ_INIT(&container_nondet);
-void init_container_nondet();
+void map2check_init_container_nondet();
 
-void insert_tail_container_nondet(non_det_log_t * objnondet);
+void map2check_save_in_tail_container_nondet(non_det_log_t * objnondet);
 
-const char * print_all_nondet_as_json();
+void map2check_print_all_nondetlog_as_json();
 
 
 

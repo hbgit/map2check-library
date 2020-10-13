@@ -47,7 +47,7 @@ typedef struct _non_det_log {
 
 } non_det_log_t;
 
-const char *print_obj_as_json(non_det_log_t obj);
+char *print_obj_as_json(non_det_log_t *obj);
 
 non_det_log_t *map2check_save_nondet_log_int(long step, int line, int scope,
                              enum var_type_t type_var, int * value,

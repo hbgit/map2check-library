@@ -18,7 +18,7 @@ TEST(NonDetLog, NonDetLog_int) {
                     "\"foo\",\"type\":0,\"value\":12}";
 
   
-  EXPECT_STREQ(print_obj_as_json(*obj), str);
+  EXPECT_STREQ(print_obj_as_json(obj), str);
 }
 
 TEST(NonDetLog, NonDetLog_uint) {
@@ -31,7 +31,7 @@ TEST(NonDetLog, NonDetLog_uint) {
                     "\"foo\",\"type\":1,\"value\":4294967295}";
 
   
-  EXPECT_STREQ(print_obj_as_json(*obj), str);
+  EXPECT_STREQ(print_obj_as_json(obj), str);
 }
 
 TEST(NonDetLog, NonDetLog_long) {
@@ -44,7 +44,7 @@ TEST(NonDetLog, NonDetLog_long) {
                     "\"foo\",\"type\":2,\"value\":9223372036854775807}";
 
   
-  EXPECT_STREQ(print_obj_as_json(*obj), str);
+  EXPECT_STREQ(print_obj_as_json(obj), str);
 }
 
 TEST(NonDetLog, NonDetLog_char) {
@@ -57,7 +57,7 @@ TEST(NonDetLog, NonDetLog_char) {
                     "\"foo\",\"type\":3,\"value\":\"?\"}";
 
   
-  EXPECT_STREQ(print_obj_as_json(*obj), str);
+  EXPECT_STREQ(print_obj_as_json(obj), str);
 }
 
 TEST(NonDetLog, NonDetLog_float) {
@@ -68,7 +68,7 @@ TEST(NonDetLog, NonDetLog_float) {
   const char *str = "{\"step\":1,\"line\":12,\"scope\":0,\"function_name\":"
                     "\"foo\",\"type\":5,\"value\":3.40282e+38}";
   
-  EXPECT_STREQ(print_obj_as_json(*obj), str);
+  EXPECT_STREQ(print_obj_as_json(obj), str);
 }
 
 TEST(NonDetLog, NonDetLog_double) {
@@ -79,7 +79,7 @@ TEST(NonDetLog, NonDetLog_double) {
   const char *str = "{\"step\":1,\"line\":12,\"scope\":0,\"function_name\":"
                     "\"foo\",\"type\":4,\"value\":1.25649}";
   
-  EXPECT_STREQ(print_obj_as_json(*obj), str);
+  EXPECT_STREQ(print_obj_as_json(obj), str);
 }
 
 // TEST(NonDetLog, NonDetLog_float)
