@@ -62,6 +62,7 @@ genBCFiles("bbtrack")
 # < memtrack > package
 set(MAP2CHECK_BC_files "")
 list(APPEND MAP2CHECK_BC_files "memtracklog")
+list(APPEND MAP2CHECK_BC_files "container_memtracklog")
 message(${MAP2CHECK_BC_files})
 genBCFiles("memtrack")
 
