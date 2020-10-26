@@ -57,5 +57,5 @@ void map2check_print_all_trackbblog_as_json(){
 
     }
 
-    printf("]\n");
+    printf("]");
 }

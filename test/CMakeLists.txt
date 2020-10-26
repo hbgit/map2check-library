@@ -12,6 +12,7 @@ add_executable(
   container_trackbb_test.cpp
   memtracklog_test.cpp
   container_memtracklog_test.cpp
+  caller_lib_result.cpp
 )
 
 target_link_libraries(

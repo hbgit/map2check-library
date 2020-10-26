@@ -68,7 +68,7 @@ void map2check_print_all_nondetlog_as_json(){
         }
     }
 
-    printf("]\n");
+    printf("]");
 
     //fputs("]", fp);
     //fclose(fp);

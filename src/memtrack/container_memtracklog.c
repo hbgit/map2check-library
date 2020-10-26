@@ -45,7 +45,7 @@ void map2check_print_all_memtracklog_as_json() {
     }
   }
 
-  printf("]\n");
+  printf("]");
 }
 
 memtrack_log_t *search_in_container_by_address(long address) {
