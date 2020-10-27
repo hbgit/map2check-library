@@ -81,16 +81,3 @@ After the verification condition from map2check-library to be validate using KLE
 ```
 TODO:
 - FIX free memory after tracking
-- FIX current step in the other modules
-
-
-
-
-
-
-
-
-
-
-
-

@@ -5,9 +5,9 @@ extern "C" {
 }
 
 TEST(TrackBBLog, TrackBBLog) {
-  bbtrack_log_t *obj = map2check_save_basic_block_log(1, 12, "foo");
+  bbtrack_log_t *obj = map2check_save_basic_block_log(12, "foo");
 
-  const char *str = "{\"step\":1,\"line\":12,\"function_name\":"
+  const char *str = "{\"step\":9,\"line\":12,\"function_name\":"
                     "\"foo\"}";
 
   EXPECT_STREQ(print_trackbb_as_json(obj), str);

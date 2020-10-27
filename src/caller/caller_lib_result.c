@@ -44,10 +44,15 @@ void map2check_init() {
 void map2check_success() {
   caller_obj.verification_result = true;
   print_all_containers_as_json();
-  //abort();
+  // abort();
 }
 
 void next_current_step() { caller_obj.current_step += 1; }
+
+long get_next_step() {
+  caller_obj.current_step += 1;
+  return caller_obj.current_step;
+}
 
 long get_current_step() { return caller_obj.current_step; }
 
@@ -58,7 +63,7 @@ void set_false_result(enum violated_property_t prp, int line_number,
   caller_obj.line_number = line_number;
 }
 
-enum violated_property_t get_current_property(){
+enum violated_property_t get_current_property() {
   return caller_obj.violated_property;
 }
 

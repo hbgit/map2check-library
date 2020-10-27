@@ -49,27 +49,27 @@ typedef struct _non_det_log {
 
 char *print_obj_as_json(non_det_log_t *obj);
 
-non_det_log_t *map2check_save_nondet_log_int(long step, int line, int scope,
+non_det_log_t *map2check_save_nondet_log_int(int line, int scope,
                              enum var_type_t type_var, int * value,
                              const char * function_name);
 
-non_det_log_t *map2check_save_nondet_log_uint(long step, int line, int scope,
+non_det_log_t *map2check_save_nondet_log_uint(int line, int scope,
                              enum var_type_t type_var, unsigned int * value,
                              const char * function_name);
 
-non_det_log_t *map2check_save_nondet_log_long(long step, int line, int scope,
+non_det_log_t *map2check_save_nondet_log_long(int line, int scope,
                              enum var_type_t type_var, long * value,
                              const char * function_name);
 
-non_det_log_t *map2check_save_nondet_log_char(long step, int line, int scope,
+non_det_log_t *map2check_save_nondet_log_char(int line, int scope,
                              enum var_type_t type_var, char * value,
                              const char * function_name);
 
-non_det_log_t *map2check_save_nondet_log_float(long step, int line, int scope,
+non_det_log_t *map2check_save_nondet_log_float(int line, int scope,
                              enum var_type_t type_var, float * value,
                              const char * function_name);
 
-non_det_log_t *map2check_save_nondet_log_double(long step, int line, int scope,
+non_det_log_t *map2check_save_nondet_log_double(int line, int scope,
                              enum var_type_t type_var, double * value,
                              const char * function_name);
 

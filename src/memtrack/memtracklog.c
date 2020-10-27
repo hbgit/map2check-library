@@ -15,6 +15,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "../../include/memtrack/memtracklog.h"
+#include "../../include/caller/caller_lib_result.h"
 #include "../../lib/json-maker.h"
 
 #include <stdio.h>
@@ -58,7 +59,7 @@ char *print_memtrack_obj_as_json(memtrack_log_t *obj) {
 }
 
 memtrack_log_t *
-map2check_save_memtrack_log(long step, int line, int scope,
+map2check_save_memtrack_log(int line, int scope,
                             long var_mem_address, long mem_address_points_to,
                             bool is_dynamic, bool is_free, const char *ptr_name,
                             const char *function_name, int size_destiny,
@@ -67,7 +68,7 @@ map2check_save_memtrack_log(long step, int line, int scope,
   memtrack_log_t *obj = (memtrack_log_t *)malloc(sizeof(memtrack_log_t));
 
   obj->line = line;
-  obj->step = step;
+  obj->step = get_next_step();
   obj->scope = scope;
   obj->var_mem_address = var_mem_address;
   obj->mem_address_points_to = mem_address_points_to;

@@ -5,6 +5,7 @@ extern "C" {
 }
 
 TEST(CallerResult, current_step) {
+  map2check_init();
   EXPECT_EQ(get_current_step(), 0);
   next_current_step();
   EXPECT_EQ(get_current_step(), 1);

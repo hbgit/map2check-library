@@ -20,17 +20,17 @@ int main(){
   //printf("%d \n", vuint);
   // BUG from KLEE, the vunit value is not int
   //const char * tmp = map2check_convert_int_to_string(vuint);
-  non_det_log_t *obj = map2check_save_nondet_log_int(1, 12, 0, INT_ID, &vuint, "foo");
+  non_det_log_t *obj = map2check_save_nondet_log_int(12, 0, INT_ID, &vuint, "foo");
   map2check_save_in_tail_container_nondet(obj);
 
-  bbtrack_log_t *bb = map2check_save_basic_block_log(2, 12, "foo");
+  bbtrack_log_t *bb = map2check_save_basic_block_log(12, "foo");
   map2check_save_in_tail_container_trackbb(bb);
 
   int k = 144;
-  non_det_log_t *obj1 = map2check_save_nondet_log_int(3, 1144, 0, INT_ID, &k, "foo");
+  non_det_log_t *obj1 = map2check_save_nondet_log_int(1144, 0, INT_ID, &k, "foo");
   map2check_save_in_tail_container_nondet(obj1);
 
-  bbtrack_log_t *bb1 = map2check_save_basic_block_log(4, 144, "foo");
+  bbtrack_log_t *bb1 = map2check_save_basic_block_log(144, "foo");
   map2check_save_in_tail_container_trackbb(bb1);
 
   if(vuint == 12){

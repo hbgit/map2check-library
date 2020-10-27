@@ -29,7 +29,7 @@ typedef struct _bbtrack_log {
 
 char *print_trackbb_as_json(bbtrack_log_t *obj);
 
-bbtrack_log_t *map2check_save_basic_block_log(long step, int line,
+bbtrack_log_t *map2check_save_basic_block_log(int line,
                                               const char *function_name);
 
 #endif // __TRACKBBLOG_H_INCLUDED__

@@ -46,6 +46,8 @@ void map2check_success();
 
 void next_current_step();
 
+long get_next_step();
+
 long get_current_step();
 
 void set_false_result(enum violated_property_t prp, int line_number, const char *function_name);

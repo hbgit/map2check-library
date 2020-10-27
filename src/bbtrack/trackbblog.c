@@ -15,6 +15,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "../../include/bbtrack/trackbblog.h"
+#include "../../include/caller/caller_lib_result.h"
 #include "../../lib/json-maker.h"
 
 #include <stdio.h>
@@ -55,12 +56,12 @@ char *print_trackbb_as_json(bbtrack_log_t *obj) {
   return r;
 }
 
-bbtrack_log_t *map2check_save_basic_block_log(long step, int line,
+bbtrack_log_t *map2check_save_basic_block_log(int line,
                                               const char *function_name) {
   bbtrack_log_t *obj = (bbtrack_log_t *)malloc(sizeof(bbtrack_log_t));
 
   obj->line = line;
-  obj->step = step;
+  obj->step = get_next_step();
   obj->function_name = function_name;
 
   return obj;

@@ -15,6 +15,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "../../include/nondet/nondetlog.h"
+#include "../../include/caller/caller_lib_result.h"
 #include "../../lib/json-maker.h"
 
 #include <bits/stdint-uintn.h>
@@ -76,14 +77,14 @@ char * print_obj_as_json(non_det_log_t *obj) {
 }
 
 
-non_det_log_t *map2check_save_nondet_log_int(long step, int line, int scope,
+non_det_log_t *map2check_save_nondet_log_int(int line, int scope,
                              enum var_type_t type_var, int *value,
                              const char *function_name) {
 
   non_det_log_t *obj = (non_det_log_t *)malloc(sizeof(non_det_log_t));
   
-  obj->line = line;
-  obj->step = step;
+  obj->line = line;  
+  obj->step = get_next_step();
   obj->scope = scope;
   obj->type_var = type_var;
   obj->value.i = value;
@@ -92,14 +93,14 @@ non_det_log_t *map2check_save_nondet_log_int(long step, int line, int scope,
   return obj;
 }
 
-non_det_log_t *map2check_save_nondet_log_uint(long step, int line, int scope,
+non_det_log_t *map2check_save_nondet_log_uint(int line, int scope,
                              enum var_type_t type_var, unsigned int *value,
                              const char *function_name) {
 
   non_det_log_t *obj = (non_det_log_t *)malloc(sizeof(non_det_log_t));
   
   obj->line = line;
-  obj->step = step;
+  obj->step = get_next_step();
   obj->scope = scope;
   obj->type_var = type_var;
   obj->value.u = value;
@@ -108,14 +109,14 @@ non_det_log_t *map2check_save_nondet_log_uint(long step, int line, int scope,
   return obj;
 }
 
-non_det_log_t *map2check_save_nondet_log_long(long step, int line, int scope,
+non_det_log_t *map2check_save_nondet_log_long(int line, int scope,
                              enum var_type_t type_var, long *value,
                              const char *function_name) {
 
   non_det_log_t *obj = (non_det_log_t *)malloc(sizeof(non_det_log_t));
   
   obj->line = line;
-  obj->step = step;
+  obj->step = get_next_step();
   obj->scope = scope;
   obj->type_var = type_var;
   obj->value.l = value;
@@ -124,14 +125,14 @@ non_det_log_t *map2check_save_nondet_log_long(long step, int line, int scope,
   return obj;
 }
 
-non_det_log_t *map2check_save_nondet_log_char(long step, int line, int scope,
+non_det_log_t *map2check_save_nondet_log_char(int line, int scope,
                              enum var_type_t type_var, char *value,
                              const char *function_name) {
 
   non_det_log_t *obj = (non_det_log_t *)malloc(sizeof(non_det_log_t));
   
   obj->line = line;
-  obj->step = step;
+  obj->step = get_next_step();
   obj->scope = scope;
   obj->type_var = type_var;
   obj->value.c = value;
@@ -140,14 +141,14 @@ non_det_log_t *map2check_save_nondet_log_char(long step, int line, int scope,
   return obj;
 }
 
-non_det_log_t *map2check_save_nondet_log_float(long step, int line, int scope,
+non_det_log_t *map2check_save_nondet_log_float(int line, int scope,
                              enum var_type_t type_var, float *value,
                              const char *function_name) {
 
   non_det_log_t *obj = (non_det_log_t *)malloc(sizeof(non_det_log_t));
   
   obj->line = line;
-  obj->step = step;
+  obj->step = get_next_step();
   obj->scope = scope;
   obj->type_var = type_var;
   obj->value.f = value;
@@ -157,14 +158,14 @@ non_det_log_t *map2check_save_nondet_log_float(long step, int line, int scope,
 }
 
 
-non_det_log_t *map2check_save_nondet_log_double(long step, int line, int scope,
+non_det_log_t *map2check_save_nondet_log_double(int line, int scope,
                              enum var_type_t type_var, double *value,
                              const char *function_name) {
 
   non_det_log_t *obj = (non_det_log_t *)malloc(sizeof(non_det_log_t));
   
   obj->line = line;
-  obj->step = step;
+  obj->step = get_next_step();
   obj->scope = scope;
   obj->type_var = type_var;
   obj->value.d = value;
@@ -174,68 +175,3 @@ non_det_log_t *map2check_save_nondet_log_double(long step, int line, int scope,
 }
 
 
-
-// const char *map2check_convert_double_to_string(double d) {
-//   char buffer[255];
-//   // //int status;
-//   // // itoa (d,buffer,2);
-//   // //atof(d, buffer, 2);
-
-//   // // double e float
-//   // int decimal, sign;
-//   // //
-//   // https://www.codecogs.com/library/computing/c/stdlib.h/ecvt.php?alias=fcvt
-//   // char *buffer = ecvt(d, 11, &decimal, &sign);
-//   // //printf("string: %c\n", buffer[0]);
-//   // //printf("pi = %c.%s\n", buffer[0], buffer + 1);
-//   // //char * t = buffer[0];
-
-//   // const char * result = strcat(strcat((buffer+0), "."), buffer + 1);
-//   // printf("string: %s\n", result);
-
-//   // // Convert string to value
-//   // //https://www.codecogs.com/library/computing/c/stdlib.h/atol.php
-//   // //https://www.ibm.com/support/knowledgecenter/SSLTBW_2.2.0/com.ibm.zos.v2r2.bpxbd00/strtod.htm
-
-//   // //printf("\n");
-//   const char *result = ftoa(d, buffer, 3);
-//   printf("string: %s\n", result);
-//   return result;
-// }
-
-// const char *map2check_convert_float_to_string(float d) {
-//   return map2check_convert_double_to_string(d);
-// }
-
-// /* reverse:  reverse string s in place */
-// void reverse(char s[]) {
-//   int i, j;
-//   char c;
-
-//   for (i = 0, j = strlen(s) - 1; i < j; i++, j--) {
-//     c = s[i];
-//     s[i] = s[j];
-//     s[j] = c;
-//   }
-// }
-
-// // https://en.wikibooks.org/wiki/C_Programming/stdlib.h/itoa
-// const char *map2check_convert_int_to_string(int n) {
-//   char s[255];
-//   int i, sign;
-
-//   if ((sign = n) < 0) /* record sign */
-//     n = -n;           /* make n positive */
-//   i = 0;
-//   do {                     /* generate digits in reverse order */
-//     s[i++] = n % 10 + '0'; /* get next digit */
-//   } while ((n /= 10) > 0); /* delete it */
-//   if (sign < 0)
-//     s[i++] = '-';
-//   s[i] = '\0';
-//   reverse(s);
-
-//   const char *result = s;
-//   //printf("string: %s\n", result);
-//   return result; 
-// }

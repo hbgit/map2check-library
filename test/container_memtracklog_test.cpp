@@ -9,7 +9,7 @@ TEST(ContainerMemoryTrackLog, ContainerList)
     map2check_init_container_memtracklog();
     
     memtrack_log_t *obj = map2check_save_memtrack_log(
-      0, 1, 0, 1728888, 0, false, false, "a",
+      1, 0, 1728888, 0, false, false, "a",
       "none", 4, 4, false);
 
     map2check_save_in_tail_container_memtracklog(obj);
@@ -22,7 +22,7 @@ TEST(ContainerMemoryTrackLog, JsonGen)
     map2check_init_container_memtracklog();
     
     memtrack_log_t *obj = map2check_save_memtrack_log(
-      0, 1, 0, 1728888, 0, false, false, "a",
+      1, 0, 1728888, 0, false, false, "a",
       "none", 4, 4, false);
 
     map2check_save_in_tail_container_memtracklog(obj);
@@ -38,7 +38,7 @@ TEST(ContainerMemoryTrackLog, search_in_container_by_address)
     map2check_init_container_memtracklog();
     
     memtrack_log_t *obj = map2check_save_memtrack_log(
-      0, 1, 0, 1728888, 0, false, false, "a",
+      1, 0, 1728888, 0, false, false, "a",
       "none", 4, 4, false);
 
     map2check_save_in_tail_container_memtracklog(obj);

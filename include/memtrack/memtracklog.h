@@ -41,7 +41,7 @@ typedef struct _memtrack_log {
 char *print_memtrack_obj_as_json(memtrack_log_t *obj);
 
 memtrack_log_t *
-map2check_save_memtrack_log(long step, int line, int scope,
+map2check_save_memtrack_log(int line, int scope,
                             long var_mem_address, long mem_address_points_to,
                             bool is_dynamic, bool is_free, const char *ptr_name,
                             const char *function_name, int size_destiny,

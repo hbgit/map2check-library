@@ -6,11 +6,11 @@ extern "C" {
 
 TEST(MemTrackLog, MemTrackLog_init) {
 
-  memtrack_log_t *obj = map2check_save_memtrack_log(1, 12, 2, 1441728, 144, 0,
+  memtrack_log_t *obj = map2check_save_memtrack_log(12, 2, 1441728, 144, 0,
                                                     0, "v", "foo", 4, 4, 1);
 
   const char *str =
-      "{\"step\":1,\"line\":12,\"scope\":2,\"var_mem_address\":1441728,\"mem_"
+      "{\"step\":14,\"line\":12,\"scope\":2,\"var_mem_address\":1441728,\"mem_"
       "address_points_to\":144,\"is_dynamic\":0,\"is_free\":0,\"ptr_name\":"
       "\"v\",\"function_name\":\"foo\",\"size_destiny\":4,\"size_primitive\":4,"
       "\"is_null_valid\":1}";
@@ -20,13 +20,13 @@ TEST(MemTrackLog, MemTrackLog_init) {
 
 TEST(MemTrackLog, MemTrackLog_Obj_Equal) {
 
-  memtrack_log_t *obj = map2check_save_memtrack_log(1, 12, 2, 1441728, 144, 0,
+  memtrack_log_t *obj = map2check_save_memtrack_log(12, 2, 1441728, 144, 0,
                                                     0, "v", "foo", 4, 4, 1);
 
-  memtrack_log_t *obj1 = map2check_save_memtrack_log(1, 12, 2, 1441728, 144, 0,
+  memtrack_log_t *obj1 = map2check_save_memtrack_log(12, 2, 1441728, 144, 0,
                                                      0, "v", "foo", 4, 4, 1);
 
-  memtrack_log_t *obj2 = map2check_save_memtrack_log(1, 13, 2, 1441728, 144, 0,
+  memtrack_log_t *obj2 = map2check_save_memtrack_log(13, 2, 1441728, 144, 0,
                                                      0, "v", "foo", 4, 4, 1);
 
   EXPECT_EQ(is_equal_memtrack_obj(obj, obj1), true);
@@ -35,7 +35,7 @@ TEST(MemTrackLog, MemTrackLog_Obj_Equal) {
 
 TEST(MemTrackLog, MemTrackLog_set_malloc) {
 
-  memtrack_log_t *obj = map2check_save_memtrack_log(1, 12, 2, 1441728, 144, 0,
+  memtrack_log_t *obj = map2check_save_memtrack_log(12, 2, 1441728, 144, 0,
                                                     0, "v", "foo", 4, 4, 1);
 
   set_malloc(obj);
@@ -45,7 +45,7 @@ TEST(MemTrackLog, MemTrackLog_set_malloc) {
 
 TEST(MemTrackLog, MemTrackLog_set_calloc) {
 
-  memtrack_log_t *obj = map2check_save_memtrack_log(1, 12, 2, 1441728, 144, 0,
+  memtrack_log_t *obj = map2check_save_memtrack_log(12, 2, 1441728, 144, 0,
                                                     0, "v", "foo", 4, 4, 1);
 
   int tmp = obj->size_destiny;
@@ -57,7 +57,7 @@ TEST(MemTrackLog, MemTrackLog_set_calloc) {
 
 TEST(MemTrackLog, MemTrackLog_set_free) {
 
-  memtrack_log_t *obj = map2check_save_memtrack_log(1, 12, 2, 1441728, 144, 0,
+  memtrack_log_t *obj = map2check_save_memtrack_log(12, 2, 1441728, 144, 0,
                                                     0, "v", "foo", 4, 4, 1);
 
   set_malloc(obj);
