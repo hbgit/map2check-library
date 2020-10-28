@@ -28,12 +28,14 @@ TEST(CallerResult, set_false_result) {
 
 TEST(CallerResult, print_all_containers_as_json_TRUE) {
   map2check_init();
+  debug_caller_result_set_only_test();
   map2check_success();
   EXPECT_TRUE(1);
 }
 
 TEST(CallerResult, print_all_containers_as_json_FALSE) {
   map2check_init();
+  debug_caller_result_set_only_test();
   set_false_result(MEMSAFETY_FREE, 15, "foo");
   print_all_containers_as_json();
   EXPECT_TRUE(1);

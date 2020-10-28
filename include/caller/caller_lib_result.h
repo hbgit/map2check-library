@@ -40,6 +40,8 @@ typedef struct _caller_result {
   enum violated_property_t violated_property;
 } caller_result_t;
 
+void debug_caller_result_set_only_test();
+
 void map2check_init();
 
 void map2check_success();

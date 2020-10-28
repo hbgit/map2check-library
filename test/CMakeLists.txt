@@ -13,6 +13,7 @@ add_executable(
   memtracklog_test.cpp
   container_memtracklog_test.cpp
   caller_lib_result.cpp
+  analysis_mode_assert.cpp
 )
 
 target_link_libraries(

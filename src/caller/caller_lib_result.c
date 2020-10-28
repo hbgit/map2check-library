@@ -32,6 +32,12 @@ const char *ToEnum_ViolatedProperty[] = {"OVERFLOW",
                                          "CONCURRENCY",
                                          "NONE"};
 
+int flag_assert_is_not_test = 1;
+
+void debug_caller_result_set_only_test(){
+  flag_assert_is_not_test = 0;
+}
+
 void map2check_init() {
   // Initialize object
   caller_obj.current_step = 0;
@@ -44,7 +50,11 @@ void map2check_init() {
 void map2check_success() {
   caller_obj.verification_result = true;
   print_all_containers_as_json();
-  // abort();
+  
+  if(flag_assert_is_not_test){
+    abort();
+  }
+
 }
 
 void next_current_step() { caller_obj.current_step += 1; }
