@@ -195,22 +195,91 @@ void map2check_binop_neg_int(int param1, int param2, unsigned line,
 }
 
 // For unsigned
+// --------------------------------------------------------------
+// Based on
+// https://wiki.sei.cmu.edu/confluence/display/c/INT30-C.+Ensure+that+unsigned+integer+operations+do+not+wrap
+// A computation involving unsigned operands can never overflow, because a
+// result that cannot be represented by the resulting unsigned integer type is
+// reduced modulo the number that is one greater than the largest value that can
+// be represented by the resulting type. Unsigned operations
+
+/// based on Cordeiro SMT-Based Bounded Model Checking for Embedded ANSI-C
+/// Software l_unsigned_overflow <-> (r − (r mod 2^w )) < 2^w
 void map2check_binop_add_unsigned(unsigned param1, unsigned param2,
                                   unsigned line, unsigned scope,
-                                  char *function_name);
+                                  char *function_name) {
+  unsigned u_a = param1;
+  unsigned u_b = param2;
+
+  // cout << l_unsigned_overflow << endl;
+
+  if (((u_a + u_b) - ((u_a + u_b) % UINT_MAX)) > UINT_MAX) {
+    vcc_nooverflow_failed(true, line, scope, function_name);
+  }
+
+  if (UINT_MAX - u_a < u_b) {
+    /* Handle error */
+    vcc_nooverflow_failed(true, line, scope, function_name);
+  } else if ((u_a + u_b) < u_a) {
+    /* Handle error */
+    vcc_nooverflow_failed(true, line, scope, function_name);
+  }
+
+  vcc_nooverflow_failed(false, line, scope, function_name);
+}
 
 void map2check_binop_sub_unsigned(unsigned param1, unsigned param2,
                                   unsigned line, unsigned scope,
-                                  char *function_name);
+                                  char *function_name) {
+  unsigned u_a = param1;
+  unsigned u_b = param2;
+  // unsigned l_unsigned_overflow = ( (u_a-u_b) - ((u_a-u_b) % UINT_MAX));
+  if (((u_a - u_b) - ((u_a - u_b) % UINT_MAX)) > UINT_MAX) {
+    vcc_nooverflow_failed(true, line, scope, function_name);
+  }
 
+  if (u_a < u_b) {
+    /* Handle error */
+    vcc_nooverflow_failed(true, line, scope, function_name);
+  } else if ((u_a - u_b) > u_a) {
+    /* Handle error */
+    vcc_nooverflow_failed(true, line, scope, function_name);
+  }
+
+  vcc_nooverflow_failed(false, line, scope, function_name);
+}
+
+/// https://wiki.sei.cmu.edu/confluence/display/c/INT30-C.+Ensure+that+unsigned+integer+operations+do+not+wrap
 void map2check_binop_mul_unsigned(unsigned param1, unsigned param2,
                                   unsigned line, unsigned scope,
-                                  char *function_name);
+                                  char *function_name) {
+  unsigned int u_a = param1;
+  unsigned int u_b = param2;
+
+  if (u_a > UINT_MAX / u_b) {
+    vcc_nooverflow_failed(true, line, scope, function_name);
+  }
+
+  vcc_nooverflow_failed(false, line, scope, function_name);
+}
 
 void map2check_binop_div_unsigned(unsigned param1, unsigned param2,
                                   unsigned line, unsigned scope,
-                                  char *function_name);
+                                  char *function_name) {
+  if (param2 == 0) {
+    vcc_nooverflow_failed(true, line, scope, function_name);
+  }
 
+  vcc_nooverflow_failed(false, line, scope, function_name);
+}
+
+/// https://wiki.sei.cmu.edu/confluence/display/c/INT30-C.+Ensure+that+unsigned+integer+operations+do+not+wrap
 void map2check_binop_shr_unsigned(unsigned param1, unsigned param2,
                                   unsigned line, unsigned scope,
-                                  char *function_name);
+                                  char *function_name) {
+  if (!(param2 >= 0 && param2 < 32)) { // 32 bits
+    vcc_nooverflow_failed(true, line, scope, function_name);
+  }
+
+  vcc_nooverflow_failed(false, line, scope, function_name);
+}
