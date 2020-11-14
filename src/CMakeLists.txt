@@ -36,35 +36,55 @@ function(genBCFiles packageCode)
     endforeach()
 endfunction()
 
-# Generating LLVM bc for the < nondet > package
+# Generating LLVM bc for the packages
+# LIB <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 # < lib > package
 message(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>")
 list(APPEND MAP2CHECK_BC_files "json-maker")
 message(${MAP2CHECK_BC_files})
 genBCFiles("../lib")
-# < to_string > package
+
+# < lib/to_string > package
 set(MAP2CHECK_BC_files "")
 list(APPEND MAP2CHECK_BC_files "ftoa")
 message(${MAP2CHECK_BC_files})
 genBCFiles("../lib/to_string")
+
+# SRC <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 # < nondet > package
 set(MAP2CHECK_BC_files "")
 list(APPEND MAP2CHECK_BC_files "nondetlog")
 list(APPEND MAP2CHECK_BC_files "container_nondet")
 message(${MAP2CHECK_BC_files})
 genBCFiles("nondet")
-# < bbtrack > package
-set(MAP2CHECK_BC_files "")
-list(APPEND MAP2CHECK_BC_files "trackbblog")
-list(APPEND MAP2CHECK_BC_files "container_trackbb")
-message(${MAP2CHECK_BC_files})
-genBCFiles("bbtrack")
+
 # < memtrack > package
 set(MAP2CHECK_BC_files "")
 list(APPEND MAP2CHECK_BC_files "memtracklog")
 list(APPEND MAP2CHECK_BC_files "container_memtracklog")
 message(${MAP2CHECK_BC_files})
 genBCFiles("memtrack")
+
+# < caller > package
+set(MAP2CHECK_BC_files "")
+list(APPEND MAP2CHECK_BC_files "caller_lib_result")
+message(${MAP2CHECK_BC_files})
+genBCFiles("caller")
+
+# < bbtrack > package
+set(MAP2CHECK_BC_files "")
+list(APPEND MAP2CHECK_BC_files "trackbblog")
+list(APPEND MAP2CHECK_BC_files "container_trackbb")
+message(${MAP2CHECK_BC_files})
+genBCFiles("bbtrack")
+
+# < analysismode > package
+set(MAP2CHECK_BC_files "")
+list(APPEND MAP2CHECK_BC_files "analysis_assert")
+list(APPEND MAP2CHECK_BC_files "analysis_overflow")
+message(${MAP2CHECK_BC_files})
+genBCFiles("analysismode")
+
 
 
 

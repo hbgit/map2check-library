@@ -27,8 +27,10 @@ build_debug()
     cmake .. -DCMAKE_C_COMPILER=/usr/bin/clang-8 -DCMAKE_CXX_COMPILER="/usr/bin/clang++-8" -DCMAKE_INSTALL_PREFIX=../release-library/ -DENABLE_TEST=ON -DENABLE_COVCODE=ON -DBUILD_DOC=OFF
     cmake --build . -- VERBOSE=1 
 
-    echo ">>> Generating LLVM BC library with KLEE"
-    files_klee_bc=`ls --ignore="ftoa.bc" src/*.bc`
+    echo ""
+    echo "\e[32m>>> Generating LLVM BC library with KLEE"
+    echo ""
+    files_klee_bc=`ls src/*.bc | sed -e s'/src\/ftoa.bc//'`
     llvm-link-8 ${files_klee_bc} -o libmap2check_klee.bc
 
     # Unit Testing

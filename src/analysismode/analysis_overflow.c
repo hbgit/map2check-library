@@ -24,9 +24,9 @@
 #include <stdint.h>
 #include <stdlib.h>
 
-int flag_is_not_test = 1;
+int debug_overflow = 1;
 
-void debug_overflow_set_only_test() { flag_is_not_test = 0; }
+void debug_overflow_set_only_test() { debug_overflow = 0; }
 
 // https://wiki.sei.cmu.edu/confluence/display/c/INT35-C.+Use+correct+integer+precisions
 /* Returns the number of set bits */
@@ -49,7 +49,7 @@ void vcc_nooverflow_failed(bool vcc_result, unsigned line, unsigned scope,
   if (vcc_result) {
     set_false_result(OVERFLOW, line, function_name);
     print_all_containers_as_json();
-    if (flag_is_not_test) {
+    if (debug_overflow) {
       abort();
     }
   }

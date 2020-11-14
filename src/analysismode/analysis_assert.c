@@ -18,18 +18,16 @@
 
 #include <stdlib.h>
 
-int flag_is_not_test = 1;
+int debug_assert = 1;
 
-void debug_assert_set_only_test(){
-    flag_is_not_test = 0;
-}
+void debug_assert_set_only_test() { debug_assert = 0; }
 
 void map2check_is_valid_assert(int line_number, const char *function_name, int expression){
     if(!expression){
         set_false_result(REACHABILITY, line_number, function_name);
         print_all_containers_as_json();
-        if(flag_is_not_test){
-            abort();
-        }        
+        if (debug_assert) {
+          abort();
+        }
     }
 }
