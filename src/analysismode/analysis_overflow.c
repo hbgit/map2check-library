@@ -63,6 +63,7 @@ void vcc_nooverflow_failed(bool vcc_result, unsigned line, unsigned scope,
 /// @return bool check overflow
 void map2check_binop_add_int(int param1, int param2, unsigned line,
                              unsigned scope, char *function_name) {
+  vcc_reset_meta_data();
   /// based on Wietz Understanding Integer Overflow in C/C++
   /// ((s1 > 0) ∧ (s2 > 0) ∧ (s1 > (INT_MAX − s2 ))) ∨
   /// ((s1 < 0) ∧ (s2 < 0) ∧ (s1 < (INT_MIN − s2 )))
@@ -89,12 +90,14 @@ void map2check_binop_add_int(int param1, int param2, unsigned line,
 
 void map2check_binop_sub_int(int param1, int param2, unsigned line,
                              unsigned scope, char *function_name) {
+  vcc_reset_meta_data();
   param2 = -param2;
   map2check_binop_add_int(param1, param2, line, scope, function_name);
 }
 
 void map2check_binop_mul_int(int param1, int param2, unsigned line,
                              unsigned scope, char *function_name) {
+  vcc_reset_meta_data();
   signed int result;
   signed int si_a = param1;
   signed int si_b = param2;
@@ -136,6 +139,7 @@ void map2check_binop_mul_int(int param1, int param2, unsigned line,
 /// https://wiki.sei.cmu.edu/confluence/display/c/INT32-C.+Ensure+that+operations+on+signed+integers+do+not+result+in+overflow
 void map2check_binop_div_int(int param1, int param2, unsigned line,
                              unsigned scope, char *function_name) {
+  vcc_reset_meta_data();
   signed int s_a = param1;
   signed int s_b = param2;
   if ((s_b == 0) || ((s_a == INT_MIN) && (s_b == -1))) {
@@ -152,6 +156,7 @@ void map2check_binop_div_int(int param1, int param2, unsigned line,
 
 void map2check_binop_shl_int(int param1, int param2, unsigned line,
                              unsigned scope, char *function_name) {
+  vcc_reset_meta_data();
   signed int si_a = param1;
   signed int si_b = param2;
   if ((si_a < 0) || (si_b < 0) || (si_b >= PRECISION(UINT_MAX)) ||
@@ -166,6 +171,7 @@ void map2check_binop_shl_int(int param1, int param2, unsigned line,
 
 void map2check_binop_shr_int(int param1, int param2, unsigned line,
                              unsigned scope, char *function_name) {
+  vcc_reset_meta_data();
   signed int si_a = param1;
   signed int si_b = param2;
 
@@ -185,6 +191,7 @@ void map2check_binop_shr_int(int param1, int param2, unsigned line,
 /// to the minimum (negative) value for the signed integer type.
 void map2check_binop_neg_int(int param1, int param2, unsigned line,
                              unsigned scope, char *function_name) {
+  vcc_reset_meta_data();
   int s_a = param1;
   if (s_a == INT_MIN) {
     /* Handle error */
@@ -208,6 +215,7 @@ void map2check_binop_neg_int(int param1, int param2, unsigned line,
 void map2check_binop_add_unsigned(unsigned param1, unsigned param2,
                                   unsigned line, unsigned scope,
                                   char *function_name) {
+  vcc_reset_meta_data();
   unsigned u_a = param1;
   unsigned u_b = param2;
 
@@ -231,6 +239,7 @@ void map2check_binop_add_unsigned(unsigned param1, unsigned param2,
 void map2check_binop_sub_unsigned(unsigned param1, unsigned param2,
                                   unsigned line, unsigned scope,
                                   char *function_name) {
+  vcc_reset_meta_data();
   unsigned u_a = param1;
   unsigned u_b = param2;
   // unsigned l_unsigned_overflow = ( (u_a-u_b) - ((u_a-u_b) % UINT_MAX));
@@ -253,6 +262,7 @@ void map2check_binop_sub_unsigned(unsigned param1, unsigned param2,
 void map2check_binop_mul_unsigned(unsigned param1, unsigned param2,
                                   unsigned line, unsigned scope,
                                   char *function_name) {
+  vcc_reset_meta_data();
   unsigned int u_a = param1;
   unsigned int u_b = param2;
 
@@ -266,6 +276,7 @@ void map2check_binop_mul_unsigned(unsigned param1, unsigned param2,
 void map2check_binop_div_unsigned(unsigned param1, unsigned param2,
                                   unsigned line, unsigned scope,
                                   char *function_name) {
+  vcc_reset_meta_data();
   if (param2 == 0) {
     vcc_nooverflow_failed(true, line, scope, function_name);
   }
@@ -277,6 +288,7 @@ void map2check_binop_div_unsigned(unsigned param1, unsigned param2,
 void map2check_binop_shr_unsigned(unsigned param1, unsigned param2,
                                   unsigned line, unsigned scope,
                                   char *function_name) {
+  vcc_reset_meta_data();
   if (!(param2 >= 0 && param2 < 32)) { // 32 bits
     vcc_nooverflow_failed(true, line, scope, function_name);
   }

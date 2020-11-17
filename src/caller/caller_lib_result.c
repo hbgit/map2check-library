@@ -45,6 +45,17 @@ void map2check_init() {
   caller_obj.line_number = -1;
   caller_obj.verification_result = false;
   caller_obj.violated_property = NONE;
+  // Containers
+  map2check_init_container_trackbb();
+  map2check_init_container_memtracklog();
+  map2check_init_container_nondet();
+}
+
+void vcc_reset_meta_data(){
+  caller_obj.function_name = "NONE";
+  caller_obj.line_number = -1;
+  caller_obj.verification_result = false;
+  caller_obj.violated_property = NONE;
 }
 
 void map2check_success() {

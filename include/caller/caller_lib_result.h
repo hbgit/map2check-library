@@ -44,6 +44,8 @@ void debug_caller_result_set_only_test();
 
 void map2check_init();
 
+void vcc_reset_meta_data();
+
 void map2check_success();
 
 void next_current_step();
