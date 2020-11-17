@@ -33,6 +33,12 @@ build_debug()
     files_klee_bc=`ls src/*.bc | sed -e s'/src\/ftoa.bc//'`
     llvm-link-8 ${files_klee_bc} -o libmap2check_klee.bc
 
+    echo ""
+    echo "\e[32m>>> Generating LLVM BC library with LibFuzzer"
+    echo ""
+    files_fuzzer_bc=`ls src/*.bc | sed -e s'/src\/ftoa.bc//'`
+    llvm-link-8 ${files_fuzzer_bc} -o libmap2check_libfuzzer.bc
+
     # Unit Testing
     cd test
     LLVM_PROFILE_FILE="map2check.profraw" ./unit_tests
