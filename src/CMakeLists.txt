@@ -55,6 +55,7 @@ genBCFiles("../lib/to_string")
 set(MAP2CHECK_BC_files "")
 list(APPEND MAP2CHECK_BC_files "nondetlog")
 list(APPEND MAP2CHECK_BC_files "container_nondet")
+list(APPEND MAP2CHECK_BC_files "nondet_gen_libfuzzer")
 message(${MAP2CHECK_BC_files})
 genBCFiles("nondet")
 

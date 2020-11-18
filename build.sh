@@ -30,7 +30,7 @@ build_debug()
     echo ""
     echo "\e[32m>>> Generating LLVM BC library with KLEE"
     echo ""
-    files_klee_bc=`ls src/*.bc | sed -e s'/src\/ftoa.bc//'`
+    files_klee_bc=`ls src/*.bc | sed -e s'/src\/ftoa.bc//' | sed -e s'/src\/nondet_gen_libfuzzer.bc//'`
     llvm-link-8 ${files_klee_bc} -o libmap2check_klee.bc
 
     echo ""
