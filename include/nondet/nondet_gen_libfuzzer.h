@@ -35,35 +35,41 @@ union DoublePattern
    double real;
 };
 
+// Utils
 extern int __map2check_main__();
-
-extern int LLVMFuzzerTestOneInput(const uint8_t *Data, size_t Size);
 
 void map2check_fuzzer_assume(int Expr);
 
+extern int LLVMFuzzerTestOneInput(const uint8_t *Data, size_t Size);
+
+// Data generation
 bool map2check_gen_data_fuzzer_bool();
-
-int32_t map2check_gen_data_fuzzer_int32_t();
-
-int64_t map2check_gen_data_fuzzer_int64_t();
-
-unsigned map2check_gen_data_fuzzer_unsigned();
-
-unsigned int map2check_gen_data_fuzzer_uint();
 
 char map2check_gen_data_fuzzer_char();
 
-char map2check_gen_data_fuzzer_uchar();
+short map2check_gen_data_fuzzer_short();
+
+unsigned map2check_gen_data_fuzzer_unsigned();
+
+int32_t map2check_gen_data_fuzzer_int32_t();
 
 char * map2check_gen_data_fuzzer_pchar();
 
-short map2check_gen_data_fuzzer_short();
+long map2check_gen_data_fuzzer_long();
+
+int64_t map2check_gen_data_fuzzer_int64_t();
+
+unsigned long map2check_gen_data_fuzzer_ulong();
+
+unsigned int map2check_gen_data_fuzzer_uint();
 
 unsigned short map2check_gen_data_fuzzer_ushort();
 
-long map2check_gen_data_fuzzer_long();
+float map2check_gen_data_fuzzer_float();
 
-unsigned long map2check_gen_data_fuzzer_ulong();
+double map2check_gen_data_fuzzer_double();
+
+char map2check_gen_data_fuzzer_uchar();
 
 size_t map2check_gen_data_fuzzer_size_t();
 
@@ -71,9 +77,11 @@ unsigned long map2check_gen_data_fuzzer_sector_t();
 
 loff_t map2check_gen_data_fuzzer_loff_t();
 
-float map2check_gen_data_fuzzer_float();
 
-double map2check_gen_data_fuzzer_double();
+
+
+
+//extern "C" void * map2checkGenNonDet_pointer();
 
 
 #endif // __NONDETGENLIBFUZZER_H_INCLUDED__

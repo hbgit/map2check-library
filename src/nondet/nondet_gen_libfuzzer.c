@@ -384,20 +384,20 @@ char map2check_gen_data_fuzzer_uchar(){
    return c;
 }
 
+size_t map2check_gen_data_fuzzer_size_t(){
+  // todo for future check arch 
+  // For instance, 32bit return unsigned int
+  // 64bit return unsigned long long
+  return map2check_gen_data_fuzzer_ulong();
+}
 
+unsigned long map2check_gen_data_fuzzer_sector_t(){
+  return map2check_gen_data_fuzzer_long();
+}
 
-
-
-
-
-
-
-
-
-size_t map2check_gen_data_fuzzer_size_t();
-
-unsigned long map2check_gen_data_fuzzer_sector_t();
-
-loff_t map2check_gen_data_fuzzer_loff_t();
+loff_t map2check_gen_data_fuzzer_loff_t(){
+  loff_t f;
+  return f;
+}
 
 
