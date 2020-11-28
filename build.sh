@@ -63,7 +63,7 @@ build_debug()
 
     # libfuzzer test by using Caller
     echo ""
-    clang-8 test/codefuzz_by_caller_test.c -fsanitize=address,fuzzer -g -fprofile-instr-generate -fcoverage-mapping build/libmap2check_libfuzzer.bc    
+    clang-8 test/codefuzz_by_caller_test.c -lm -fsanitize=address,fuzzer -g -fprofile-instr-generate -fcoverage-mapping build/libmap2check_libfuzzer.bc    
     ./a.out 2> out.fuzz 
     cat out.fuzz | grep ERROR
     if [ $? -eq 0 ]; 
@@ -73,6 +73,9 @@ build_debug()
         echo ">>> LibFuzzer ERROR"
         exit 1
     fi
+    # clean up fuzzer test
+    rm a.out out.fuzz crash-* default.profraw
+    
 
 }
 
