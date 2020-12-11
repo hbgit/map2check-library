@@ -46,35 +46,41 @@ build_debug()
     llvm-cov-8 report ./unit_tests -instr-profile=map2check.profdata
     llvm-cov-8 export -format=lcov ./unit_tests -instr-profile=map2check.profdata > lcov.info
 
-    # klee
-    cd ..
-    #ls -alh
-    clang-8 -c -emit-llvm -O0 -Xclang -disable-O0-optnone ../test/codeklee_by_caller_test.c
-    llvm-link-8 codeklee_by_caller_test.bc libmap2check_klee.bc > fullprogram_2.bc
-
+      
     if [ $istravis -eq 0 ]; then
-	    echo ">> Travis build is OFF"
+	    echo "\e[32m>>> Travis build is OFF"
         cd ..
+        # Here in build    
+        # KLEE testing
+        echo ""
+        echo "\e[32m>>> KLEE testing ..."
+        clang-8 -c -emit-llvm -O0 -Xclang -disable-O0-optnone ../test/codeklee_by_caller_test.c
+        llvm-link-8 codeklee_by_caller_test.bc libmap2check_klee.bc > fullprogram_2.bc
+        cd ..
+         # Here in root folder 
         ./run_klee_test.sh
-    else
-        echo ">> Travis build is ON"
-    fi
-    
 
-    # libfuzzer test by using Caller
-    echo ""
-    clang-8 test/codefuzz_by_caller_test.c -lm -fsanitize=address,fuzzer -g -fprofile-instr-generate -fcoverage-mapping build/libmap2check_libfuzzer.bc    
-    ./a.out 2> out.fuzz 
-    cat out.fuzz | grep ERROR
-    if [ $? -eq 0 ]; 
-    then
-        echo ">>> LibFuzzer OKAY"
+        # Libfuzzer testing
+        echo ""
+        echo "\e[32m>>> LibFuzzer testing"
+        clang-8 test/codefuzz_by_caller_test.c -lm -fsanitize=address,fuzzer -g -fprofile-instr-generate -fcoverage-mapping build/libmap2check_libfuzzer.bc    
+        ./a.out 2> out.fuzz 
+        cat out.fuzz | grep ERROR
+        if [ $? -eq 0 ]; 
+        then
+            echo "\e[32m>>> LibFuzzer testing result: OKAY"
+        else
+            echo "\e[32m>>> LibFuzzer testing result: ERROR"
+            exit 1
+        fi
+        # clean up fuzzer test
+        rm a.out out.fuzz crash-* default.profraw
+
     else
-        echo ">>> LibFuzzer ERROR"
-        exit 1
+        echo "\e[32m>>> Travis build is ON"
+        echo "\e[32m>>> KLEE testing skipped"
+        echo "\e[32m>>> Libfuzzer testing skipped"
     fi
-    # clean up fuzzer test
-    rm a.out out.fuzz crash-* default.profraw
     
 
 }

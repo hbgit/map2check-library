@@ -9,8 +9,8 @@ docker run --rm -v $(pwd):/home/src:Z --user $(id -u):$(id -g) klee/klee /bin/ba
 docker run --rm -v $(pwd):/home/src:Z --user $(id -u):$(id -g) klee/klee /bin/bash -c "cd klee_build; ktest-tool /home/src/klee-out-0/test000001.ktest | grep -c \"object 0: name:\" "
 if [ $? -eq 0 ]; 
 then
-    echo ">>> KLEE OKAY"
+    echo "\e[32m>>> KLEE testing result: OKAY"
 else
-    echo ">>> KLEE ERROR"
+    echo "\e[32m>>> KLEE testing result: ERROR"
     exit 1
 fi
