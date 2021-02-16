@@ -1,10 +1,15 @@
-#include "../include/ContainerMemoryTrackLog.hpp"
-#include "../include/MemoryTrackLog.hpp"
-#include "../include/AnalysisModeMemory.hpp"
-
 #include "gtest/gtest.h"
 
+extern "C" {
+  #include "../include/analysismode/analysis_memory.h"  
+}
 
+TEST(AnalysisModeMemory, debug_analysis_mem_set_only_test)
+{
+    debug_analysis_mem_set_only_test();
+}
+
+/*
 TEST(AnalysisModeMemory, isValidAllocaAddress)
 {
     ContainerMemoryTrackLog CntrMt;
@@ -189,3 +194,4 @@ TEST(AnalysisModeMemory, isInvalidFree)
     AnalysisModeMemory aM3 = AnalysisModeMemory(CntrMt.ContainerLog_);    
     EXPECT_EQ(aM3.isDerefError(1024), true);
 }
+*/

@@ -126,3 +126,27 @@ void map2check_map_calloc(void *ptr_address, int quantity, int size) {
 
   map2check_save_in_tail_container_memtracklog(obj);
 }
+
+/*
+* Function from AnalysisModeMemory that handle with container_memtracklog
+*/
+
+bool is_addr_a_invalid_free_in_cntr(long memory_address){
+  if(memory_address == (long)NULL){
+    return false;
+  }
+
+  memtrack_log_t *item_memtrack;
+
+  TAILQ_FOREACH_REVERSE(item_memtrack, &container_memtracklog, memtracklog_list, pointers) {
+    if (item_memtrack->mem_address_points_to == memory_address) {
+      if(item_memtrack->is_free || !item_memtrack->is_dynamic){
+        return true;
+      }else{
+        return false;
+      }
+    }
+  }
+
+  return true;
+}

@@ -83,6 +83,7 @@ genBCFiles("bbtrack")
 set(MAP2CHECK_BC_files "")
 list(APPEND MAP2CHECK_BC_files "analysis_assert")
 list(APPEND MAP2CHECK_BC_files "analysis_overflow")
+list(APPEND MAP2CHECK_BC_files "analysis_memory")
 message(${MAP2CHECK_BC_files})
 genBCFiles("analysismode")
 

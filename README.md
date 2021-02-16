@@ -32,6 +32,7 @@ $ ./build.sh --debug
 
 In this new data model, we aims to create a model object for each data structure that need a data storage, e.g., NonDetLog that has all data about nondet call functions. In this sense, we have a Container object that handle with the storage for each data structure.
 
+<!-- from https://app.genmymodel.com/ -->
 <center>
 <img src="./docs/imgs/class-diagram.png">
 </center>
@@ -88,5 +89,5 @@ After the verification condition from map2check-library to be validate using KLE
 
 
 TODO:
-- FIX free memory after tracking
-- FIX figure ./docs/imgs/class-diagram.png
+- FIX free memory after tracking [TODO]
+- FIX figure ./docs/imgs/class-diagram.png [DOING]
