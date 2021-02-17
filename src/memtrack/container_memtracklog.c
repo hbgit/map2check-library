@@ -20,6 +20,7 @@
 #include "../../include/memtrack/container_memtracklog.h"
 #include "../../include/memtrack/memtracklog.h"
 
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -149,4 +150,126 @@ bool is_addr_a_invalid_free_in_cntr(long memory_address){
   }
 
   return true;
+}
+
+
+bool is_addr_a_deref_error_in_cntr(long memory_address){
+  memtrack_log_t *item_memtrack;
+
+  TAILQ_FOREACH_REVERSE(item_memtrack, &container_memtracklog, memtracklog_list, pointers) {
+    if(item_memtrack->var_mem_address ==  memory_address){
+      return false;
+    }
+
+    if(item_memtrack->mem_address_points_to == memory_address){
+      if(item_memtrack->is_free || !item_memtrack->is_dynamic){
+        return true;
+      }else{
+        return false;
+      }
+    }
+  }
+
+  return true;
+}
+
+bool is_addr_a_memcleanup_error_in_cntr(long memory_address){
+  memtrack_log_t *item_memtrack;
+
+  TAILQ_FOREACH_REVERSE(item_memtrack, &container_memtracklog, memtracklog_list, pointers) {
+    if(item_memtrack->mem_address_points_to == memory_address){
+      bool error = true;
+
+      memtrack_log_t *aux_item_memtrack = item_memtrack;
+      TAILQ_FOREACH_REVERSE(aux_item_memtrack, &container_memtracklog, memtracklog_list, pointers) {
+        if(item_memtrack->var_mem_address == aux_item_memtrack->var_mem_address){
+          error = aux_item_memtrack->mem_address_points_to == memory_address ? true : false;
+          break;
+        }
+      }
+
+      if(error){
+        return true;
+      }
+
+    }
+  }
+
+  return false;
+}
+
+bool is_addr_valid_heap_in_cntr(long address, int size){
+  memtrack_log_t *item_memtrack;
+
+  TAILQ_FOREACH_REVERSE(item_memtrack, &container_memtracklog, memtracklog_list, pointers) {
+    long range_addr = (long)item_memtrack->var_mem_address + 
+                      (item_memtrack->size_destiny - size) + 1;
+
+    if(item_memtrack->var_mem_address <= address && (long)address < range_addr){
+      return true;
+    }
+  }
+
+  return false;
+}
+
+map_result_mem_ar is_all_address_valid_in_cntr(){
+  long mem_track_addr_error = 0;
+  map_result_mem_ar result_check;
+
+  //add a list to use as cache to avoid check duplicated addr
+  memtrack_log_t *item_memtrack;
+
+  TAILQ_FOREACH_REVERSE(item_memtrack, &container_memtracklog, memtracklog_list, pointers) {
+    if(item_memtrack->is_free){
+      bool released_checked = false;
+
+      memtrack_log_t *tmp_memtrack;
+      TAILQ_FOREACH(tmp_memtrack, &container_memtracklog, pointers) {
+        if(item_memtrack->var_mem_address == tmp_memtrack->var_mem_address && tmp_memtrack->is_free){
+          released_checked = true;
+        }
+      }
+
+      if(released_checked == false){
+        result_check.result = true;
+        result_check.addr = item_memtrack->var_mem_address;
+      }
+    }
+  }
+
+  result_check.result = false;
+  result_check.addr = 0;
+  return result_check;
+}
+
+bool is_a_valid_address_in_cntr(long address, int size){
+  memtrack_log_t *item_memtrack;
+
+  TAILQ_FOREACH_REVERSE(item_memtrack, &container_memtracklog, memtracklog_list, pointers) {
+    long range_addr = (long)item_memtrack->var_mem_address + 
+                      (item_memtrack->size_destiny - size) + 1;
+
+    if(item_memtrack->var_mem_address <= address && (long)address < range_addr){
+      if(item_memtrack->is_free){
+        return false;
+      }else{
+        return true;
+      }
+    }
+  }
+
+  return false;
+}
+
+bool free_resolved_address_in_cntr(long address, bool is_null_valid){
+  if(address == (long)NULL && is_null_valid){
+    return false;
+  }
+
+  if(is_addr_a_invalid_free_in_cntr(address)){
+    return true;
+  }
+  
+  return false;
 }

@@ -61,8 +61,6 @@ void map2check_map_malloc(void *ptr_address, int size);
 void map2check_map_calloc(void *ptr_address, int quantity, int size);
 
 // Function from AnalysisModeMemory that handle with container_memtracklog
-// TO analysis mode
-// freeResolvedAddress
 
 /// @brief This replaced the old is_invalid_free function.
 /// Checking in the container memory if a given address
@@ -135,6 +133,6 @@ bool is_a_valid_address_in_cntr(long address, int size);
 /// Check if a given address is valid to be dealallocated.
 /// @param address to be analyzed
 /// @return bool, TRUE is invalid (BUG was found) and FALSE is valid.
-bool free_resolved_address_in_cntr(long address);
+bool free_resolved_address_in_cntr(long address, bool is_null_valid);
 
 #endif // __CONTAINERMEMTRACKLOG_H_INCLUDED__
