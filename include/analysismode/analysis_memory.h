@@ -21,15 +21,20 @@
 #include <stdbool.h>
 //#include "../memtrack/container_memtracklog.h"
 
+// Call container_memtracklog and analyze the result
+
 void debug_analysis_mem_set_only_test();
 
 void map2check_set_memcleanup();
 
 void map2check_set_null_is_valid();
 
+void vcc_memcheck_failed(bool vcc_result, unsigned line, unsigned scope,
+                           char *function_name, long address);
+
 // TODO: This functions are from CallerLibraryCheckMemory.cpp
 
-void map2check_check_load(void *ptr, int size);
+void map2check_check_load(void *ptr, int line, unsigned scope, int size, const char *function_name);
 
 void map2check_check_free_resolved_address(void *ptr, unsigned line,
                                      const char *function_name,
@@ -41,9 +46,5 @@ void map2check_check_free(const char *name, void *ptr, unsigned scope, unsigned 
                     const char *function_name);
 
 void map2check_check_mem_endprog();
-
-// TODO: add functions from AnalysisModeMemory.hpp
-
-bool is_valid_alloca_address(long address, int size);
 
 #endif // __ANALYSISMODEMEMORY_H_INCLUDED__ 

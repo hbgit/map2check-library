@@ -21,7 +21,16 @@
 #include <stdbool.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include "../../include/analysismode/analysis_memory.h"
 #include "../../include/memtrack/container_memtracklog.h"
+#include "../../include/caller/caller_lib_result.h"
+
+typedef enum v_type {  
+  FREE,
+  DEREF,
+  MEMTRACK,
+  MEMCLEANUP  
+} violated_mem_type;
 
 bool is_null_valid = false;
 bool is_check_memcleanup = false;
@@ -29,9 +38,6 @@ bool debug_analysis_mem = false;
 
 void debug_analysis_mem_set_only_test(){
     debug_analysis_mem = true;
-    // functions that handle with container_memtracklog
-    // should write in the container memtrack
-    printf("]");
 }
 
 void map2check_set_memcleanup(){
@@ -42,13 +48,50 @@ void map2check_set_null_is_valid(){
     is_null_valid = true;
 }
 
-// TODO: This functions are from CallerLibraryCheckMemory.cpp
 
-void map2check_check_load(void *ptr, int size);
+void vcc_memcheck_failed(bool vcc_result, unsigned line, unsigned scope, 
+                        const char *function_name, long address, violated_mem_type type){ 
+    if (vcc_result) {
+        // TODO: add other data in the json result
+        if(type == FREE){
+            set_false_result(MEMSAFETY_FREE, line, function_name);
+        }else if(type == DEREF){
+            set_false_result(MEMSAFETY_DEREF, line, function_name);
+        }else if(type == MEMTRACK){
+            set_false_result(MEMSAFETY_MEMTRACK, line, function_name);
+        }else if(type == MEMCLEANUP){
+            set_false_result(MEMSAFETY_MEMCLEANUP, line, function_name);
+        }
+         
+        print_all_containers_as_json();
+        if (debug_analysis_mem) {
+            abort();
+        }
+    }
+}
+
+void map2check_check_load(void *ptr, int line, unsigned scope, int size, const char *function_name){
+    vcc_reset_meta_data();
+
+    if(!is_check_memcleanup){
+        if(!(is_a_valid_address_in_cntr((long)ptr, size)) &&
+           is_addr_valid_heap_in_cntr((long)ptr, size)){
+            vcc_memcheck_failed(true, line, scope, function_name, (long)ptr, DEREF);
+        }
+    }
+}
 
 void map2check_check_free_resolved_address(void *ptr, unsigned line,
                                      const char *function_name,
-                                     short int isNullValid);
+                                     short int isNullValid){
+    vcc_reset_meta_data();
+
+    if(!is_check_memcleanup){
+        if(free_resolved_address_in_cntr((long) ptr, is_null_valid)){
+            vcc_memcheck_failed(true, line, 0, function_name, (long)ptr, FREE);
+        }
+    }
+}
 
 void map2check_check_deref(int line, const char *function_name);
 
