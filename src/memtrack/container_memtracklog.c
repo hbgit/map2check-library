@@ -198,7 +198,7 @@ bool is_addr_a_memcleanup_error_in_cntr(long memory_address){
   return false;
 }
 
-bool is_addr_valid_heap_in_cntr(long address, int size){
+bool is_addr_invalid_heap_in_cntr(long address, int size){
   memtrack_log_t *item_memtrack;
 
   TAILQ_FOREACH_REVERSE(item_memtrack, &container_memtracklog, memtracklog_list, pointers) {
@@ -213,7 +213,7 @@ bool is_addr_valid_heap_in_cntr(long address, int size){
   return false;
 }
 
-map_result_mem_ar is_all_address_valid_in_cntr(){
+map_result_mem_ar has_a_invalid_address_in_cntr(){
   long mem_track_addr_error = 0;
   map_result_mem_ar result_check;
 
@@ -243,7 +243,7 @@ map_result_mem_ar is_all_address_valid_in_cntr(){
   return result_check;
 }
 
-bool is_a_valid_address_in_cntr(long address, int size){
+bool is_a_invalid_address_in_cntr(long address, int size){
   memtrack_log_t *item_memtrack;
 
   TAILQ_FOREACH_REVERSE(item_memtrack, &container_memtracklog, memtracklog_list, pointers) {

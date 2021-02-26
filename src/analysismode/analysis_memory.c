@@ -74,8 +74,8 @@ void map2check_check_load(void *ptr, int line, unsigned scope, int size, const c
     vcc_reset_meta_data();
 
     if(!is_check_memcleanup){
-        if(!(is_a_valid_address_in_cntr((long)ptr, size)) &&
-           is_addr_valid_heap_in_cntr((long)ptr, size)){
+        if(!(is_a_invalid_address_in_cntr((long)ptr, size)) &&
+           is_addr_invalid_heap_in_cntr((long)ptr, size)){
             vcc_memcheck_failed(true, line, scope, function_name, (long)ptr, DEREF);
         }
     }
@@ -119,7 +119,7 @@ void map2check_check_mem_endprog(){
     vcc_reset_meta_data();
 
     //is_addr_a_memcleanup_error_in_cntr(long memory_address
-    map_result_mem_ar result_chk = is_all_address_valid_in_cntr();
+    map_result_mem_ar result_chk = has_a_invalid_address_in_cntr();
 
     if(result_chk.result){
         if(is_check_memcleanup){

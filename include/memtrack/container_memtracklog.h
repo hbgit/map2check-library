@@ -62,6 +62,10 @@ void map2check_map_calloc(void *ptr_address, int quantity, int size);
 
 // Function from AnalysisModeMemory that handle with container_memtracklog
 
+//
+// VCCs for memory safety
+//
+
 /// @brief This replaced the old is_invalid_free function.
 /// Checking in the container memory if a given address
 /// execute an invalid free, when that given address was released.
@@ -104,7 +108,7 @@ bool is_addr_a_memcleanup_error_in_cntr(long memory_address);
 /// @param address Address to set up as alloca
 /// @param size    Size memory
 /// @return bool, TRUE is invalid (BUG was found) and FALSE is valid.
-bool is_addr_valid_heap_in_cntr(long address, int size);
+bool is_addr_invalid_heap_in_cntr(long address, int size);
 
 /// @brief This replaced the old valid_allocation_log function.
 /// It is to check if all address allocated and tracked
@@ -114,7 +118,7 @@ bool is_addr_valid_heap_in_cntr(long address, int size);
 /// if we find that the address was released.
 /// @return map<bool,Address>, TRUE is invalid (BUG was found) and FALSE is valid; 
 /// and the invalid Address.
-map_result_mem_ar is_all_address_valid_in_cntr();
+map_result_mem_ar has_a_invalid_address_in_cntr();
 
 /// @brief This replaced the old is_valid_allocation_address function.
 /// Checking if a given Address is valid in the Alloca Addresses tracked.
@@ -127,7 +131,7 @@ map_result_mem_ar is_all_address_valid_in_cntr();
 /// @param address Address to set up as alloca
 /// @param step Current step of the program analysis
 /// @return bool, TRUE is invalid (BUG was found) and FALSE is valid.
-bool is_a_valid_address_in_cntr(long address, int size);
+bool is_a_invalid_address_in_cntr(long address, int size);
 
 /// @brief old map2check_free_resolved_address function. 
 /// Check if a given address is valid to be dealallocated.
