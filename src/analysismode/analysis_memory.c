@@ -124,10 +124,10 @@ void map2check_check_mem_endprog(){
     if(result_chk.result){
         if(is_check_memcleanup){
             if(is_addr_a_memcleanup_error_in_cntr(result_chk.addr)){
-                vcc_memcheck_failed(false, -1, -1, "main", result_chk.addr, MEMCLEANUP); 
+                vcc_memcheck_failed(true, -1, -1, "main", result_chk.addr, MEMCLEANUP); 
             }
         }else{
-            vcc_memcheck_failed(false, -1, -1, "main", result_chk.addr, MEMTRACK);
+            vcc_memcheck_failed(true, -1, -1, "main", result_chk.addr, MEMTRACK);
         }
     }
 }

@@ -32,7 +32,7 @@ void map2check_set_null_is_valid();
 void vcc_memcheck_failed(bool vcc_result, unsigned line, unsigned scope,
                            char *function_name, long address);
 
-// TODO: This functions are from CallerLibraryCheckMemory.cpp
+// This functions are from CallerLibraryCheckMemory.cpp
 
 void map2check_check_load(void *ptr, int line, unsigned scope, int size, const char *function_name);
 
@@ -40,10 +40,10 @@ void map2check_check_free_resolved_address(void *ptr, unsigned line,
                                      const char *function_name,
                                      short int isNullValid);
 
-void map2check_check_deref(void *ptr, unsigned scope, unsigned line,
+void map2check_check_free(const char *name, void *ptr, unsigned scope, unsigned line,
                     const char *function_name);
 
-void map2check_check_free(const char *name, void *ptr, unsigned scope, unsigned line,
+void map2check_check_deref(void *ptr, unsigned scope, unsigned line,
                     const char *function_name);
 
 void map2check_check_mem_endprog();
