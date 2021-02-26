@@ -111,6 +111,8 @@ void map2check_map_free(const char *var_name, void *ptr_address, unsigned scope,
 }
 
 void map2check_map_malloc(void *ptr_address, int size) {
+  
+  //TODO: Fix this data track
   memtrack_log_t *obj =
       map2check_save_memtrack_log(-1, -1, (long)ptr_address, 0, false,
                                   false, "none", "none", -1, -1, false);
@@ -142,14 +144,14 @@ bool is_addr_a_invalid_free_in_cntr(long memory_address){
   TAILQ_FOREACH_REVERSE(item_memtrack, &container_memtracklog, memtracklog_list, pointers) {
     if (item_memtrack->mem_address_points_to == memory_address) {
       if(item_memtrack->is_free || !item_memtrack->is_dynamic){
-        return true;
+        return true;  // VCC violated
       }else{
         return false;
       }
     }
   }
 
-  return true;
+  return true; // VCC violated
 }
 
 
@@ -163,14 +165,14 @@ bool is_addr_a_deref_error_in_cntr(long memory_address){
 
     if(item_memtrack->mem_address_points_to == memory_address){
       if(item_memtrack->is_free || !item_memtrack->is_dynamic){
-        return true;
+        return true; // VCC violated
       }else{
         return false;
       }
     }
   }
 
-  return true;
+  return true; // VCC violated
 }
 
 bool is_addr_a_memcleanup_error_in_cntr(long memory_address){
@@ -179,17 +181,18 @@ bool is_addr_a_memcleanup_error_in_cntr(long memory_address){
   TAILQ_FOREACH_REVERSE(item_memtrack, &container_memtracklog, memtracklog_list, pointers) {
     if(item_memtrack->mem_address_points_to == memory_address){
       bool error = true;
-
+      //return true;
       memtrack_log_t *aux_item_memtrack = item_memtrack;
       TAILQ_FOREACH_REVERSE(aux_item_memtrack, &container_memtracklog, memtracklog_list, pointers) {
         if(item_memtrack->var_mem_address == aux_item_memtrack->var_mem_address){
           error = aux_item_memtrack->mem_address_points_to == memory_address ? true : false;
+          
           break;
         }
       }
 
       if(error){
-        return true;
+        return true; // VCC violated
       }
 
     }

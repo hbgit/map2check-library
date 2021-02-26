@@ -131,3 +131,93 @@ TEST(ContainerMemoryTrackLog, map2check_map_calloc)
     
     EXPECT_EQ(search_in_container_by_address((long)ptr)->size_destiny, 16);
 }
+
+//
+// VCCs for memory safety
+//
+
+TEST(ContainerMemoryTrackLog, is_addr_a_invalid_free_in_cntr_true)
+{
+    map2check_init_container_memtracklog();
+    
+    int a;
+    void * ptr = &a;
+    map2check_map_malloc(ptr, 4);
+    map2check_map_free("ptr", ptr, 0, 4, "main");
+
+    EXPECT_EQ(is_addr_a_invalid_free_in_cntr((long)ptr), true); // VCC ok
+    EXPECT_EQ(is_addr_a_invalid_free_in_cntr((long)12345), true); // VCC violated
+}
+
+TEST(ContainerMemoryTrackLog, is_addr_a_invalid_free_in_cntr_false)
+{
+    map2check_init_container_memtracklog();
+    
+    EXPECT_EQ(is_addr_a_invalid_free_in_cntr(NULL), false); // VCC violated
+
+    memtrack_log_t *obj = map2check_save_memtrack_log(
+      1, 0, 1728888, 12, true, false, "a", "none", 4, 4, false);
+    map2check_save_in_tail_container_memtracklog(obj);    
+    map2check_map_malloc((void *)12, 4);
+
+    //map2check_print_all_memtracklog_as_json();
+    EXPECT_EQ(is_addr_a_invalid_free_in_cntr((long)12), false);
+}
+
+TEST(ContainerMemoryTrackLog, is_addr_a_deref_error_in_cntr_false)
+{
+    map2check_init_container_memtracklog();
+    
+    memtrack_log_t *obj = map2check_save_memtrack_log(
+      1, 0, 1728888, 12, true, false, "a", "none", 4, 4, false);
+    map2check_save_in_tail_container_memtracklog(obj);    
+    
+    EXPECT_EQ(is_addr_a_deref_error_in_cntr((long)1728888), false);
+
+    memtrack_log_t *obj1 = map2check_save_memtrack_log(
+      1, 0, 8888, 12, true, false, "a", "none", 4, 4, false);
+    map2check_save_in_tail_container_memtracklog(obj1);    
+    
+    EXPECT_EQ(is_addr_a_deref_error_in_cntr(12), false);
+}
+
+TEST(ContainerMemoryTrackLog, is_addr_a_deref_error_in_cntr_true)
+{
+    map2check_init_container_memtracklog();
+    
+    memtrack_log_t *obj = map2check_save_memtrack_log(
+      1, 0, 1728888, 12, true, false, "a", "none", 4, 4, false);
+    map2check_save_in_tail_container_memtracklog(obj);    
+    
+    EXPECT_EQ(is_addr_a_deref_error_in_cntr(2003), true);
+
+    memtrack_log_t *obj1 = map2check_save_memtrack_log(
+      1, 0, 8888, 12, false, true, "a", "none", 4, 4, false);
+    map2check_save_in_tail_container_memtracklog(obj1);    
+    
+    EXPECT_EQ(is_addr_a_deref_error_in_cntr(12), true);
+}
+
+TEST(ContainerMemoryTrackLog, is_addr_a_memcleanup_error_in_cntr_true)
+{
+    map2check_init_container_memtracklog();
+    
+    memtrack_log_t *obj = map2check_save_memtrack_log(
+      1, 0, 12, 12, true, false, "a", "none", 4, 4, false);
+    map2check_save_in_tail_container_memtracklog(obj);   
+    
+    map2check_print_all_memtracklog_as_json();
+    EXPECT_EQ(is_addr_a_memcleanup_error_in_cntr(12), true);
+}
+
+TEST(ContainerMemoryTrackLog, is_addr_a_memcleanup_error_in_cntr_false)
+{
+    map2check_init_container_memtracklog();
+    
+    memtrack_log_t *obj = map2check_save_memtrack_log(
+      1, 0, 12, 15, true, false, "a", "none", 4, 4, false);
+    map2check_save_in_tail_container_memtracklog(obj);   
+    
+    map2check_print_all_memtracklog_as_json();
+    EXPECT_EQ(is_addr_a_memcleanup_error_in_cntr(12), false);
+}
