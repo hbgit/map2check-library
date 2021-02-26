@@ -93,15 +93,44 @@ void map2check_check_free_resolved_address(void *ptr, unsigned line,
     }
 }
 
-void map2check_check_deref(int line, const char *function_name);
-
 void map2check_check_free(const char *name, void *ptr, unsigned scope, unsigned line,
-                    const char *function_name);
+                    const char *function_name){
+    vcc_reset_meta_data();
 
-void map2check_check_mem_endprog();
+    if(!is_check_memcleanup){
+        if(is_addr_a_invalid_free_in_cntr((long) ptr)){
+           vcc_memcheck_failed(true, line, scope, function_name, (long)ptr, FREE); 
+        }
+    }
+}
 
-// TODO: add functions from AnalysisModeMemory.hpp
+void map2check_check_deref(void *ptr, unsigned scope, unsigned line,
+                    const char *function_name){
+    vcc_reset_meta_data();
 
-bool is_valid_alloca_address(long address, int size);
+    if(!is_check_memcleanup){
+        if(is_addr_a_deref_error_in_cntr((long) ptr)){
+            vcc_memcheck_failed(true, line, scope, function_name, (long)ptr, DEREF); 
+        }
+    }
+}
+
+void map2check_check_mem_endprog(){
+    vcc_reset_meta_data();
+
+    //is_addr_a_memcleanup_error_in_cntr(long memory_address
+    map_result_mem_ar result_chk = is_all_address_valid_in_cntr();
+
+    if(result_chk.result){
+        if(is_check_memcleanup){
+            if(is_addr_a_memcleanup_error_in_cntr(result_chk.addr)){
+                vcc_memcheck_failed(false, -1, -1, "main", result_chk.addr, MEMCLEANUP); 
+            }
+        }else{
+            vcc_memcheck_failed(false, -1, -1, "main", result_chk.addr, MEMTRACK);
+        }
+    }
+}
+
 
 #endif // __ANALYSISMODEMEMORY_H_INCLUDED__ 
