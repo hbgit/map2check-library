@@ -13,10 +13,23 @@ It is a C library to support Map2Check Tool that performs over program analysis:
 
 ## To build the map2check-library
 
-You can use the [build.sh](build.sh) script:
+You can use the [build.sh](build.sh) script, but it's necessary to install all map2check-library dependencies:
 
 ```Console
 $ ./build.sh --debug
+```
+
+You can also use our dockerfile to set up the environment to build map2check-library, as follows:
+
+```Console
+$ docker build -t hbgit/map2checklibrary --no-cache -f Dockerfile .
+$ docker pull klee/klee:2.2
+$ sudo apt install -y python3-pip
+$ pip3 install --user cpp-coveralls
+# Building the tool
+$ docker run --rm -v $(pwd):/home/:Z --user $(id -u):$(id -g) hbgit/map2checklibrary /bin/bash -c "cd home/; ./build.sh -d -t"
+# KLEE and LibFuzzer testing
+$ ./run_klee_test.sh
 ```
 
 <!-- Using https://mermaidjs.github.io/mermaid-live-editor -->

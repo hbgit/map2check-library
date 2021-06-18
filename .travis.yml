@@ -6,7 +6,7 @@ services:
 
 before_install:
 - docker build -t hbgit/map2checklibrary --no-cache -f Dockerfile .
-- docker pull klee/klee
+- docker pull klee/klee:2.2
 - sudo apt install -y python3-pip
 - pip3 install --user cpp-coveralls  
 
