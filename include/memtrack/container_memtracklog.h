@@ -27,8 +27,6 @@ typedef struct {
     bool result;
 } map_result_mem_ar; 
   
-typedef struct greaterSmaller Struct; 
-
 TAILQ_HEAD(memtracklog_list, _memtrack_log);
 struct memtracklog_list container_memtracklog;
 
@@ -61,10 +59,10 @@ void map2check_map_malloc(void *ptr_address, int size);
 void map2check_map_calloc(void *ptr_address, int quantity, int size);
 
 // Function from AnalysisModeMemory that handle with container_memtracklog
-
 //
-// VCCs for memory safety
-//
+// VCCs for memory safety, here we have the rule in the analysis mode
+// we just have a caller, this to avoid conflicts because the container_memtracklog 
+// list
 
 /// @brief This replaced the old is_invalid_free function.
 /// Checking in the container memory if a given address

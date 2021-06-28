@@ -224,8 +224,9 @@ map_result_mem_ar has_a_invalid_address_in_cntr(){
   memtrack_log_t *item_memtrack;
 
   TAILQ_FOREACH_REVERSE(item_memtrack, &container_memtracklog, memtracklog_list, pointers) {
-    if(item_memtrack->is_free){
+    if(!item_memtrack->is_free){
       bool released_checked = false;
+      result_check.addr = item_memtrack->var_mem_address;
 
       memtrack_log_t *tmp_memtrack;
       TAILQ_FOREACH(tmp_memtrack, &container_memtracklog, pointers) {
@@ -237,12 +238,12 @@ map_result_mem_ar has_a_invalid_address_in_cntr(){
       if(released_checked == false){
         result_check.result = true;
         result_check.addr = item_memtrack->var_mem_address;
+        return result_check;
       }
     }
-  }
+  } 
 
-  result_check.result = false;
-  result_check.addr = 0;
+  result_check.result = false;  
   return result_check;
 }
 

@@ -18,6 +18,13 @@
 #ifndef __ANALYSISMODEMEMORY_H_INCLUDED__
 #define __ANALYSISMODEMEMORY_H_INCLUDED__
 
+typedef enum v_type {  
+  FREE,
+  DEREF,
+  MEMTRACK,
+  MEMCLEANUP  
+} violated_mem_type;
+
 #include <stdbool.h>
 //#include "../memtrack/container_memtracklog.h"
 
@@ -30,7 +37,7 @@ void map2check_set_memcleanup();
 void map2check_set_null_is_valid();
 
 void vcc_memcheck_failed(bool vcc_result, unsigned line, unsigned scope,
-                           char *function_name, long address);
+                           char *function_name, long address, violated_mem_type type);
 
 // This functions are from CallerLibraryCheckMemory.cpp
 

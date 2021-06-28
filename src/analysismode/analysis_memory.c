@@ -25,16 +25,16 @@
 #include "../../include/memtrack/container_memtracklog.h"
 #include "../../include/caller/caller_lib_result.h"
 
+bool is_null_valid = false;
+bool is_check_memcleanup = false;
+bool debug_analysis_mem = false;
+
 typedef enum v_type {  
   FREE,
   DEREF,
   MEMTRACK,
   MEMCLEANUP  
 } violated_mem_type;
-
-bool is_null_valid = false;
-bool is_check_memcleanup = false;
-bool debug_analysis_mem = false;
 
 void debug_analysis_mem_set_only_test(){
     debug_analysis_mem = true;
@@ -64,7 +64,7 @@ void vcc_memcheck_failed(bool vcc_result, unsigned line, unsigned scope,
         }
          
         print_all_containers_as_json();
-        if (debug_analysis_mem) {
+        if (!debug_analysis_mem) {
             abort();
         }
     }
@@ -114,6 +114,7 @@ void map2check_check_deref(void *ptr, unsigned scope, unsigned line,
         }
     }
 }
+
 
 void map2check_check_mem_endprog(){
     vcc_reset_meta_data();

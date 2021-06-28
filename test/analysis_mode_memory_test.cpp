@@ -1,12 +1,31 @@
 #include "gtest/gtest.h"
 
 extern "C" {
-  #include "../include/analysismode/analysis_memory.h"  
+  #include "../include/analysismode/analysis_memory.h" 
+  #include "../include/caller/caller_lib_result.h" 
 }
 
 TEST(AnalysisModeMemory, debug_analysis_mem_set_only_test)
 {
     debug_analysis_mem_set_only_test();
+    //map2check_init();
+    //debug_assert_set_only_test();
+    //map2check_is_valid_assert(12, "foo", 144 <= 12);
+    EXPECT_EQ(1, 1);
+}
+
+TEST(AnalysisModeMemory, vcc_memcheck_failed)
+{
+    map2check_init();
+    debug_analysis_mem_set_only_test();
+    vcc_memcheck_failed(1, 12, 0, (char*)"foo",(long)123456, FREE);
+    EXPECT_EQ(get_current_property(), MEMSAFETY_FREE);
+    vcc_memcheck_failed(1, 12, 0, (char*)"foo",(long)123456, DEREF);
+    EXPECT_EQ(get_current_property(), MEMSAFETY_DEREF);
+    vcc_memcheck_failed(1, 12, 0, (char*)"foo",(long)123456, MEMTRACK);
+    EXPECT_EQ(get_current_property(), MEMSAFETY_MEMTRACK);
+    vcc_memcheck_failed(1, 12, 0, (char*)"foo",(long)123456, MEMCLEANUP);
+    EXPECT_EQ(get_current_property(), MEMSAFETY_MEMCLEANUP);
 }
 
 /*
