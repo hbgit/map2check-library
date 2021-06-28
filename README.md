@@ -102,9 +102,3 @@ After the verification condition from map2check-library to be validate using KLE
   }
 }
 ```
-
-
-TODO:
-- FIX free memory after tracking [DOING]
-- FIX figure ./docs/imgs/class-diagram.png [DOING]
-- FIX track data on container_memtracklog [TODO]
