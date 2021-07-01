@@ -39,6 +39,7 @@ char *print_memtrack_obj_as_json(memtrack_log_t *obj) {
   dest = json_int(dest, "size_destiny", obj->size_destiny);
   dest = json_int(dest, "size_primitive", obj->size_primitive);
   dest = json_int(dest, "is_null_valid", obj->is_null_valid);
+  dest = json_int(dest, "mem_type_track", obj->type_track);
 
   // Close json and check generation
   dest = json_objClose(dest);
@@ -63,7 +64,7 @@ map2check_save_memtrack_log(int line, int scope,
                             long var_mem_address, long mem_address_points_to,
                             bool is_dynamic, bool is_free, const char *ptr_name,
                             const char *function_name, int size_destiny,
-                            int size_primitive, bool is_null_valid) {
+                            int size_primitive, bool is_null_valid, mem_type_track type_track) {
 
   memtrack_log_t *obj = (memtrack_log_t *)malloc(sizeof(memtrack_log_t));
 
@@ -79,6 +80,7 @@ map2check_save_memtrack_log(int line, int scope,
   obj->size_destiny = size_destiny;
   obj->size_primitive = size_primitive;
   obj->is_null_valid = is_null_valid;
+  obj->type_track = type_track;
 
   return obj;
 }

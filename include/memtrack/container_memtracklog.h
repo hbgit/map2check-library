@@ -38,25 +38,15 @@ void map2check_print_all_memtracklog_as_json();
 
 memtrack_log_t * search_in_container_by_address(long address);
 
-void map2check_map_alloca(const char *var_name, void *ptr_addres, int size,
-                          int size_primitive, int line_number, int scope);
+void map2check_track_data_in_cntr(const char *var_name, 
+                                  void *ptr_addres, 
+                                  int size,
+                                  int size_primitive, 
+                                  int line_number,                                   
+                                  int scope,                                  
+                                  int type_track,
+                                  int quantity_calloc);
 
-void map2check_map_non_static_alloca(const char *var_name, void *ptr_address,
-                                     int size, int size_primitive,
-                                     int line_number, int scope);
-
-void map2check_map_funct_address(const char *var_name, void *ptr_address);
-
-void map2check_map_store_pointer(void *var_address, void *value, unsigned scope,
-                                 const char *var_name, int line_number,
-                                 const char *funct_name);
-
-void map2check_map_free(const char *var_name, void *ptr_addres, unsigned scope,
-                        unsigned line_number, const char *funct_name);
-
-void map2check_map_malloc(void *ptr_address, int size);
-
-void map2check_map_calloc(void *ptr_address, int quantity, int size);
 
 // Function from AnalysisModeMemory that handle with container_memtracklog
 //
@@ -81,11 +71,22 @@ bool is_addr_a_invalid_free_in_cntr(long memory_address);
 /// @return bool, TRUE is invalid (BUG was found) and FALSE is valid.
 bool is_addr_a_deref_error_in_cntr(long memory_address);
 
-/// @brief This replaced the old is_memcleanup_error function.
+/// @brief 
 /// A memcleanup error occurs when a memory leak happens but we still have
-/// a pointer that points to the leaked location, so to verify we:
-/// 1. From last element to the first check if some variable points to the
-/// location
+/// a pointer that points to the leaked location. According to SV-COMP, 
+/// All allocated memory is deallocated before the program terminates. 
+/// In addition to valid-memtrack: There exists no finite execution of the 
+/// program on which the program terminates but still points to allocated memory. 
+/// (Comparison to Valgrind: This property can be violated even if Valgrind 
+/// reports 'still reachable'.). This way, map2check consider that the  
+/// memory was allocated and was not subsequently freed before the program terminated. 
+/// Thus, the blocks were not freed, but they could have been freed (if the programmer 
+/// had wanted to) because the program still was keeping track of pointers to those 
+/// memory blocks.
+/// Map2Check VCC check:
+/// 1. From last element to the first, we check if some POINTED MEMORY ADDRESS 
+///    is a dynamic memory
+/// 2. TODO: DOING after change track memory
 /// 2. If found, iterates from the found element to the last and check if the
 /// pointer does not change.
 /// 3a. If it doesn't change, then it is a memcleanup error

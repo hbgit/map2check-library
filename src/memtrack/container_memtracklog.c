@@ -62,76 +62,86 @@ memtrack_log_t *search_in_container_by_address(long address) {
   return tmp_memtrack;
 }
 
-void map2check_map_alloca(const char *var_name, void *ptr_address, int size,
-                          int size_primitive, int line_number, int scope) {
+void map2check_track_data_in_cntr(const char *var_name, void *ptr_address, int size,
+                          int size_primitive, int line_number, int scope, int type_track, int quantity_calloc) {
 
   memtrack_log_t *obj = map2check_save_memtrack_log(
       line_number, scope, (long)ptr_address, 0, false, false, var_name,
-      "none", size, size_primitive, false);
+      "none", size, size_primitive, false, type_track);
+
+  if(type_track == 4){ //free
+    set_free(obj);
+  }
+  else if(type_track == 5){ //malloc
+    set_malloc(obj);
+  }
+  else if(type_track == 6){ //calloc
+    set_calloc(quantity_calloc, obj);
+  }
 
   map2check_save_in_tail_container_memtracklog(obj);
 }
 
-void map2check_map_non_static_alloca(const char *var_name, void *ptr_address,
-                                     int size, int size_primitive,
-                                     int line_number, int scope) {
-  memtrack_log_t *obj = map2check_save_memtrack_log(
-      line_number, scope, (long)ptr_address, 0, false, false, var_name,
-      "none", size, size_primitive, false);
+// void map2check_map_non_static_alloca(const char *var_name, void *ptr_address,
+//                                      int size, int size_primitive,
+//                                      int line_number, int scope) {
+//   memtrack_log_t *obj = map2check_save_memtrack_log(
+//       line_number, scope, (long)ptr_address, 0, false, false, var_name,
+//       "none", size, size_primitive, false);
 
-  map2check_save_in_tail_container_memtracklog(obj);
-}
+//   map2check_save_in_tail_container_memtracklog(obj);
+// }
 
-void map2check_map_funct_address(const char *var_name, void *ptr_address) {
-  memtrack_log_t *obj =
-      map2check_save_memtrack_log(-1, -1, (long)ptr_address, 0, false,
-                                  false, var_name, "none", -1, -1, false);
+// void map2check_map_funct_address(const char *var_name, void *ptr_address) {
+//   memtrack_log_t *obj =
+//       map2check_save_memtrack_log(-1, -1, (long)ptr_address, 0, false,
+//                                   false, var_name, "none", -1, -1, false);
 
-  map2check_save_in_tail_container_memtracklog(obj);
-}
+//   map2check_save_in_tail_container_memtracklog(obj);
+// }
 
-void map2check_map_store_pointer(void *var_address, void *value, unsigned scope,
-                                 const char *var_name, int line_number,
-                                 const char *funct_name) {
-  memtrack_log_t *obj = map2check_save_memtrack_log(
-      line_number, scope, (long)var_address, 0, false, false, var_name,
-      "none", -1, -1, false);
+// void map2check_map_store_pointer(void *var_address, void *value, unsigned scope,
+//                                  const char *var_name, int line_number,
+//                                  const char *funct_name) {
+//   memtrack_log_t *obj = map2check_save_memtrack_log(
+//       line_number, scope, (long)var_address, 0, false, false, var_name,
+//       "none", -1, -1, false);
 
-  map2check_save_in_tail_container_memtracklog(obj);
-}
+//   map2check_save_in_tail_container_memtracklog(obj);
+// }
 
-void map2check_map_free(const char *var_name, void *ptr_address, unsigned scope,
-                        unsigned line_number, const char *funct_name) {
-  memtrack_log_t *obj = map2check_save_memtrack_log(
-      line_number, scope, (long)ptr_address, 0, false, false, var_name,
-      "none", -1, -1, false);
-  set_free(obj);
+// void map2check_map_free(const char *var_name, void *ptr_address, unsigned scope,
+//                         unsigned line_number, const char *funct_name) {
+//   memtrack_log_t *obj = map2check_save_memtrack_log(
+//       line_number, scope, (long)ptr_address, 0, false, false, var_name,
+//       "none", -1, -1, false);
+//   set_free(obj);
 
-  map2check_save_in_tail_container_memtracklog(obj);
-}
+//   map2check_save_in_tail_container_memtracklog(obj);
+// }
 
-void map2check_map_malloc(void *ptr_address, int size) {
+// void map2check_map_malloc(void *ptr_address, int size) {
   
-  //TODO: Fix this data track
-  memtrack_log_t *obj =
-      map2check_save_memtrack_log(-1, -1, (long)ptr_address, 0, false,
-                                  false, "none", "none", -1, -1, false);
-  set_malloc(obj);
+//   //TODO: Fix this data track
+//   memtrack_log_t *obj =
+//       map2check_save_memtrack_log(-1, -1, (long)ptr_address, 0, false,
+//                                   false, "none", "none", -1, -1, false);
+//   set_malloc(obj);
 
-  map2check_save_in_tail_container_memtracklog(obj);
-}
+//   map2check_save_in_tail_container_memtracklog(obj);
+// }
 
-void map2check_map_calloc(void *ptr_address, int quantity, int size) {
-  memtrack_log_t *obj =
-      map2check_save_memtrack_log(-1, -1, (long)ptr_address, 0, false,
-                                  false, "none", "none", size, -1, false);
-  set_calloc(quantity, obj);
+// void map2check_map_calloc(void *ptr_address, int quantity, int size) {
+//   memtrack_log_t *obj =
+//       map2check_save_memtrack_log(-1, -1, (long)ptr_address, 0, false,
+//                                   false, "none", "none", size, -1, false);
+//   set_calloc(quantity, obj);
 
-  map2check_save_in_tail_container_memtracklog(obj);
-}
+//   map2check_save_in_tail_container_memtracklog(obj);
+// }
 
 /*
-* Function from AnalysisModeMemory that handle with container_memtracklog
+* Function from AnalysisModeMemory-VCC that handle with container_memtracklog
 */
 
 bool is_addr_a_invalid_free_in_cntr(long memory_address){
@@ -150,7 +160,6 @@ bool is_addr_a_invalid_free_in_cntr(long memory_address){
 
   return true; // VCC violated
 }
-
 
 bool is_addr_a_deref_error_in_cntr(long memory_address){
   memtrack_log_t *item_memtrack;

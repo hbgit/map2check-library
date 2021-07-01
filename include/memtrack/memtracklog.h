@@ -22,6 +22,16 @@
 
 typedef unsigned int BYTE;
 
+typedef enum v_type {  
+  ALLOCA,
+  NON_STATIC_ALLOCA,
+  FUNCTION,
+  STORE_PTR,
+  FREE,
+  MALLOC,
+  CALLOC  
+} mem_type_track;
+
 typedef struct _memtrack_log {
   TAILQ_ENTRY(_memtrack_log) pointers;
   long step;
@@ -36,6 +46,7 @@ typedef struct _memtrack_log {
   int size_destiny;
   int size_primitive;
   bool is_null_valid;
+  mem_type_track type_track;
 } memtrack_log_t;
 
 char *print_memtrack_obj_as_json(memtrack_log_t *obj);
@@ -45,7 +56,7 @@ map2check_save_memtrack_log(int line, int scope,
                             long var_mem_address, long mem_address_points_to,
                             bool is_dynamic, bool is_free, const char *ptr_name,
                             const char *function_name, int size_destiny,
-                            int size_primitive, bool is_null_valid);
+                            int size_primitive, bool is_null_valid, mem_type_track type_track);
 
 bool is_equal_memtrack_obj(memtrack_log_t *obj1, memtrack_log_t *obj2);
 
