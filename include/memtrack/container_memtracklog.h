@@ -94,29 +94,8 @@ bool is_addr_a_deref_error_in_cntr(long memory_address);
 /// error.
 /// @param memory_address to be searched in the list
 /// @return bool, TRUE is invalid (BUG was found) and FALSE is valid.
-bool is_addr_a_memcleanup_error_in_cntr(long memory_address);
-
-/// @brief This replaced the old is_valid_heap_address function.
-/// Checking if a given Address is valid in the Heap Address.
-/// It is called heap because it is a pile of memory space available to
-/// programmers to allocated and de-allocate. We iterate over all elements,
-/// beggining from back, if the address that we are looking for is in the range
-/// of the element address memory space, different from Alloca here we do not
-/// check if the element is not free.
-/// @param address Address to set up as alloca
-/// @param size    Size memory
-/// @return bool, TRUE is invalid (BUG was found) and FALSE is valid.
-bool is_addr_invalid_heap_in_cntr(long address, int size);
-
-/// @brief This replaced the old valid_allocation_log function.
-/// It is to check if all address allocated and tracked
-/// were released at the end of the program, to check this, we iterate
-/// over all elements starting from bottom of allocation log, if the
-/// address of the current item is not Free, we iterate from the top
-/// if we find that the address was released.
-/// @return map<bool,Address>, TRUE is invalid (BUG was found) and FALSE is valid; 
-/// and the invalid Address.
-map_result_mem_ar has_a_invalid_address_in_cntr();
+/// TODO: The verification rules is incomplete !
+bool has_a_memcleanup_error_in_cntr();
 
 /// @brief This replaced the old is_valid_allocation_address function.
 /// Checking if a given Address is valid in the Alloca Addresses tracked.
@@ -130,11 +109,5 @@ map_result_mem_ar has_a_invalid_address_in_cntr();
 /// @param step Current step of the program analysis
 /// @return bool, TRUE is invalid (BUG was found) and FALSE is valid.
 bool is_a_invalid_address_in_cntr(long address, int size);
-
-/// @brief old map2check_free_resolved_address function. 
-/// Check if a given address is valid to be dealallocated.
-/// @param address to be analyzed
-/// @return bool, TRUE is invalid (BUG was found) and FALSE is valid.
-bool free_resolved_address_in_cntr(long address, bool is_null_valid);
 
 #endif // __CONTAINERMEMTRACKLOG_H_INCLUDED__

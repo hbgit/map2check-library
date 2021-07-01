@@ -74,8 +74,7 @@ void map2check_check_load(void *ptr, int line, unsigned scope, int size, const c
     vcc_reset_meta_data();
 
     if(!is_check_memcleanup){
-        if(!(is_a_invalid_address_in_cntr((long)ptr, size)) &&
-           is_addr_invalid_heap_in_cntr((long)ptr, size)){
+        if(!(is_a_invalid_address_in_cntr((long)ptr, size))){
             vcc_memcheck_failed(true, line, scope, function_name, (long)ptr, DEREF);
         }
     }
@@ -98,6 +97,9 @@ void map2check_check_free(const char *name, void *ptr, unsigned scope, unsigned 
     vcc_reset_meta_data();
 
     if(!is_check_memcleanup){
+        if((long) ptr == (long)NULL && is_null_valid){
+            vcc_memcheck_failed(true, line, scope, function_name, (long)ptr, FREE); 
+        }
         if(is_addr_a_invalid_free_in_cntr((long) ptr)){
            vcc_memcheck_failed(true, line, scope, function_name, (long)ptr, FREE); 
         }
@@ -115,22 +117,18 @@ void map2check_check_deref(void *ptr, unsigned scope, unsigned line,
     }
 }
 
-
+//TODO: review this vcc
 void map2check_check_mem_endprog(){
     vcc_reset_meta_data();
-
-    //is_addr_a_memcleanup_error_in_cntr(long memory_address
-    map_result_mem_ar result_chk = has_a_invalid_address_in_cntr();
-
-    if(result_chk.result){
-        if(is_check_memcleanup){
-            if(is_addr_a_memcleanup_error_in_cntr(result_chk.addr)){
-                vcc_memcheck_failed(true, -1, -1, "main", result_chk.addr, MEMCLEANUP); 
-            }
-        }else{
-            vcc_memcheck_failed(true, -1, -1, "main", result_chk.addr, MEMTRACK);
+    
+    if(is_check_memcleanup){
+        if(is_addr_a_memcleanup_error_in_cntr()){
+            vcc_memcheck_failed(true, -1, -1, "main", 0, MEMCLEANUP); 
         }
+    }else{
+        vcc_memcheck_failed(true, -1, -1, "main", 0, MEMTRACK);
     }
+  
 }
 
 

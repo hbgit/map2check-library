@@ -198,7 +198,7 @@ TEST(ContainerMemoryTrackLog, is_addr_a_deref_error_in_cntr_true)
     EXPECT_EQ(is_addr_a_deref_error_in_cntr(12), true);
 }
 
-TEST(ContainerMemoryTrackLog, is_addr_a_memcleanup_error_in_cntr_true)
+TEST(ContainerMemoryTrackLog, has_a_memcleanup_error_in_cntr_true)
 {
     map2check_init_container_memtracklog();
     
@@ -207,75 +207,7 @@ TEST(ContainerMemoryTrackLog, is_addr_a_memcleanup_error_in_cntr_true)
     map2check_save_in_tail_container_memtracklog(obj);   
     
     map2check_print_all_memtracklog_as_json();
-    EXPECT_EQ(is_addr_a_memcleanup_error_in_cntr(12), true);
-}
-
-TEST(ContainerMemoryTrackLog, is_addr_a_memcleanup_error_in_cntr_false)
-{
-    map2check_init_container_memtracklog();
-    
-    memtrack_log_t *obj = map2check_save_memtrack_log(
-      1, 0, 12, 15, true, false, "a", "none", 4, 4, false);
-    map2check_save_in_tail_container_memtracklog(obj);   
-    
-    map2check_print_all_memtracklog_as_json();
-    EXPECT_EQ(is_addr_a_memcleanup_error_in_cntr(12), false);
-}
-
-TEST(ContainerMemoryTrackLog, is_addr_invalid_heap_in_cntr_true)
-{
-    map2check_init_container_memtracklog();
-    
-    memtrack_log_t *obj = map2check_save_memtrack_log(
-      1, 0, 12, 15, true, false, "a", "none", 4, 4, false);
-    map2check_save_in_tail_container_memtracklog(obj);   
-    
-    map2check_print_all_memtracklog_as_json();
-    EXPECT_EQ(is_addr_invalid_heap_in_cntr(12,4), true);
-}
-
-TEST(ContainerMemoryTrackLog, is_addr_invalid_heap_in_cntr_false)
-{
-    map2check_init_container_memtracklog();
-    
-    memtrack_log_t *obj = map2check_save_memtrack_log(
-      1, 0, 12, 15, true, false, "a", "none", 4, 4, false);
-    map2check_save_in_tail_container_memtracklog(obj);   
-    
-    map2check_print_all_memtracklog_as_json();
-    EXPECT_EQ(is_addr_invalid_heap_in_cntr(144,4), false);
-}
-
-TEST(ContainerMemoryTrackLog, has_a_invalid_address_in_cntr_true)
-{
-    map2check_init_container_memtracklog();
-    
-    memtrack_log_t *obj = map2check_save_memtrack_log(
-      1, 0, 12, 15, true, false, "a", "none", 4, 4, false);
-    map2check_save_in_tail_container_memtracklog(obj);   
-    //map2check_print_all_memtracklog_as_json();
-    map_result_mem_ar x = has_a_invalid_address_in_cntr();
-
-    EXPECT_EQ(x.result, true);
-}
-
-TEST(ContainerMemoryTrackLog, has_a_invalid_address_in_cntr_false)
-{
-    map2check_init_container_memtracklog();
-    
-    memtrack_log_t *obj = map2check_save_memtrack_log(
-      1, 0, 12, 15, false, true, "a", "none", 4, 4, false);
-    map2check_save_in_tail_container_memtracklog(obj); 
-    
-    memtrack_log_t *obj1 = map2check_save_memtrack_log(
-      1, 0, 12, 15, false, false, "b", "none", 4, 4, false);
-    map2check_save_in_tail_container_memtracklog(obj1);  
-    
-    map2check_print_all_memtracklog_as_json();
-    
-    map_result_mem_ar x = has_a_invalid_address_in_cntr();
-
-    EXPECT_EQ(x.result, false);
+    EXPECT_EQ(has_a_memcleanup_error_in_cntr(), true);
 }
 
 TEST(ContainerMemoryTrackLog, is_a_invalid_address_in_cntr_false)
@@ -309,26 +241,4 @@ TEST(ContainerMemoryTrackLog, is_a_invalid_address_in_cntr_true)
     map2check_save_in_tail_container_memtracklog(obj);   
 
     EXPECT_EQ(is_a_invalid_address_in_cntr(12,4), true);
-}
-
-TEST(ContainerMemoryTrackLog, free_resolved_address_in_cntr_false)
-{
-    map2check_init_container_memtracklog();
-    
-    memtrack_log_t *obj = map2check_save_memtrack_log(
-      1, 0, 12, 15, false, false, "a", "none", 4, 4, false);
-    map2check_save_in_tail_container_memtracklog(obj);   
-
-    EXPECT_EQ(free_resolved_address_in_cntr(0,0), false);
-}
-
-TEST(ContainerMemoryTrackLog, free_resolved_address_in_cntr_true)
-{
-    map2check_init_container_memtracklog();
-    
-    memtrack_log_t *obj = map2check_save_memtrack_log(
-      1, 0, 12, 15, false, false, "a", "none", 4, 4, false);
-    map2check_save_in_tail_container_memtracklog(obj);   
-
-    EXPECT_EQ(free_resolved_address_in_cntr(1,0), true);
 }
