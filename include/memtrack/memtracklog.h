@@ -20,48 +20,71 @@
 #include <stdbool.h>
 #include <sys/queue.h>
 
-typedef unsigned int BYTE;
-
-typedef enum v_type {  
-  ALLOCA,
-  NON_STATIC_ALLOCA,
-  FUNCTION,
-  STORE_PTR,
-  FREE,
-  MALLOC,
-  CALLOC  
+/// @brief mem_type_track is a enum to identify the type of the data
+/// to be tracked.
+typedef enum tt_type {  
+  INST_ALLOCA,
+  INST_NON_STATIC_ALLOCA,
+  INST_FUNCTION,
+  INST_STORE,
+  INST_FREE,
+  INST_MALLOC,
+  INST_CALLOC  
 } mem_type_track;
 
+/// @brief memtrack_log_t is a struct that define our object that 
+/// has all attributes, i.e., data to be tracked in the analyzed program.
 typedef struct _memtrack_log {
   TAILQ_ENTRY(_memtrack_log) pointers;
   long step;
-  int line;
-  int scope;
-  long var_mem_address;
-  long mem_address_points_to;
+  // attributes that are tracked
+  int line;  
+  const char *var_name;
+  long var_mem_address; // variable memory address 
+  long mem_address_points_to; // memory address that the tracked variable points to
+  int scope_from_mem_address_points_to;
   bool is_dynamic;
   bool is_free;
-  const char *ptr_name;
+  int scope;  
   const char *function_name;
   int size_destiny;
   int size_primitive;
-  bool is_null_valid;
+  bool is_ptr;
   mem_type_track type_track;
 } memtrack_log_t;
 
+
+/// Functions to handle with memory track log
+/// @brief Print the data object tracked in json format.
 char *print_memtrack_obj_as_json(memtrack_log_t *obj);
 
+/// @brief Collect all data to create a memory track object
+/// according memtrack_log_t type structure
 memtrack_log_t *
-map2check_save_memtrack_log(int line, int scope,
-                            long var_mem_address, long mem_address_points_to,
-                            bool is_dynamic, bool is_free, const char *ptr_name,
-                            const char *function_name, int size_destiny,
-                            int size_primitive, bool is_null_valid, mem_type_track type_track);
+create_memtrack_object_log(int line,
+                            const char *var_name,
+                            long var_mem_address, 
+                            long mem_address_points_to,
+                            int scope_from_mem_address_points_to,
+                            bool is_dynamic, 
+                            bool is_free, 
+                            int scope,
+                            const char *function_name, 
+                            int size_destiny,
+                            int size_primitive, 
+                            bool is_ptr,
+                            mem_type_track type_track);
 
+/// @brief Check if two memory track object are equals
 bool is_equal_memtrack_obj(memtrack_log_t *obj1, memtrack_log_t *obj2);
 
+/// @brief Set attribute is_dynamic in a memory track object
 void set_malloc(memtrack_log_t *obj);
+
+/// @brief Set attribute is_dynamic and size_destiny in a memory track object
 void set_calloc(int quantity, memtrack_log_t *obj);
+
+/// @brief Set attributes related to free instruction in a memory track object
 // NOTE: realloc is modelling by set free and then execute a new malloc
 void set_free(memtrack_log_t *obj);
 

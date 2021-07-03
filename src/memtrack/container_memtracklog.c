@@ -30,7 +30,7 @@ void map2check_init_container_memtracklog() {
   TAILQ_INIT(&container_memtracklog);
 }
 
-void map2check_save_in_tail_container_memtracklog(memtrack_log_t *objmemtrack) {
+void save_in_tail_container_memtracklog(memtrack_log_t *objmemtrack) {
   TAILQ_INSERT_TAIL(&container_memtracklog, objmemtrack, pointers);
 }
 
@@ -62,12 +62,33 @@ memtrack_log_t *search_in_container_by_address(long address) {
   return tmp_memtrack;
 }
 
-void map2check_track_data_in_cntr(const char *var_name, void *ptr_address, int size,
-                          int size_primitive, int line_number, int scope, int type_track, int quantity_calloc) {
+void map2check_save_memory_data_in_cntr(int line,
+                            const char *var_name,
+                            long var_mem_address, 
+                            long mem_address_points_to,
+                            int scope_from_mem_address_points_to,
+                            int is_dynamic, 
+                            int is_free, 
+                            int scope,
+                            const char *function_name, 
+                            int size_destiny,
+                            int size_primitive, 
+                            int is_ptr,
+                            int type_track) {
 
-  memtrack_log_t *obj = map2check_save_memtrack_log(
-      line_number, scope, (long)ptr_address, 0, false, false, var_name,
-      "none", size, size_primitive, false, type_track);
+  memtrack_log_t *obj = create_memtrack_object_log(line,
+                            var_name,
+                            var_mem_address, 
+                            mem_address_points_to,
+                            scope_from_mem_address_points_to,
+                            is_dynamic, 
+                            is_free, 
+                            scope,
+                            function_name, 
+                            size_destiny,
+                            size_primitive, 
+                            is_ptr,
+                            type_track);
 
   if(type_track == 4){ //free
     set_free(obj);
@@ -76,10 +97,10 @@ void map2check_track_data_in_cntr(const char *var_name, void *ptr_address, int s
     set_malloc(obj);
   }
   else if(type_track == 6){ //calloc
-    set_calloc(quantity_calloc, obj);
+    set_calloc(size_primitive, obj);
   }
 
-  map2check_save_in_tail_container_memtracklog(obj);
+  save_in_tail_container_memtracklog(obj);
 }
 
 // void map2check_map_non_static_alloca(const char *var_name, void *ptr_address,

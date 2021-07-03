@@ -28,17 +28,19 @@ char *print_memtrack_obj_as_json(memtrack_log_t *obj) {
 
   dest = json_objOpen(dest, NULL);
   dest = json_long(dest, "step", obj->step);
+  // attributes that are tracked
   dest = json_int(dest, "line", obj->line);
-  dest = json_int(dest, "scope", obj->scope);
+  dest = json_str(dest, "ptr_name", obj->var_name);
   dest = json_long(dest, "var_mem_address", obj->var_mem_address);
   dest = json_long(dest, "mem_address_points_to", obj->mem_address_points_to);
+  dest = json_long(dest, "scope_from_mem_address_points_to", obj->scope_from_mem_address_points_to);
   dest = json_int(dest, "is_dynamic", obj->is_dynamic);
-  dest = json_int(dest, "is_free", obj->is_free);
-  dest = json_str(dest, "ptr_name", obj->ptr_name);
+  dest = json_int(dest, "is_free", obj->is_free);  
+  dest = json_int(dest, "scope", obj->scope);
   dest = json_str(dest, "function_name", obj->function_name);
   dest = json_int(dest, "size_destiny", obj->size_destiny);
   dest = json_int(dest, "size_primitive", obj->size_primitive);
-  dest = json_int(dest, "is_null_valid", obj->is_null_valid);
+  dest = json_int(dest, "is_ptr", obj->is_ptr);
   dest = json_int(dest, "mem_type_track", obj->type_track);
 
   // Close json and check generation
@@ -60,26 +62,36 @@ char *print_memtrack_obj_as_json(memtrack_log_t *obj) {
 }
 
 memtrack_log_t *
-map2check_save_memtrack_log(int line, int scope,
-                            long var_mem_address, long mem_address_points_to,
-                            bool is_dynamic, bool is_free, const char *ptr_name,
-                            const char *function_name, int size_destiny,
-                            int size_primitive, bool is_null_valid, mem_type_track type_track) {
+create_memtrack_object_log(int line,
+                            const char *var_name,
+                            long var_mem_address, 
+                            long mem_address_points_to,
+                            int scope_from_mem_address_points_to,
+                            bool is_dynamic, 
+                            bool is_free, 
+                            int scope,
+                            const char *function_name, 
+                            int size_destiny,
+                            int size_primitive, 
+                            bool is_ptr,
+                            mem_type_track type_track) {
 
   memtrack_log_t *obj = (memtrack_log_t *)malloc(sizeof(memtrack_log_t));
 
   obj->line = line;
   obj->step = get_next_step();
-  obj->scope = scope;
+  // attributes that are tracked
+  obj->var_name = var_name;
   obj->var_mem_address = var_mem_address;
   obj->mem_address_points_to = mem_address_points_to;
+  obj->scope_from_mem_address_points_to = scope_from_mem_address_points_to;
   obj->is_dynamic = is_dynamic;
-  obj->is_free = is_free;
-  obj->ptr_name = ptr_name;
+  obj->is_free = is_free;  
+  obj->scope = scope;
   obj->function_name = function_name;
   obj->size_destiny = size_destiny;
-  obj->size_primitive = size_primitive;
-  obj->is_null_valid = is_null_valid;
+  obj->size_primitive = size_primitive; 
+  obj->is_ptr = is_ptr; 
   obj->type_track = type_track;
 
   return obj;
@@ -117,7 +129,7 @@ void set_calloc(int quantity, memtrack_log_t *obj){
 
 // NOTE: realloc is modelling by set free and then execute a new malloc
 void set_free(memtrack_log_t *obj){
-  if(obj->var_mem_address == (long)NULL && obj->is_null_valid){
+  if(obj->var_mem_address == (long)NULL){
     return;
   }
 

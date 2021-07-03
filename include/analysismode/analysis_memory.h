@@ -18,7 +18,7 @@
 #ifndef __ANALYSISMODEMEMORY_H_INCLUDED__
 #define __ANALYSISMODEMEMORY_H_INCLUDED__
 
-typedef enum v_type {  
+typedef enum vm_type {  
   FREE,
   DEREF,
   MEMTRACK,
@@ -26,7 +26,7 @@ typedef enum v_type {
 } violated_mem_type;
 
 #include <stdbool.h>
-//#include "../memtrack/container_memtracklog.h"
+#include "../memtrack/container_memtracklog.h"
 
 // Call container_memtracklog and analyze the result
 
@@ -42,10 +42,6 @@ void vcc_memcheck_failed(bool vcc_result, unsigned line, unsigned scope,
 // This functions are from CallerLibraryCheckMemory.cpp
 
 void map2check_check_load(void *ptr, int line, unsigned scope, int size, const char *function_name);
-
-void map2check_check_free_resolved_address(void *ptr, unsigned line,
-                                     const char *function_name,
-                                     short int isNullValid);
 
 void map2check_check_free(const char *name, void *ptr, unsigned scope, unsigned line,
                     const char *function_name);

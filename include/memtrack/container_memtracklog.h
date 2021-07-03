@@ -32,20 +32,25 @@ struct memtracklog_list container_memtracklog;
 
 void map2check_init_container_memtracklog();
 
-void map2check_save_in_tail_container_memtracklog(memtrack_log_t *objmemtrack);
+void save_in_tail_container_memtracklog(memtrack_log_t *objmemtrack);
 
 void map2check_print_all_memtracklog_as_json();
 
 memtrack_log_t * search_in_container_by_address(long address);
 
-void map2check_track_data_in_cntr(const char *var_name, 
-                                  void *ptr_addres, 
-                                  int size,
-                                  int size_primitive, 
-                                  int line_number,                                   
-                                  int scope,                                  
-                                  int type_track,
-                                  int quantity_calloc);
+void map2check_save_memory_data_in_cntr(int line,
+                            const char *var_name,
+                            long var_mem_address, 
+                            long mem_address_points_to,
+                            int scope_from_mem_address_points_to,
+                            int is_dynamic, 
+                            int is_free, 
+                            int scope,
+                            const char *function_name, 
+                            int size_destiny,
+                            int size_primitive, 
+                            int is_ptr,
+                            int type_track);
 
 
 // Function from AnalysisModeMemory that handle with container_memtracklog

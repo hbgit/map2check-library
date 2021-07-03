@@ -29,7 +29,7 @@ bool is_null_valid = false;
 bool is_check_memcleanup = false;
 bool debug_analysis_mem = false;
 
-typedef enum v_type {  
+typedef enum vm_type {  
   FREE,
   DEREF,
   MEMTRACK,
@@ -76,18 +76,6 @@ void map2check_check_load(void *ptr, int line, unsigned scope, int size, const c
     if(!is_check_memcleanup){
         if(!(is_a_invalid_address_in_cntr((long)ptr, size))){
             vcc_memcheck_failed(true, line, scope, function_name, (long)ptr, DEREF);
-        }
-    }
-}
-
-void map2check_check_free_resolved_address(void *ptr, unsigned line,
-                                     const char *function_name,
-                                     short int isNullValid){
-    vcc_reset_meta_data();
-
-    if(!is_check_memcleanup){
-        if(free_resolved_address_in_cntr((long) ptr, is_null_valid)){
-            vcc_memcheck_failed(true, line, 0, function_name, (long)ptr, FREE);
         }
     }
 }
