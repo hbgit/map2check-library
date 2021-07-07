@@ -4,66 +4,160 @@ extern "C" {
 #include "../include/memtrack/memtracklog.h"
 }
 
-TEST(MemTrackLog, MemTrackLog_init) {
+TEST(MemTrackLog, MemTrackLog_create_memtrack_object_log) {
 
-  // memtrack_log_t *obj = map2check_save_memtrack_log(12, 2, 1441728, 144, 0,
-  //                                                   0, "v", "foo", 4, 4, 1);
+  memtrack_log_t *obj = create_memtrack_object_log(12,
+                            "v0",
+                            (long)123, 
+                            (long)9874561230,
+                            0,
+                            1, 
+                            0, 
+                            0,
+                            "main", 
+                            4,
+                            4, 
+                            1,
+                            INST_ALLOCA);
 
-  // const char *str =
-  //     "{\"step\":14,\"line\":12,\"scope\":2,\"var_mem_address\":1441728,\"mem_"
-  //     "address_points_to\":144,\"is_dynamic\":0,\"is_free\":0,\"ptr_name\":"
-  //     "\"v\",\"function_name\":\"foo\",\"size_destiny\":4,\"size_primitive\":4,"
-  //     "\"is_null_valid\":1}";
-
-  //EXPECT_STREQ(print_memtrack_obj_as_json(obj), str);
-  EXPECT_EQ(1,1);
+  EXPECT_EQ(obj->line,12);
+  EXPECT_EQ(obj->var_name,"v0");
+  EXPECT_EQ(obj->var_mem_address,123);
+  EXPECT_EQ(obj->mem_address_points_to,9874561230);
+  EXPECT_EQ(obj->type_track,INST_ALLOCA);
+  
 }
 
-// TEST(MemTrackLog, MemTrackLog_Obj_Equal) {
+TEST(MemTrackLog, MemTrackLog_print_memtrack_obj_as_json) {
+  memtrack_log_t *obj = create_memtrack_object_log(12,
+                            "v0",
+                            (long)123, 
+                            (long)9874561230,
+                            0,
+                            1, 
+                            0, 
+                            0,
+                            "main", 
+                            4,
+                            4, 
+                            1,
+                            INST_ALLOCA);
 
-//   memtrack_log_t *obj = map2check_save_memtrack_log(12, 2, 1441728, 144, 0,
-//                                                     0, "v", "foo", 4, 4, 1);
+  const char *str = "{\"step\":15,\"line\":12,\"ptr_name\":\"v0\",\"var_mem_address\":123,\"mem_address_points_to\":9874561230,\"scope_from_mem_address_points_to\":0,\"is_dynamic\":1,\"is_free\":0,\"scope\":0,\"function_name\":\"main\",\"size_destiny\":4,\"size_primitive\":4,\"is_ptr\":1,\"mem_type_track\":0}";
+  EXPECT_STREQ(print_memtrack_obj_as_json(obj), str);
+}
 
-//   memtrack_log_t *obj1 = map2check_save_memtrack_log(12, 2, 1441728, 144, 0,
-//                                                      0, "v", "foo", 4, 4, 1);
+TEST(MemTrackLog, MemTrackLog_is_equal_memtrack_obj) {
 
-//   memtrack_log_t *obj2 = map2check_save_memtrack_log(13, 2, 1441728, 144, 0,
-//                                                      0, "v", "foo", 4, 4, 1);
+  memtrack_log_t *obj = create_memtrack_object_log(12,
+                            "v0",
+                            (long)123, 
+                            (long)9874561230,
+                            0,
+                            1, 
+                            0, 
+                            0,
+                            "main", 
+                            4,
+                            4, 
+                            1,
+                            INST_ALLOCA);
 
-//   EXPECT_EQ(is_equal_memtrack_obj(obj, obj1), true);
-//   EXPECT_EQ(is_equal_memtrack_obj(obj, obj2), false);
-// }
+  memtrack_log_t *obj1 = create_memtrack_object_log(12,
+                            "v0",
+                            (long)123, 
+                            (long)9874561230,
+                            0,
+                            1, 
+                            0, 
+                            0,
+                            "main", 
+                            4,
+                            4, 
+                            1,
+                            INST_ALLOCA);
 
-// TEST(MemTrackLog, MemTrackLog_set_malloc) {
+  memtrack_log_t *obj3 = create_memtrack_object_log(12,
+                            "v0",
+                            (long)546, 
+                            (long)9874561230,
+                            0,
+                            1, 
+                            0, 
+                            0,
+                            "main", 
+                            4,
+                            4, 
+                            1,
+                            INST_ALLOCA);
 
-//   memtrack_log_t *obj = map2check_save_memtrack_log(12, 2, 1441728, 144, 0,
-//                                                     0, "v", "foo", 4, 4, 1);
+  EXPECT_EQ(is_equal_memtrack_obj(obj, obj1), true);
+  EXPECT_EQ(is_equal_memtrack_obj(obj, obj3), false);
+}
 
-//   set_malloc(obj);
+TEST(MemTrackLog, MemTrackLog_set_malloc) {
 
-//   EXPECT_EQ(obj->is_dynamic, true);
-// }
+  memtrack_log_t *obj = create_memtrack_object_log(12,
+                            "v0",
+                            (long)123, 
+                            (long)9874561230,
+                            0,
+                            0, 
+                            0, 
+                            0,
+                            "main", 
+                            4,
+                            4, 
+                            1,
+                            INST_ALLOCA);
 
-// TEST(MemTrackLog, MemTrackLog_set_calloc) {
+  set_malloc(obj);
 
-//   memtrack_log_t *obj = map2check_save_memtrack_log(12, 2, 1441728, 144, 0,
-//                                                     0, "v", "foo", 4, 4, 1);
+  EXPECT_EQ(obj->is_dynamic, true);
+}
 
-//   int tmp = obj->size_destiny;
-//   set_calloc(4, obj);
+TEST(MemTrackLog, MemTrackLog_set_calloc) {
 
-//   EXPECT_EQ(obj->is_dynamic, true);
-//   EXPECT_GE(obj->size_destiny, tmp);
-// }
+  memtrack_log_t *obj = create_memtrack_object_log(12,
+                            "v0",
+                            (long)123, 
+                            (long)9874561230,
+                            0,
+                            0, 
+                            0, 
+                            0,
+                            "main", 
+                            4,
+                            4, 
+                            1,
+                            INST_ALLOCA);
 
-// TEST(MemTrackLog, MemTrackLog_set_free) {
+  int tmp = obj->size_destiny;
+  set_calloc(4, obj);
 
-//   memtrack_log_t *obj = map2check_save_memtrack_log(12, 2, 1441728, 144, 0,
-//                                                     0, "v", "foo", 4, 4, 1);
+  EXPECT_EQ(obj->is_dynamic, true);
+  EXPECT_GE(obj->size_destiny, tmp);
+}
 
-//   set_malloc(obj);
-//   EXPECT_EQ(obj->is_dynamic, true);
+TEST(MemTrackLog, MemTrackLog_set_free) {
 
-//   set_free(obj);
-//   EXPECT_EQ(obj->is_free, true);
-// }
+  memtrack_log_t *obj = create_memtrack_object_log(12,
+                            "v0",
+                            (long)123, 
+                            (long)9874561230,
+                            0,
+                            0, 
+                            0, 
+                            0,
+                            "main", 
+                            4,
+                            4, 
+                            1,
+                            INST_ALLOCA);
+
+  set_malloc(obj);
+  EXPECT_EQ(obj->is_dynamic, true);
+
+  set_free(obj);
+  EXPECT_EQ(obj->is_free, true);
+}
