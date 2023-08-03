@@ -21,14 +21,17 @@ $ ./build.sh --debug
 
 You can also use our dockerfile to set up the environment to build map2check-library, as follows:
 
+- Installing map2check-library tools to build:
 ```Console
 $ docker build -t hbgit/map2checklibrary --no-cache -f Dockerfile .
 $ docker pull klee/klee:2.2
 $ sudo apt install -y python3-pip
 $ pip3 install --user cpp-coveralls
-# Building the tool
+```
+- Building and Testing the tool
+```Console
 $ docker run --rm -v $(pwd):/home/:Z --user $(id -u):$(id -g) hbgit/map2checklibrary /bin/bash -c "cd home/; ./build.sh -d -t"
-# KLEE and LibFuzzer testing
+# KLEE testing
 $ ./run_klee_test.sh
 ```
 

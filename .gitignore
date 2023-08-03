@@ -1,2 +1,4 @@
 build/*
 release-library/*
+codeklee_by_caller_test.bc
+fullprogram_2.bc

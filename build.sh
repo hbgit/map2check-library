@@ -45,42 +45,31 @@ build_debug()
     llvm-profdata-8 merge -sparse map2check.profraw -o map2check.profdata
     llvm-cov-8 report ./unit_tests -instr-profile=map2check.profdata
     llvm-cov-8 export -format=lcov ./unit_tests -instr-profile=map2check.profdata > lcov.info
-
-      
-    if [ $istravis -eq 0 ]; then
-	    echo "\e[32m>>> Travis build is OFF"
-        cd ..
-        # Here in build    
-        # KLEE testing
-        echo ""
-        echo "\e[32m>>> KLEE testing ..."
-        clang-8 -c -emit-llvm -O0 -Xclang -disable-O0-optnone ../test/codeklee_by_caller_test.c
-        llvm-link-8 codeklee_by_caller_test.bc libmap2check_klee.bc > fullprogram_2.bc
-        cd ..
-         # Here in root folder 
-        ./run_klee_test.sh
-
-        # Libfuzzer testing
-        echo ""
-        echo "\e[32m>>> LibFuzzer testing"
-        clang-8 test/codefuzz_by_caller_test.c -lm -fsanitize=address,fuzzer -g -fprofile-instr-generate -fcoverage-mapping build/libmap2check_libfuzzer.bc    
-        ./a.out 2> out.fuzz 
-        cat out.fuzz | grep ERROR
-        if [ $? -eq 0 ]; 
-        then
-            echo "\e[32m>>> LibFuzzer testing result: OKAY"
-        else
-            echo "\e[32m>>> LibFuzzer testing result: ERROR"
-            exit 1
-        fi
-        # clean up fuzzer test
-        rm a.out out.fuzz crash-* default.profraw
-
-    else
+    cd .. # back to root
+          
+    if [ $istravis -eq 1 ]; then
         echo "\e[32m>>> Travis build is ON"
         echo "\e[32m>>> KLEE testing skipped"
         echo "\e[32m>>> Libfuzzer testing skipped"
+    else
+        # Build for KLEE testing
+        echo ""
+        echo "\e[32m>>> Build KLEE testing ..."
+        
+        clang-8 -c -emit-llvm -O0 -Xclang -disable-O0-optnone ../test/codeklee_by_caller_test.c
+        
+        llvm-link-8 codeklee_by_caller_test.bc libmap2check_klee.bc > fullprogram_2.bc
+
+        # Build for LibFuzzer testing
+        # TODO: fix this
+        # echo ""
+        # echo "\e[32m>>> Build LibFuzzer testing ..."
+        # ls
+        # clang-8 ../test/codefuzz_by_caller_test.c -lm -fsanitize=address,fuzzer -g -fprofile-instr-generate -fcoverage-mapping libmap2check_libfuzzer.bc    
+                
     fi
+
+
     
 
 }

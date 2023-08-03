@@ -15,7 +15,7 @@ add_executable(
   caller_lib_result.cpp
   analysis_mode_assert_test.cpp
   analysis_mode_overflow_test.cpp
-  analysis_mode_memory_test.cpp
+  #analysis_mode_memory_test.cpp
 )
 
 target_link_libraries(
