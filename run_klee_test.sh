@@ -1,4 +1,8 @@
 #!/bin/sh
+
+echo ""
+echo "\e[32m>>> Run KLEE testing ..."
+
 cd build
   
 # run

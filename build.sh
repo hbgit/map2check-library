@@ -56,15 +56,13 @@ build_debug()
         echo ""
         echo "\e[32m>>> Build KLEE testing ..."
         
-        clang-8 -c -emit-llvm -O0 -Xclang -disable-O0-optnone ../test/codeklee_by_caller_test.c
-        
+        clang-8 -c -emit-llvm -O0 -Xclang -disable-O0-optnone ../test/codeklee_by_caller_test.c        
         llvm-link-8 codeklee_by_caller_test.bc libmap2check_klee.bc > fullprogram_2.bc
-
+        
         # Build for LibFuzzer testing
-        # TODO: fix this
         # echo ""
         # echo "\e[32m>>> Build LibFuzzer testing ..."
-        # ls
+        # # ls
         # clang-8 ../test/codefuzz_by_caller_test.c -lm -fsanitize=address,fuzzer -g -fprofile-instr-generate -fcoverage-mapping libmap2check_libfuzzer.bc    
                 
     fi
