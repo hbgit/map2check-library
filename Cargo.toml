@@ -1,0 +1,35 @@
+# SPDX-License-Identifier: GPL-3.0-only
+[package]
+name = "map2check-library"
+version = "1.0.0"
+edition = "2021"
+description = "Rust library to support Map2Check tool: tracks memory, basic blocks, and nondeterministic values, and checks safety properties"
+license = "GPL-3.0-only"
+authors = ["Herbert Rocha <herberthb12@gmail.com>"]
+
+[lib]
+name = "map2check"
+crate-type = ["staticlib", "rlib"]
+path = "rust/src/lib.rs"
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+
+[dev-dependencies]
+mockall = "0.13"
+
+[features]
+libfuzzer = []
+klee = []
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+panic = "abort"
+
+[profile.dev]
+opt-level = 0
+debug = true

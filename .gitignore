@@ -1,4 +1,23 @@
+# CMake build artifacts
 build/*
 release-library/*
+
+# LLVM bitcode (gerados por llvm-link)
 codeklee_by_caller_test.bc
 fullprogram_2.bc
+libmap2check_klee.bc
+libmap2check_libfuzzer.bc
+*.bc
+
+# Rust / Cargo build artifacts
+target/
+
+# Cobertura (cargo tarpaulin / llvm-cov)
+coverage/
+*.profraw
+*.profdata
+lcov.info
+tarpaulin-report.html
+
+# Header C gerado por cbindgen
+map2check.h
