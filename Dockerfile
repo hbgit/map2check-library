@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: GPL-3.0-only
 
 # ── Stage 1: Builder ──────────────────────────────────────────────────────────
-FROM rust:1.78-slim-bookworm AS builder
+FROM rust:1.82-slim-bookworm AS builder
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     clang-14 llvm-14 llvm-14-dev llvm-14-tools lld-14 \
@@ -9,16 +9,22 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 RUN rustup component add clippy rustfmt && \
-    cargo install cargo-tarpaulin cargo-audit cbindgen
+    cargo install cargo-tarpaulin cargo-audit cargo-deny cbindgen
 
 WORKDIR /build
 COPY Cargo.toml Cargo.lock* ./
 COPY clippy.toml deny.toml cbindgen.toml ./
-COPY src/ ./src/
+#adicionei os copy pedido 
+COPY rust-toolchain.toml ./
+COPY rust/ ./rust/
+COPY build.rs ./
+
+
 
 RUN cargo fetch
 RUN cargo build --release
-RUN cbindgen --config cbindgen.toml --crate map2check-library --output map2check.h || true
+
+
 
 # ── Stage 2: KLEE BC build ────────────────────────────────────────────────────
 FROM builder AS klee-bc
@@ -28,12 +34,12 @@ RUN RUSTFLAGS="-C instrument-coverage=no --emit=llvm-bc" \
     RUSTFLAGS="-C instrument-coverage=no" \
     cargo build --release --features klee
 
-RUN find target/release/deps -name "*.bc" -exec llvm-link-14 {} + -o libmap2check_klee.bc 2>/dev/null || true
+RUN find target/release/deps -name "*.bc" -exec llvm-link-14 {} + -o libmap2check_klee.bc || true
 
 # ── Stage 3: Test + Coverage ──────────────────────────────────────────────────
 FROM builder AS test
 
-COPY tests/ ./tests/
+COPY test/ ./test/
 
 RUN cargo test --all-features 2>&1 | tee /tmp/test-results.txt
 
@@ -41,8 +47,8 @@ RUN cargo tarpaulin \
     --out Lcov \
     --output-dir /coverage \
     --all-features \
-    --exclude-files "src/ffi.rs" \
-    || true
+    --exclude-files "src/ffi.rs" 
+    
 
 # ── Stage 4: Final minimal runtime image ──────────────────────────────────────
 FROM debian:bookworm-slim AS final
@@ -52,7 +58,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /build/target/release/libmap2check.a /usr/local/lib/
-COPY --from=builder /build/map2check.h /usr/local/include/
+COPY --from=builder /build/include/map2check.h /usr/local/include/
 COPY --from=test /coverage /coverage
 
 LABEL maintainer="herberthb12@gmail.com"
