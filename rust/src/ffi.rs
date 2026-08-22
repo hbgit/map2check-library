@@ -28,12 +28,12 @@ use crate::analysismode::VccChecker;
 use crate::analysismode::VccContext;
 use crate::bbtrack::BasicBlockEntry;
 use crate::caller::ViolatedProperty;
+use crate::error::Map2CheckError;
 use crate::memtrack::MemTrackEntry;
 use crate::nondet::NonDetEntry;
 use crate::nondet::NonDetValue;
 use crate::output;
 use crate::state;
-use crate::error::Map2CheckError;
 
 // — Helpers —————————————————————————————————————————————————————————————————
 
