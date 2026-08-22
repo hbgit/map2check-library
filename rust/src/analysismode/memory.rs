@@ -7,8 +7,7 @@ use crate::{
     analysismode::{VccChecker, VccContext, VccOutcome},
     caller::ViolatedProperty,
     error::Map2CheckError,
-    memtrack,
-    state,
+    memtrack, state,
 };
 
 // ── Load / dereference check ──────────────────────────────────────────────────

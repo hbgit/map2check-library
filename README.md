@@ -14,103 +14,81 @@ Biblioteca de suporte à ferramenta [Map2Check](https://github.com/hbgit/map2che
 
 ## Requisitos
 
-- Rust 1.82+ (`rustup`, edição 2021)
-- Para build de bitcode KLEE: `clang-8`, `llvm-link-8`
-- Para cobertura: `cargo-tarpaulin`
-- Para auditoria de dependências: `cargo-audit`, `cargo-deny`
-- Para geração do header C: `cbindgen`
+O projeto exige **Rust 1.82.0**, conforme definido em `rust-toolchain.toml` (edição 2021). O `rustup` seleciona automaticamente esse toolchain ao executar os comandos na raiz do projeto.
+
+Ferramentas necessárias:
+
+- `rustup` e `cargo`
+- Componentes Rust `clippy` e `rustfmt`
+- Docker, para o build da imagem
+- `cargo-tarpaulin`, `cargo-audit`, `cargo-deny` e `cbindgen` para cobertura, auditoria e desenvolvimento
+- `clang` e `llvm-link` para a geração do bitcode usado pelo KLEE
 
 ```sh
-# Instalar ferramentas de desenvolvimento
 rustup component add clippy rustfmt
 cargo install cargo-tarpaulin cargo-audit cargo-deny cbindgen
 ```
 
-## Build
+## Features disponíveis
 
-### Biblioteca (debug)
+As features configuradas no `Cargo.toml` são:
+
+- `libfuzzer`: habilita a integração com o LibFuzzer.
+- `klee`: habilita o build de bitcode para integração com o KLEE.
+
+## Build e testes
+
+Execute os comandos a seguir na raiz do projeto:
 
 ```sh
-cargo build
-# Saída: target/debug/libmap2check.a + target/debug/libmap2check.rlib
-```
-
-### Biblioteca (release)
-
-```sh
+# Compilar a biblioteca em modo release
 cargo build --release
-# Saída: target/release/libmap2check.a
+
+# Checar lint e possíveis erros
+cargo clippy
+
+# Verificar e formatar o código
+cargo fmt
+
+# Rodar todos os testes com todas as features ativadas
+cargo test --all-features
 ```
 
-### Com suporte a LibFuzzer
+O artefato principal é gerado em `target/release/libmap2check.a`.
+
+### Cobertura
+
+Para gerar o relatório de cobertura localmente:
 
 ```sh
-cargo build --release --features libfuzzer
+cargo tarpaulin --out Html --output-dir coverage/ --all-features
 ```
 
-### Com suporte a KLEE (bitcode)
+O relatório HTML fica em `coverage/tarpaulin-report.html`.
+
+### Geração do header C
+
+O arquivo `include/map2check.h` é gerado automaticamente durante a compilação. O script `build.rs` executa o `cbindgen` usando `cbindgen.toml` e grava o resultado na pasta `include/`. Portanto, não é necessário gerar o header manualmente.
+
+### Build via Docker
+
+O `Dockerfile` na raiz usa um build multi-stage para compilar a biblioteca, gerar o bitcode do KLEE, executar os testes e gerar a cobertura:
 
 ```sh
-RUSTFLAGS="--emit=llvm-bc" cargo build --release --features klee
-llvm-link-8 target/release/deps/*.bc -o libmap2check_klee.bc
-```
-
-### Gerar header C (cbindgen)
-
-```sh
-cbindgen --config cbindgen.toml --crate map2check-library --output map2check.h
-```
-
-### Build via Docker (multi-stage)
-
-```sh
-# Constrói todas as etapas: builder → klee-bc → test+coverage → imagem final
 docker build -t hbgit/map2check-library .
+```
 
-# Executar testes dentro do container
-docker run --rm hbgit/map2check-library
+Para executar o script de integração com KLEE:
 
-# KLEE integration test
+```sh
 docker pull klee/klee:2.2
 ./run_klee_test.sh
 ```
 
-## Testes
+## Linting e auditoria
 
 ```sh
-# Todos os testes (36 testes unitários)
-cargo test
-
-# Testes de um módulo específico
-cargo test memtrack
-cargo test analysismode::overflow
-cargo test output
-
-# Com output detalhado
-cargo test -- --nocapture
-
-# Com todas as features ativadas
-cargo test --all-features
-```
-
-## Cobertura
-
-```sh
-cargo tarpaulin --out Html --output-dir coverage/ --all-features
-# Relatório: coverage/tarpaulin-report.html
-# Meta: ≥ 80%
-```
-
-## Linting e Auditoria
-
-```sh
-# Clippy com regras pedantic
-cargo clippy -- -W clippy::pedantic -W clippy::nursery -D warnings
-
-# Verificação de vulnerabilidades conhecidas
 cargo audit
-
-# Verificação de licenças e políticas de dependência
 cargo deny check
 ```
 

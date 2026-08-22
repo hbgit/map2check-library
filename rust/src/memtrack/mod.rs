@@ -108,14 +108,16 @@ pub fn is_deref_error(entries: &[MemTrackEntry], address: usize) -> bool {
 /// Checks whether there is a memory cleanup error (leaked allocation still referenced).
 /// Replaces `has_a_memcleanup_error_in_cntr`.
 pub fn has_memcleanup_error(entries: &[MemTrackEntry]) -> bool {
-    entries.iter().rev().any(|e| e.is_dynamic && !e.is_free && {
-        // Check if any later entry still holds a pointer to this allocation
-        let leaked_addr = e.points_to;
-        entries
-            .iter()
-            .rev()
-            .take_while(|later| !std::ptr::eq(*later, e))
-            .any(|later| later.points_to == leaked_addr)
+    entries.iter().rev().any(|e| {
+        e.is_dynamic && !e.is_free && {
+            // Check if any later entry still holds a pointer to this allocation
+            let leaked_addr = e.points_to;
+            entries
+                .iter()
+                .rev()
+                .take_while(|later| !std::ptr::eq(*later, e))
+                .any(|later| later.points_to == leaked_addr)
+        }
     })
 }
 
@@ -123,9 +125,7 @@ pub fn has_memcleanup_error(entries: &[MemTrackEntry]) -> bool {
 /// Replaces `is_a_invalid_address_in_cntr`.
 pub fn is_invalid_address(entries: &[MemTrackEntry], address: usize, size: usize) -> bool {
     !entries.iter().rev().any(|e| {
-        !e.is_free
-            && address >= e.points_to
-            && address + size <= e.points_to + e.size_destiny
+        !e.is_free && address >= e.points_to && address + size <= e.points_to + e.size_destiny
     })
 }
 
@@ -139,8 +139,16 @@ pub fn find_by_address(entries: &[MemTrackEntry], address: usize) -> Option<&Mem
 mod tests {
     use super::*;
 
-    fn make_entry(var_addr: usize, points_to: usize, is_dynamic: bool, is_free: bool, size: usize) -> MemTrackEntry {
-        MemTrackEntry::new(1, 10, 0, var_addr, points_to, is_dynamic, is_free, "ptr", "main", size, 4, false)
+    fn make_entry(
+        var_addr: usize,
+        points_to: usize,
+        is_dynamic: bool,
+        is_free: bool,
+        size: usize,
+    ) -> MemTrackEntry {
+        MemTrackEntry::new(
+            1, 10, 0, var_addr, points_to, is_dynamic, is_free, "ptr", "main", size, 4, false,
+        )
     }
 
     #[test]

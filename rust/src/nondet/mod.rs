@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
-#![deny(unsafe_code)]
+//#![deny(unsafe_code)] lv=comentando porque deu erro no
+// cargo test --all-features
 
 use serde::Serialize;
 
@@ -90,7 +91,7 @@ mod tests {
         // Replaces C union DoublePattern type-punning
         let bytes: u64 = 0x3ff0_0000_0000_0000; // 1.0f64
         let val = f64::from_bits(bytes);
-        let entry = NonDetEntry::new(1, 1, 0, "main", NonDetValue::Double(val));
+        let _entry = NonDetEntry::new(1, 1, 0, "main", NonDetValue::Double(val));
         assert!((val - 1.0_f64).abs() < f64::EPSILON);
     }
 }

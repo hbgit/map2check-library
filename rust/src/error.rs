@@ -18,10 +18,7 @@ pub enum Map2CheckError {
     Serialization(#[from] serde_json::Error),
 
     #[error("integer overflow in {operation} at line {line}")]
-    OverflowDetected {
-        operation: &'static str,
-        line: u32,
-    },
+    OverflowDetected { operation: &'static str, line: u32 },
 
     #[error("null pointer dereference at line {line} in {function}")]
     NullDereference { line: u32, function: String },

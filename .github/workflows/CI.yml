@@ -1,0 +1,42 @@
+name: CI Map2Check Rust
+
+on:
+  push:
+    branches: [ "master", "feature/rust" ]
+  pull_request:
+    branches: [ "master", "feature/rust" ]
+
+jobs:
+  build_and_test:
+    runs-on: ubuntu-latest
+    
+    
+    defaults:
+      run:
+        working-directory: ./rust
+
+    steps:
+      - name: Baixar o código do repositório
+        uses: actions/checkout@v4
+
+      - name: Instalar o compilador Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+
+      - name: Verificar a formatação do código
+        run: cargo fmt --check
+
+      - name: Rodar o analisador estático (Clippy)
+        run: cargo clippy --all-targets --all-features -- -D warnings
+
+      - name: Compilar o projeto em modo Release
+        run: cargo build --release
+
+      - name: Rodar todos os testes
+        run: cargo test --all-features
+
+      - name: Checar segurança de dependências (cargo-deny)
+        uses: EmbarkStudios/cargo-deny-action@v1
+        with:
+          manifest-path: ./rust/Cargo.toml

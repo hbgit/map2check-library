@@ -41,7 +41,10 @@ mod tests {
 
     #[test]
     fn contains_line_finds_existing() {
-        let entries = vec![BasicBlockEntry::new(1, 10, "foo"), BasicBlockEntry::new(2, 20, "bar")];
+        let entries = vec![
+            BasicBlockEntry::new(1, 10, "foo"),
+            BasicBlockEntry::new(2, 20, "bar"),
+        ];
         assert!(contains_line(&entries, 10));
         assert!(contains_line(&entries, 20));
     }

@@ -33,3 +33,6 @@ panic = "abort"
 [profile.dev]
 opt-level = 0
 debug = true
+
+[build-dependencies]
+cbindgen = "0.26.0"
