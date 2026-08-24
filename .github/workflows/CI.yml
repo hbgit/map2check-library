@@ -39,4 +39,4 @@ jobs:
       - name: Checar segurança de dependências (cargo-deny)
         uses: EmbarkStudios/cargo-deny-action@v1
         with:
-          manifest-path: ./rust/Cargo.toml
+          manifest-path: ./Cargo.toml
