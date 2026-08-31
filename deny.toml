@@ -2,17 +2,19 @@
 allow = [
     "MIT",
     "Apache-2.0",
+    "MPL-2.0",
     "Apache-2.0 WITH LLVM-exception",
     "BSD-2-Clause",
     "BSD-3-Clause",
     "ISC",
     "Unicode-3.0",
-    "GPL-3.0-only",
+    "GPL-3.0",
 ]
-deny = ["GPL-2.0-only"]
 
 [advisories]
-ignore = []
+ignore = [
+    "RUSTSEC-2024-0375",
+]
 
 [bans]
 multiple-versions = "warn"

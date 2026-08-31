@@ -126,3 +126,11 @@ pub extern "C" fn __VERIFIER_nondet_double() -> f64 {
 pub extern "C" fn __VERIFIER_nondet_size_t() -> usize {
     read_u64() as usize
 }
+
+//lv
+// Cria uma função "falsa" apenas para os testes passarem no Linker
+#[cfg(test)]
+#[no_mangle]
+pub extern "C" fn __map2check_main__() -> i32 {
+    0 // Retorna 0 (sucesso) e não faz nada
+}

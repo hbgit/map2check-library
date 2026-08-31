@@ -6,11 +6,7 @@
 
 use serde::Serialize;
 
-use crate::{
-    caller::ViolatedProperty,
-    error::Map2CheckError,
-    state::AnalysisState,
-};
+use crate::{caller::ViolatedProperty, error::Map2CheckError, state::AnalysisState};
 
 /// Top-level JSON output structure.
 /// Schema matches what Map2Check tool expects from the library.

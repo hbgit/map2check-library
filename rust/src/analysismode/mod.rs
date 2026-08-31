@@ -31,7 +31,9 @@ impl VccContext {
 #[derive(Debug, PartialEq, Eq)]
 pub enum VccOutcome {
     Safe,
-    Violated { property: crate::caller::ViolatedProperty },
+    Violated {
+        property: crate::caller::ViolatedProperty,
+    },
 }
 
 /// Core trait that all analysis-mode checkers implement.

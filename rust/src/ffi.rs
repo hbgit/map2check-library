@@ -6,24 +6,36 @@
 
 use std::ffi::CStr;
 
-use crate::{
-    analysismode::{
-        assert::AssertChecker,
-        memory::{DerefChecker, FreeChecker, LoadChecker, MemCleanupChecker},
-        overflow::{
-            AddI32, AddU32, DivI32, DivU32, MulI32, MulU32, NegI32, ShlI32, ShrI32, ShrU32,
-            SubI32, SubU32,
-        },
-        VccChecker, VccContext,
-    },
-    bbtrack::BasicBlockEntry,
-    caller::ViolatedProperty,
-    memtrack::MemTrackEntry,
-    nondet::{NonDetEntry, NonDetValue},
-    output, state,
-};
+// Importações desmembradas para evitar bugs do cbindgen
+use crate::analysismode::assert::AssertChecker;
+use crate::analysismode::memory::DerefChecker;
+use crate::analysismode::memory::FreeChecker;
+use crate::analysismode::memory::LoadChecker;
+use crate::analysismode::memory::MemCleanupChecker;
+use crate::analysismode::overflow::AddI32;
+use crate::analysismode::overflow::AddU32;
+use crate::analysismode::overflow::DivI32;
+use crate::analysismode::overflow::DivU32;
+use crate::analysismode::overflow::MulI32;
+use crate::analysismode::overflow::MulU32;
+use crate::analysismode::overflow::NegI32;
+use crate::analysismode::overflow::ShlI32;
+use crate::analysismode::overflow::ShrI32;
+use crate::analysismode::overflow::ShrU32;
+use crate::analysismode::overflow::SubI32;
+use crate::analysismode::overflow::SubU32;
+use crate::analysismode::VccChecker;
+use crate::analysismode::VccContext;
+use crate::bbtrack::BasicBlockEntry;
+use crate::caller::ViolatedProperty;
+use crate::error::Map2CheckError;
+use crate::memtrack::MemTrackEntry;
+use crate::nondet::NonDetEntry;
+use crate::nondet::NonDetValue;
+use crate::output;
+use crate::state;
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
+// — Helpers —————————————————————————————————————————————————————————————————
 
 /// Convert a raw C string to &str, returning "" on null or invalid UTF-8.
 ///
@@ -38,7 +50,8 @@ unsafe fn c_str<'a>(ptr: *const std::os::raw::c_char) -> &'a str {
     unsafe { CStr::from_ptr(ptr) }.to_str().unwrap_or("")
 }
 
-fn log_error(e: &crate::error::Map2CheckError) {
+// A assinatura foi encurtada porque importamos o Map2CheckError ali em cima
+fn log_error(e: &Map2CheckError) {
     eprintln!("[map2check] error: {e}");
 }
 
@@ -60,7 +73,7 @@ fn run_vcc_check(checker: impl VccChecker, ctx: &VccContext, line: u32, fname: &
 // ── Initialisation ────────────────────────────────────────────────────────────
 
 /// Initialises all containers. Must be called before any tracking function.
-#[unsafe(no_mangle)]
+#[no_mangle]
 pub extern "C" fn map2check_init() {
     state::init();
 }
@@ -68,7 +81,7 @@ pub extern "C" fn map2check_init() {
 // ── Result management ─────────────────────────────────────────────────────────
 
 /// Records a verification success and prints the JSON report.
-#[unsafe(no_mangle)]
+#[no_mangle]
 pub extern "C" fn map2check_success() {
     if let Err(e) = state::with_state(|s| {
         s.result.ok = true;
@@ -82,7 +95,7 @@ pub extern "C" fn map2check_success() {
 ///
 /// # Safety
 /// `function_name` must be null or a valid null-terminated C string.
-#[unsafe(no_mangle)]
+#[no_mangle]
 pub unsafe extern "C" fn set_false_result(
     prp: ViolatedProperty,
     line_number: i32,
@@ -99,19 +112,19 @@ pub unsafe extern "C" fn set_false_result(
 }
 
 /// Returns the currently violated property.
-#[unsafe(no_mangle)]
+#[no_mangle]
 pub extern "C" fn get_current_property() -> ViolatedProperty {
     state::with_state(|s| Ok(s.result.property)).unwrap_or(ViolatedProperty::None)
 }
 
 /// Returns the current step counter value.
-#[unsafe(no_mangle)]
+#[no_mangle]
 pub extern "C" fn get_current_step() -> u64 {
     state::with_state(|s| Ok(s.current_step())).unwrap_or(0)
 }
 
 /// Prints the full JSON report to stdout.
-#[unsafe(no_mangle)]
+#[no_mangle]
 pub extern "C" fn print_all_containers_as_json() {
     if let Err(e) = state::with_state(|s| output::print_json(s)) {
         log_error(&e);
@@ -119,7 +132,7 @@ pub extern "C" fn print_all_containers_as_json() {
 }
 
 /// Resets violation metadata without clearing tracking containers.
-#[unsafe(no_mangle)]
+#[no_mangle]
 pub extern "C" fn vcc_reset_meta_data() {
     if let Err(e) = state::with_state(|s| {
         s.result.property = ViolatedProperty::None;
@@ -133,11 +146,11 @@ pub extern "C" fn vcc_reset_meta_data() {
 }
 
 /// Enables memcleanup checking at end of program.
-#[unsafe(no_mangle)]
+#[no_mangle]
 pub extern "C" fn map2check_set_memcleanup() {}
 
 /// Marks NULL as valid for the current scope's pointer checks.
-#[unsafe(no_mangle)]
+#[no_mangle]
 pub extern "C" fn map2check_set_null_is_valid() {}
 
 // ── NonDet tracking ───────────────────────────────────────────────────────────
@@ -146,7 +159,7 @@ macro_rules! nondet_ffi {
     ($fn_name:ident, $variant:ident, $rust_ty:ty, $c_ty:ty) => {
         /// # Safety
         /// `function_name` must be null or a valid null-terminated C string.
-        #[unsafe(no_mangle)]
+        #[no_mangle]
         pub unsafe extern "C" fn $fn_name(
             line: i32,
             scope: i32,
@@ -172,11 +185,11 @@ macro_rules! nondet_ffi {
     };
 }
 
-nondet_ffi!(map2check_save_nondet_log_int,    Int,    i32, i32);
-nondet_ffi!(map2check_save_nondet_log_uint,   UInt,   u32, u32);
-nondet_ffi!(map2check_save_nondet_log_long,   Long,   i64, i64);
-nondet_ffi!(map2check_save_nondet_log_char,   Char,   u8,  u8);
-nondet_ffi!(map2check_save_nondet_log_float,  Float,  f32, f32);
+nondet_ffi!(map2check_save_nondet_log_int, Int, i32, i32);
+nondet_ffi!(map2check_save_nondet_log_uint, UInt, u32, u32);
+nondet_ffi!(map2check_save_nondet_log_long, Long, i64, i64);
+nondet_ffi!(map2check_save_nondet_log_char, Char, u8, u8);
+nondet_ffi!(map2check_save_nondet_log_float, Float, f32, f32);
 nondet_ffi!(map2check_save_nondet_log_double, Double, f64, f64);
 
 // ── Basic-block tracking ──────────────────────────────────────────────────────
@@ -185,7 +198,7 @@ nondet_ffi!(map2check_save_nondet_log_double, Double, f64, f64);
 ///
 /// # Safety
 /// `function_name` must be null or a valid null-terminated C string.
-#[unsafe(no_mangle)]
+#[no_mangle]
 pub unsafe extern "C" fn map2check_save_basic_block_log(
     line: i32,
     function_name: *const std::os::raw::c_char,
@@ -194,7 +207,8 @@ pub unsafe extern "C" fn map2check_save_basic_block_log(
     let fname = unsafe { c_str(function_name) };
     if let Err(e) = state::with_state(|s| {
         let step = s.next_step();
-        s.bbtrack.push(BasicBlockEntry::new(step, line as u32, fname));
+        s.bbtrack
+            .push(BasicBlockEntry::new(step, line as u32, fname));
         Ok(())
     }) {
         log_error(&e);
@@ -202,16 +216,14 @@ pub unsafe extern "C" fn map2check_save_basic_block_log(
 }
 
 /// Returns 1 if `line` was recorded as executed, 0 otherwise.
-#[unsafe(no_mangle)]
+#[no_mangle]
 pub extern "C" fn map2check_is_in_trackbb_container(line: i32) -> i32 {
     state::with_state(|s| {
-        Ok(
-            if crate::bbtrack::contains_line(&s.bbtrack, line as u32) {
-                1
-            } else {
-                0
-            },
-        )
+        Ok(if crate::bbtrack::contains_line(&s.bbtrack, line as u32) {
+            1
+        } else {
+            0
+        })
     })
     .unwrap_or(0)
 }
@@ -220,7 +232,7 @@ pub extern "C" fn map2check_is_in_trackbb_container(line: i32) -> i32 {
 
 /// # Safety
 /// `var_name` must be null or a valid null-terminated C string; `ptr_address` may be null.
-#[unsafe(no_mangle)]
+#[no_mangle]
 pub unsafe extern "C" fn map2check_map_alloca(
     var_name: *const std::os::raw::c_char,
     ptr_address: *const std::os::raw::c_void,
@@ -256,16 +268,24 @@ pub unsafe extern "C" fn map2check_map_alloca(
 
 /// # Safety
 /// `ptr_address` may be null (null malloc result is valid C).
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn map2check_map_malloc(
-    ptr_address: *const std::os::raw::c_void,
-    size: i32,
-) {
+#[no_mangle]
+pub unsafe extern "C" fn map2check_map_malloc(ptr_address: *const std::os::raw::c_void, size: i32) {
     let addr = ptr_address as usize;
     if let Err(e) = state::with_state(|s| {
         let step = s.next_step();
         let mut entry = MemTrackEntry::new(
-            step, 0, 0, addr, addr, false, false, "", "", size as usize, 1, false,
+            step,
+            0,
+            0,
+            addr,
+            addr,
+            false,
+            false,
+            "",
+            "",
+            size as usize,
+            1,
+            false,
         );
         entry.set_malloc();
         s.memtrack.push(entry);
@@ -277,7 +297,7 @@ pub unsafe extern "C" fn map2check_map_malloc(
 
 /// # Safety
 /// `ptr_address` may be null.
-#[unsafe(no_mangle)]
+#[no_mangle]
 pub unsafe extern "C" fn map2check_map_calloc(
     ptr_address: *const std::os::raw::c_void,
     quantity: i32,
@@ -287,7 +307,18 @@ pub unsafe extern "C" fn map2check_map_calloc(
     if let Err(e) = state::with_state(|s| {
         let step = s.next_step();
         let mut entry = MemTrackEntry::new(
-            step, 0, 0, addr, addr, false, false, "", "", size as usize, 1, false,
+            step,
+            0,
+            0,
+            addr,
+            addr,
+            false,
+            false,
+            "",
+            "",
+            size as usize,
+            1,
+            false,
         );
         entry.set_calloc(quantity as usize);
         s.memtrack.push(entry);
@@ -299,7 +330,7 @@ pub unsafe extern "C" fn map2check_map_calloc(
 
 /// # Safety
 /// `var_name` and `function_name` must be null or valid null-terminated C strings.
-#[unsafe(no_mangle)]
+#[no_mangle]
 pub unsafe extern "C" fn map2check_map_free(
     var_name: *const std::os::raw::c_char,
     ptr_address: *const std::os::raw::c_void,
@@ -314,7 +345,18 @@ pub unsafe extern "C" fn map2check_map_free(
     if let Err(e) = state::with_state(|s| {
         let step = s.next_step();
         let mut entry = MemTrackEntry::new(
-            step, line_number, scope, addr, addr, true, false, name, fname, 0, 1, false,
+            step,
+            line_number,
+            scope,
+            addr,
+            addr,
+            true,
+            false,
+            name,
+            fname,
+            0,
+            1,
+            false,
         );
         entry.set_free();
         s.memtrack.push(entry);
@@ -326,7 +368,7 @@ pub unsafe extern "C" fn map2check_map_free(
 
 /// # Safety
 /// `var_name` and `funct_name` must be null or valid null-terminated C strings.
-#[unsafe(no_mangle)]
+#[no_mangle]
 pub unsafe extern "C" fn map2check_map_store_pointer(
     var_address: *const std::os::raw::c_void,
     value: *const std::os::raw::c_void,
@@ -368,7 +410,7 @@ pub unsafe extern "C" fn map2check_map_store_pointer(
 ///
 /// # Safety
 /// `function_name` must be null or a valid null-terminated C string.
-#[unsafe(no_mangle)]
+#[no_mangle]
 pub unsafe extern "C" fn map2check_is_valid_assert(
     line_number: i32,
     function_name: *const std::os::raw::c_char,
@@ -398,7 +440,7 @@ macro_rules! overflow_ffi_binop {
     ($fn_name:ident, $checker:ident, $ty:ty) => {
         /// # Safety
         /// `function_name` must be null or a valid null-terminated C string.
-        #[unsafe(no_mangle)]
+        #[no_mangle]
         pub unsafe extern "C" fn $fn_name(
             param1: $ty,
             param2: $ty,
@@ -409,7 +451,15 @@ macro_rules! overflow_ffi_binop {
             // SAFETY: caller guarantees function_name is valid or null.
             let fname = unsafe { c_str(function_name) };
             let ctx = VccContext::new(line, scope, fname);
-            run_vcc_check($checker { lhs: param1, rhs: param2 }, &ctx, line, fname);
+            run_vcc_check(
+                $checker {
+                    lhs: param1,
+                    rhs: param2,
+                },
+                &ctx,
+                line,
+                fname,
+            );
         }
     };
 }
@@ -418,7 +468,7 @@ macro_rules! overflow_ffi_shift {
     ($fn_name:ident, $checker:ident, $ty:ty) => {
         /// # Safety
         /// `function_name` must be null or a valid null-terminated C string.
-        #[unsafe(no_mangle)]
+        #[no_mangle]
         pub unsafe extern "C" fn $fn_name(
             param1: $ty,
             param2: u32,
@@ -429,14 +479,22 @@ macro_rules! overflow_ffi_shift {
             // SAFETY: caller guarantees function_name is valid or null.
             let fname = unsafe { c_str(function_name) };
             let ctx = VccContext::new(line, scope, fname);
-            run_vcc_check($checker { lhs: param1, rhs: param2 }, &ctx, line, fname);
+            run_vcc_check(
+                $checker {
+                    lhs: param1,
+                    rhs: param2,
+                },
+                &ctx,
+                line,
+                fname,
+            );
         }
     };
 }
 
 /// # Safety
 /// `function_name` must be null or a valid null-terminated C string.
-#[unsafe(no_mangle)]
+#[no_mangle]
 pub unsafe extern "C" fn map2check_binop_neg_int(
     param1: i32,
     line: u32,
@@ -449,16 +507,16 @@ pub unsafe extern "C" fn map2check_binop_neg_int(
     run_vcc_check(NegI32 { val: param1 }, &ctx, line, fname);
 }
 
-overflow_ffi_binop!(map2check_binop_add_int,      AddI32, i32);
-overflow_ffi_binop!(map2check_binop_sub_int,      SubI32, i32);
-overflow_ffi_binop!(map2check_binop_mul_int,      MulI32, i32);
-overflow_ffi_binop!(map2check_binop_div_int,      DivI32, i32);
+overflow_ffi_binop!(map2check_binop_add_int, AddI32, i32);
+overflow_ffi_binop!(map2check_binop_sub_int, SubI32, i32);
+overflow_ffi_binop!(map2check_binop_mul_int, MulI32, i32);
+overflow_ffi_binop!(map2check_binop_div_int, DivI32, i32);
 overflow_ffi_binop!(map2check_binop_add_unsigned, AddU32, u32);
 overflow_ffi_binop!(map2check_binop_sub_unsigned, SubU32, u32);
 overflow_ffi_binop!(map2check_binop_mul_unsigned, MulU32, u32);
 overflow_ffi_binop!(map2check_binop_div_unsigned, DivU32, u32);
-overflow_ffi_shift!(map2check_binop_shl_int,      ShlI32, i32);
-overflow_ffi_shift!(map2check_binop_shr_int,      ShrI32, i32);
+overflow_ffi_shift!(map2check_binop_shl_int, ShlI32, i32);
+overflow_ffi_shift!(map2check_binop_shr_int, ShrI32, i32);
 overflow_ffi_shift!(map2check_binop_shr_unsigned, ShrU32, u32);
 
 // ── Analysis mode: memory ─────────────────────────────────────────────────────
@@ -467,7 +525,7 @@ overflow_ffi_shift!(map2check_binop_shr_unsigned, ShrU32, u32);
 ///
 /// # Safety
 /// `function_name` must be null or a valid null-terminated C string; `ptr` may be null.
-#[unsafe(no_mangle)]
+#[no_mangle]
 pub unsafe extern "C" fn map2check_check_load(
     ptr: *const std::os::raw::c_void,
     line: i32,
@@ -479,7 +537,11 @@ pub unsafe extern "C" fn map2check_check_load(
     let fname = unsafe { c_str(function_name) };
     let ctx = VccContext::new(line as u32, scope, fname);
     run_vcc_check(
-        LoadChecker { address: ptr as usize, size: size as usize, is_null_valid: false },
+        LoadChecker {
+            address: ptr as usize,
+            size: size as usize,
+            is_null_valid: false,
+        },
         &ctx,
         line as u32,
         fname,
@@ -490,7 +552,7 @@ pub unsafe extern "C" fn map2check_check_load(
 ///
 /// # Safety
 /// `function_name` must be null or a valid null-terminated C string; `ptr` may be null.
-#[unsafe(no_mangle)]
+#[no_mangle]
 pub unsafe extern "C" fn map2check_check_free(
     _name: *const std::os::raw::c_char,
     ptr: *const std::os::raw::c_void,
@@ -501,14 +563,21 @@ pub unsafe extern "C" fn map2check_check_free(
     // SAFETY: caller guarantees function_name is valid or null.
     let fname = unsafe { c_str(function_name) };
     let ctx = VccContext::new(line, 0, fname);
-    run_vcc_check(FreeChecker { address: ptr as usize }, &ctx, line, fname);
+    run_vcc_check(
+        FreeChecker {
+            address: ptr as usize,
+        },
+        &ctx,
+        line,
+        fname,
+    );
 }
 
 /// Checks whether dereferencing `ptr` is valid.
 ///
 /// # Safety
 /// `function_name` must be null or a valid null-terminated C string; `ptr` may be null.
-#[unsafe(no_mangle)]
+#[no_mangle]
 pub unsafe extern "C" fn map2check_check_deref(
     ptr: *const std::os::raw::c_void,
     scope: u32,
@@ -518,11 +587,18 @@ pub unsafe extern "C" fn map2check_check_deref(
     // SAFETY: caller guarantees function_name is valid or null.
     let fname = unsafe { c_str(function_name) };
     let ctx = VccContext::new(line, scope, fname);
-    run_vcc_check(DerefChecker { address: ptr as usize }, &ctx, line, fname);
+    run_vcc_check(
+        DerefChecker {
+            address: ptr as usize,
+        },
+        &ctx,
+        line,
+        fname,
+    );
 }
 
 /// Checks for memory leaks at end of program.
-#[unsafe(no_mangle)]
+#[no_mangle]
 pub extern "C" fn map2check_check_mem_endprog() {
     let ctx = VccContext::new(0, 0, "end_of_program");
     run_vcc_check(MemCleanupChecker, &ctx, 0, "end_of_program");
