@@ -38,9 +38,9 @@ jobs:
           manifest-path: ./Cargo.toml
 
       - name: Auditoria de segurança (cargo-audit)
-        run: |
-          cargo install cargo-audit
-          cargo audit
+        uses: rustsec/audit-check@v2
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build do Dockerfile
         run: docker build .
