@@ -22,7 +22,7 @@ COPY build.rs ./
 
 
 RUN cargo fetch
-RUN cargo build --release
+RUN mkdir -p include && cargo build --release
 
 
 
@@ -47,7 +47,7 @@ RUN cargo tarpaulin \
     --out Lcov \
     --output-dir /coverage \
     --all-features \
-    --exclude-files "src/ffi.rs" 
+    --exclude-files "rust/src/ffi.rs" 
     
 
 # ── Stage 4: Final minimal runtime image ──────────────────────────────────────

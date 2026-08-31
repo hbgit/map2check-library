@@ -11,10 +11,6 @@ jobs:
     runs-on: ubuntu-latest
     
     
-    defaults:
-      run:
-        working-directory: ./rust
-
     steps:
       - name: Baixar o código do repositório
         uses: actions/checkout@v4
@@ -40,3 +36,11 @@ jobs:
         uses: EmbarkStudios/cargo-deny-action@v2
         with:
           manifest-path: ./Cargo.toml
+
+      - name: Auditoria de segurança (cargo-audit)
+        run: |
+          cargo install cargo-audit
+          cargo audit
+
+      - name: Build do Dockerfile
+        run: docker build .

@@ -1,22 +1,27 @@
 use std::env;
+use std::path::Path;
 
 fn main() {
     // Pega o diretório raiz do projeto
     let crate_dir = env::var("CARGO_MANIFEST_DIR").unwrap();
+
+    // Garante que o diretório include/ existe
+    let include_dir = Path::new(&crate_dir).join("include");
+    std::fs::create_dir_all(&include_dir).expect("Falha ao criar o diretório include/");
 
     // Tenta ler as configurações do cbindgen.toml, se existir
     let config = cbindgen::Config::from_file("cbindgen.toml").unwrap_or_default();
 
     // Gera o header e salva na pasta include/
     cbindgen::Builder::new()
-        .with_crate(crate_dir)
+        .with_crate(&crate_dir)
         .with_config(config)
         .generate()
         .expect("Falha ao gerar o header C")
-        .write_to_file("include/map2check.h");
+        .write_to_file(include_dir.join("map2check.h"));
 
     // Avisa ao compilador para rodar este script novamente APENAS se
     // os arquivos Rust mudarem
-    println!("cargo:rerun-if-changed=src/");
+    println!("cargo:rerun-if-changed=rust/src/");
     println!("cargo:rerun-if-changed=cbindgen.toml");
 }

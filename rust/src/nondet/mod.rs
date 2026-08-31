@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-//#![deny(unsafe_code)] lv=comentando porque deu erro no
-// cargo test --all-features
+#![cfg_attr(not(feature = "libfuzzer"), deny(unsafe_code))]
 
 use serde::Serialize;
 
