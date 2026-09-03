@@ -9,14 +9,18 @@ on:
 jobs:
   build_and_test:
     runs-on: ubuntu-latest
+<<<<<<< HEAD
     
     
+=======
+
+>>>>>>> 557da6e (3 de set. de 2026, 14:50)
     steps:
       - name: Baixar o código do repositório
         uses: actions/checkout@v4
 
       - name: Instalar o compilador Rust
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@1.82.0
         with:
           components: clippy, rustfmt
 

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #![deny(unsafe_code)]
 
-use std::sync::{Arc, Mutex, OnceLock};
+use std::sync::{Mutex, OnceLock};
 
 use crate::{
     bbtrack::BasicBlockEntry,
@@ -11,7 +11,7 @@ use crate::{
     nondet::NonDetEntry,
 };
 
-static ANALYSIS_STATE: OnceLock<Arc<Mutex<AnalysisState>>> = OnceLock::new();
+static ANALYSIS_STATE: OnceLock<Mutex<AnalysisState>> = OnceLock::new();
 
 #[derive(Debug, Default)]
 pub struct AnalysisState {
@@ -43,23 +43,72 @@ impl AnalysisState {
     }
 }
 
+fn ensure_state() -> &'static Mutex<AnalysisState> {
+    ANALYSIS_STATE.get_or_init(|| Mutex::new(AnalysisState::default()))
+}
+
 pub fn init() {
-    ANALYSIS_STATE.get_or_init(|| Arc::new(Mutex::new(AnalysisState::default())));
+    let _ = ensure_state();
 }
 
-pub fn get() -> Result<Arc<Mutex<AnalysisState>>, Map2CheckError> {
-    ANALYSIS_STATE
-        .get()
-        .cloned()
-        .ok_or(Map2CheckError::NotInitialized)
+pub fn reset() {
+    let state = ensure_state();
+    match state.lock() {
+        Ok(mut guard) => guard.reset(),
+        Err(poisoned) => {
+            let mut guard = poisoned.into_inner();
+            guard.reset();
+        }
+    }
 }
 
-/// Convenience: lock the global state and apply a closure.
+pub fn get() -> Result<&'static Mutex<AnalysisState>, Map2CheckError> {
+    Ok(ensure_state())
+}
+
+/// Locks the process-wide analysis state and applies a closure.
+///
+/// This function is intentionally non-reentrant: it serializes access to the
+/// singleton state via a global mutex and should not be called from a path that
+/// can re-enter the same FFI boundary while the lock is held. Code that needs to
+/// mutate the state should do so within a single closure and avoid nested calls
+/// into other exported `extern "C"` functions.
 pub fn with_state<F, R>(f: F) -> Result<R, Map2CheckError>
 where
     F: FnOnce(&mut AnalysisState) -> Result<R, Map2CheckError>,
 {
-    let arc = get()?;
-    let mut guard = arc.lock()?;
+    let state = get()?;
+    let mut guard = state.lock()?;
     f(&mut guard)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn reset_clears_global_state() {
+        init();
+        with_state(|s| {
+            s.set_false(ViolatedProperty::MemsafetyDeref, 42, "test_fn");
+            s.nondets.push(NonDetEntry::new(
+                1,
+                42,
+                0,
+                "test_fn",
+                crate::nondet::NonDetValue::Int(7),
+            ));
+            Ok(())
+        })
+        .unwrap();
+
+        reset();
+
+        let state = ensure_state();
+        let guard = state.lock().unwrap();
+        assert!(guard.result.function_name.is_empty());
+        assert!(guard.nondets.is_empty());
+        assert!(guard.memtrack.is_empty());
+        assert!(guard.bbtrack.is_empty());
+    }
 }

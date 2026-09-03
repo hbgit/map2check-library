@@ -4,13 +4,11 @@
 // Replaces nondet_gen_libfuzzer.c — eliminates all union type-punning
 // by using f32::from_bits() / f64::from_bits() from safe Rust.
 
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicPtr, AtomicUsize, Ordering};
 
 static FUZZER_CURSOR: AtomicUsize = AtomicUsize::new(0);
 static FUZZER_SIZE: AtomicUsize = AtomicUsize::new(0);
-
-// Safety: written once from LLVMFuzzerTestOneInput before any reads.
-static mut FUZZER_DATA: *const u8 = std::ptr::null();
+static FUZZER_DATA: AtomicPtr<u8> = AtomicPtr::new(std::ptr::null_mut());
 
 /// Called by LibFuzzer before the test target runs.
 ///
@@ -19,8 +17,10 @@ static mut FUZZER_DATA: *const u8 = std::ptr::null();
 /// This is guaranteed by the LibFuzzer runtime contract.
 #[no_mangle]
 pub unsafe extern "C" fn LLVMFuzzerTestOneInput(data: *const u8, size: usize) -> i32 {
+    crate::state::reset();
+
     // SAFETY: LibFuzzer guarantees `data` is valid for `size` bytes.
-    FUZZER_DATA = data;
+    FUZZER_DATA.store(data as *mut u8, Ordering::SeqCst);
     FUZZER_SIZE.store(size, Ordering::SeqCst);
     FUZZER_CURSOR.store(0, Ordering::SeqCst);
 
@@ -37,8 +37,10 @@ fn read_bytes(n: usize) -> Option<&'static [u8]> {
     if cursor + n > size {
         return None;
     }
+
+    let ptr = FUZZER_DATA.load(Ordering::SeqCst);
     // SAFETY: FUZZER_DATA was set from a valid LibFuzzer buffer; cursor+n <= size.
-    let slice = unsafe { std::slice::from_raw_parts(FUZZER_DATA.add(cursor), n) };
+    let slice = unsafe { std::slice::from_raw_parts(ptr.add(cursor), n) };
     FUZZER_CURSOR.store(cursor + n, Ordering::SeqCst);
     Some(slice)
 }
