@@ -61,6 +61,11 @@ extern void map2check_binop_neg_int(int value,
 
 extern int __VERIFIER_nondet_int(void);
 extern unsigned int __VERIFIER_nondet_uint(void);
+extern int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size);
+
+int __map2check_main__(void) {
+    return 0;
+}
 
 static void run_bad_inputs(void) {
     /* chamadas antes do init() */
@@ -101,6 +106,16 @@ int main(void) {
 
     /* rodada 3: segunda rodada hostil */
     run_bad_inputs();
+
+    /* duas iteracoes consecutivas devem iniciar com estado independente */
+    {
+        const uint8_t first_input[] = {0x01, 0x02, 0x03, 0x04};
+        const uint8_t second_input[] = {0xa0, 0xb0};
+        if (LLVMFuzzerTestOneInput(first_input, sizeof(first_input)) != 0 ||
+            LLVMFuzzerTestOneInput(second_input, sizeof(second_input)) != 0) {
+            return 1;
+        }
+    }
 
     map2check_success();
     return 0;

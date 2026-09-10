@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #![deny(unsafe_code)]
 
-use std::sync::{Mutex, OnceLock};
+use std::sync::{LazyLock, Mutex};
 
 use crate::{
     bbtrack::BasicBlockEntry,
@@ -11,7 +11,8 @@ use crate::{
     nondet::NonDetEntry,
 };
 
-static ANALYSIS_STATE: OnceLock<Mutex<AnalysisState>> = OnceLock::new();
+static ANALYSIS_STATE: LazyLock<Mutex<AnalysisState>> =
+    LazyLock::new(|| Mutex::new(AnalysisState::default()));
 
 #[derive(Debug, Default)]
 pub struct AnalysisState {
@@ -44,7 +45,7 @@ impl AnalysisState {
 }
 
 fn ensure_state() -> &'static Mutex<AnalysisState> {
-    ANALYSIS_STATE.get_or_init(|| Mutex::new(AnalysisState::default()))
+    &ANALYSIS_STATE
 }
 
 pub fn init() {

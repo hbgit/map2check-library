@@ -70,7 +70,7 @@ fn run_vcc_check(checker: impl VccChecker, ctx: &VccContext, line: u32, fname: &
     }
 }
 
-fn ffi_guard<T>(f: impl FnOnce() -> T, default: T) -> T {
+pub(crate) fn ffi_guard<T>(f: impl FnOnce() -> T, default: T) -> T {
     match std::panic::catch_unwind(std::panic::AssertUnwindSafe(f)) {
         Ok(value) => value,
         Err(_) => {
