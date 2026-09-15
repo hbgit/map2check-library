@@ -9,12 +9,6 @@ on:
 jobs:
   build_and_test:
     runs-on: ubuntu-latest
-<<<<<<< HEAD
-    
-    
-=======
-
->>>>>>> 557da6e (3 de set. de 2026, 14:50)
     steps:
       - name: Baixar o código do repositório
         uses: actions/checkout@v4
