@@ -96,6 +96,21 @@ pub fn is_invalid_free(entries: &[MemTrackEntry], address: usize) -> bool {
         .unwrap_or(false)
 }
 
+/// Checks whether freeing the already-resolved heap `address` is invalid.
+/// Unlike [`is_invalid_free`], which matches on the pointer *variable's* own
+/// slot (`var_addr`), this matches on the target heap address (`points_to`) —
+/// the value obtained after following one level of indirection. Used by
+/// `map2check_check_free_resolved_address`, which receives the resolved
+/// pointer value directly instead of the address of the pointer variable.
+pub fn is_invalid_free_resolved(entries: &[MemTrackEntry], address: usize) -> bool {
+    entries
+        .iter()
+        .rev()
+        .find(|e| e.points_to == address)
+        .map(|e| e.is_free)
+        .unwrap_or(false)
+}
+
 /// Checks whether dereferencing `address` is invalid (not allocated or already freed).
 /// Replaces `is_addr_a_deref_error_in_cntr`.
 pub fn is_deref_error(entries: &[MemTrackEntry], address: usize) -> bool {
@@ -161,6 +176,24 @@ mod tests {
     fn valid_free_not_flagged() {
         let entries = vec![make_entry(0x100, 0x200, true, false, 8)];
         assert!(!is_invalid_free(&entries, 0x100));
+    }
+
+    #[test]
+    fn invalid_free_resolved_detected_when_already_freed() {
+        let entries = vec![make_entry(0x100, 0x200, true, true, 8)];
+        assert!(is_invalid_free_resolved(&entries, 0x200));
+    }
+
+    #[test]
+    fn valid_free_resolved_not_flagged() {
+        let entries = vec![make_entry(0x100, 0x200, true, false, 8)];
+        assert!(!is_invalid_free_resolved(&entries, 0x200));
+    }
+
+    #[test]
+    fn free_resolved_unknown_address_not_flagged() {
+        let entries = vec![make_entry(0x100, 0x200, true, false, 8)];
+        assert!(!is_invalid_free_resolved(&entries, 0xDEAD));
     }
 
     #[test]

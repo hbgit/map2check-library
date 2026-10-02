@@ -64,6 +64,33 @@ impl VccChecker for FreeChecker {
     }
 }
 
+// ── Free check (resolved address) ───────────────────────────────────────────────
+
+/// Checks whether freeing an already-resolved heap `address` is valid.
+/// Replaces `map2check_check_free_resolved_address` — unlike [`FreeChecker`],
+/// which is keyed on the pointer variable's own slot, this is keyed on the
+/// target heap address itself (post-indirection).
+pub struct FreeResolvedChecker {
+    pub address: usize,
+}
+
+impl VccChecker for FreeResolvedChecker {
+    fn check(&self, _ctx: &VccContext) -> Result<VccOutcome, Map2CheckError> {
+        if self.address == 0 {
+            return Ok(VccOutcome::Safe);
+        }
+        state::with_state(|s| {
+            if memtrack::is_invalid_free_resolved(&s.memtrack, self.address) {
+                Ok(VccOutcome::Violated {
+                    property: ViolatedProperty::MemsafetyFree,
+                })
+            } else {
+                Ok(VccOutcome::Safe)
+            }
+        })
+    }
+}
+
 // ── Deref check ───────────────────────────────────────────────────────────────
 
 /// Checks whether dereferencing `address` is valid.
