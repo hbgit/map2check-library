@@ -20,6 +20,10 @@ pub struct AnalysisState {
     pub nondets: Vec<NonDetEntry>,
     pub memtrack: Vec<MemTrackEntry>,
     pub bbtrack: Vec<BasicBlockEntry>,
+    /// Set by `map2check_set_null_is_valid()`; read by `map2check_check_load`.
+    pub null_is_valid: bool,
+    /// Set by `map2check_set_memcleanup()`; read by `map2check_check_mem_endprog`.
+    pub memcleanup_enabled: bool,
 }
 
 impl AnalysisState {

@@ -23,7 +23,7 @@
 extern void map2check_save_nondet_log_int(int32_t line, int32_t scope, int32_t value, const char *function_name);
 extern void map2check_save_nondet_log_uint(int32_t line, int32_t scope, uint32_t value, const char *function_name);
 extern void map2check_save_nondet_log_long(int32_t line, int32_t scope, int64_t value, const char *function_name);
-extern void map2check_save_nondet_log_char(int32_t line, int32_t scope, uint8_t value, const char *function_name);
+extern void map2check_save_nondet_log_char(int32_t line, int32_t scope, int8_t value, const char *function_name);
 extern void map2check_save_nondet_log_float(int32_t line, int32_t scope, float value, const char *function_name);
 extern void map2check_save_nondet_log_double(int32_t line, int32_t scope, double value, const char *function_name);
 
@@ -57,6 +57,7 @@ static void run_bad_inputs(void) {
     set_false_result(MemsafetyDeref, -1, NULL);
     (void)get_current_property();
     (void)get_current_step();
+    (void)get_next_step();
     print_all_containers_as_json();
     vcc_reset_meta_data();
     map2check_set_memcleanup();
@@ -66,11 +67,16 @@ static void run_bad_inputs(void) {
     map2check_check_load(NULL, 1, 0, 8, NULL);
     map2check_check_deref(NULL, 0, 2, NULL);
     map2check_check_free(NULL, NULL, 0, 3, NULL);
+    map2check_check_free_resolved_address(NULL, 3, NULL);
     map2check_check_mem_endprog();
 
     /* memtrack with null/empty strings */
     map2check_map_alloca(NULL, NULL, 4, 4, 4, 1);
     map2check_map_alloca("", NULL, 4, 4, 5, 1);
+    map2check_map_non_static_alloca(NULL, NULL, 4, 4, 4, 1);
+    map2check_map_non_static_alloca("", NULL, 4, 4, 5, 1);
+    map2check_map_funct_address(NULL, NULL, 4, 1);
+    map2check_map_funct_address("", NULL, 5, 1);
     map2check_map_malloc(NULL, -1);
     map2check_map_calloc(NULL, -1, -1);
     map2check_map_store_pointer(NULL, NULL, 0, NULL, 6, NULL);
@@ -116,6 +122,15 @@ static void run_bad_inputs(void) {
     (void)__VERIFIER_nondet_float();
     (void)__VERIFIER_nondet_double();
     (void)__VERIFIER_nondet_size_t();
+    (void)__VERIFIER_nondet_pointer();
+
+    /* __VERIFIER_assume/assert/map2check_fuzzer_assume only with a truthy
+     * condition here: a falsy one calls exit(0)/abort() by design (see
+     * rust/src/nondet/libfuzzer.rs), which would end this harness process
+     * instead of just this check. */
+    __VERIFIER_assume(1);
+    __VERIFIER_assert(1);
+    map2check_fuzzer_assume(1);
 }
 
 /* ── Round 2: a well-formed pass after init(), touching every export with
@@ -125,12 +140,15 @@ static void run_valid_pass(void) {
     map2check_map_malloc(NULL, 16);
     map2check_map_calloc(NULL, 4, 8);
     map2check_map_alloca("buf", NULL, 8, 8, 20, 1);
+    map2check_map_non_static_alloca("vla", (void *)0x3, 8, 8, 20, 1);
+    map2check_map_funct_address("f", (void *)0x4, 20, 1);
     map2check_map_store_pointer((void *)0x1, (void *)0x2, 1, "buf", 21, "main");
     map2check_map_free("buf", (void *)0x1, 1, 22, "main");
 
     map2check_check_load((void *)0x1, 23, 1, 4, "main");
     map2check_check_deref((void *)0x1, 1, 24, "main");
     map2check_check_free("buf", (void *)0x1, 1, 25, "main");
+    map2check_check_free_resolved_address((void *)0x2, 25, "main");
     map2check_check_mem_endprog();
 
     map2check_save_basic_block_log(26, "main");
@@ -169,13 +187,19 @@ static void run_valid_pass(void) {
     (void)__VERIFIER_nondet_float();
     (void)__VERIFIER_nondet_double();
     (void)__VERIFIER_nondet_size_t();
+    (void)__VERIFIER_nondet_pointer();
+    __VERIFIER_assume(1);
+    __VERIFIER_assert(1);
+    map2check_fuzzer_assume(1);
 
     set_false_result(MemsafetyMemtrack, 30, "main");
     (void)get_current_property();
     (void)get_current_step();
+    (void)get_next_step();
     vcc_reset_meta_data();
     map2check_set_memcleanup();
     map2check_set_null_is_valid();
+    map2check_check_mem_endprog();
     print_all_containers_as_json();
 }
 

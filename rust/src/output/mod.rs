@@ -97,6 +97,7 @@ mod tests {
             nondets: vec![NonDetEntry::new(1, 10, 0, "main", NonDetValue::Int(42))],
             memtrack: vec![],
             bbtrack: vec![BasicBlockEntry::new(1, 5, "main")],
+            ..Default::default()
         }
     }
 
