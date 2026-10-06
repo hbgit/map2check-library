@@ -16,29 +16,6 @@
 
 #include "../include/map2check.h"
 
-/* ── Manual declarations for macro-generated exports absent from the
- *    cbindgen header (see rust/src/ffi.rs: nondet_ffi!, overflow_ffi_binop!,
- *    overflow_ffi_shift!) ────────────────────────────────────────────── */
-
-extern void map2check_save_nondet_log_int(int32_t line, int32_t scope, int32_t value, const char *function_name);
-extern void map2check_save_nondet_log_uint(int32_t line, int32_t scope, uint32_t value, const char *function_name);
-extern void map2check_save_nondet_log_long(int32_t line, int32_t scope, int64_t value, const char *function_name);
-extern void map2check_save_nondet_log_char(int32_t line, int32_t scope, uint8_t value, const char *function_name);
-extern void map2check_save_nondet_log_float(int32_t line, int32_t scope, float value, const char *function_name);
-extern void map2check_save_nondet_log_double(int32_t line, int32_t scope, double value, const char *function_name);
-
-extern void map2check_binop_add_int(int32_t param1, int32_t param2, uint32_t line, uint32_t scope, const char *function_name);
-extern void map2check_binop_sub_int(int32_t param1, int32_t param2, uint32_t line, uint32_t scope, const char *function_name);
-extern void map2check_binop_mul_int(int32_t param1, int32_t param2, uint32_t line, uint32_t scope, const char *function_name);
-extern void map2check_binop_div_int(int32_t param1, int32_t param2, uint32_t line, uint32_t scope, const char *function_name);
-extern void map2check_binop_add_unsigned(uint32_t param1, uint32_t param2, uint32_t line, uint32_t scope, const char *function_name);
-extern void map2check_binop_sub_unsigned(uint32_t param1, uint32_t param2, uint32_t line, uint32_t scope, const char *function_name);
-extern void map2check_binop_mul_unsigned(uint32_t param1, uint32_t param2, uint32_t line, uint32_t scope, const char *function_name);
-extern void map2check_binop_div_unsigned(uint32_t param1, uint32_t param2, uint32_t line, uint32_t scope, const char *function_name);
-extern void map2check_binop_shl_int(int32_t param1, uint32_t param2, uint32_t line, uint32_t scope, const char *function_name);
-extern void map2check_binop_shr_int(int32_t param1, uint32_t param2, uint32_t line, uint32_t scope, const char *function_name);
-extern void map2check_binop_shr_unsigned(uint32_t param1, uint32_t param2, uint32_t line, uint32_t scope, const char *function_name);
-
 /* Test-only entry point LibFuzzer's LLVMFuzzerTestOneInput calls into
  * (rust/src/nondet/libfuzzer.rs only defines this under cfg(test); the real
  * static lib expects the linking program — here, this harness — to provide
@@ -52,9 +29,17 @@ int __map2check_main__(void) {
  * every export that can plausibly be called out of order.
  */
 static void run_bad_inputs(void) {
+    int32_t int_value = -1;
+    uint32_t uint_value = 0;
+    long long_value = -1;
+    char char_value = 0;
+    float float_value = 0.0f;
+    double double_value = 0.0;
+
     /* result/state management, pre-init */
     map2check_reset();
     set_false_result(MemsafetyDeref, -1, NULL);
+    set_false_result(100, 1, NULL);
     (void)get_current_property();
     (void)get_current_step();
     print_all_containers_as_json();
@@ -66,11 +51,14 @@ static void run_bad_inputs(void) {
     map2check_check_load(NULL, 1, 0, 8, NULL);
     map2check_check_deref(NULL, 0, 2, NULL);
     map2check_check_free(NULL, NULL, 0, 3, NULL);
+    map2check_check_free_resolved_address(NULL, 3, NULL, 1);
     map2check_check_mem_endprog();
 
     /* memtrack with null/empty strings */
     map2check_map_alloca(NULL, NULL, 4, 4, 4, 1);
     map2check_map_alloca("", NULL, 4, 4, 5, 1);
+    map2check_map_non_static_alloca(NULL, NULL, -1, -1, 5, 1);
+    map2check_map_funct_address(NULL, NULL);
     map2check_map_malloc(NULL, -1);
     map2check_map_calloc(NULL, -1, -1);
     map2check_map_store_pointer(NULL, NULL, 0, NULL, 6, NULL);
@@ -81,12 +69,12 @@ static void run_bad_inputs(void) {
     (void)map2check_is_in_trackbb_container(-1);
 
     /* nondet log savers with null function name */
-    map2check_save_nondet_log_int(9, 0, -1, NULL);
-    map2check_save_nondet_log_uint(9, 0, 0, NULL);
-    map2check_save_nondet_log_long(9, 0, -1, NULL);
-    map2check_save_nondet_log_char(9, 0, 0, NULL);
-    map2check_save_nondet_log_float(9, 0, 0.0f, NULL);
-    map2check_save_nondet_log_double(9, 0, 0.0, NULL);
+    (void)map2check_save_nondet_log_int(9, 0, INT_ID, &int_value, NULL);
+    (void)map2check_save_nondet_log_uint(9, 0, UNIT_ID, &uint_value, NULL);
+    (void)map2check_save_nondet_log_long(9, 0, LONG_ID, &long_value, NULL);
+    (void)map2check_save_nondet_log_char(9, 0, CHAR_ID, &char_value, NULL);
+    (void)map2check_save_nondet_log_float(9, 0, FLOAT_ID, &float_value, NULL);
+    (void)map2check_save_nondet_log_double(9, 0, DOUBLE_ID, &double_value, NULL);
 
     /* assert and overflow family with null function name / extreme values */
     map2check_is_valid_assert(10, NULL, 0);
@@ -98,7 +86,7 @@ static void run_bad_inputs(void) {
     map2check_binop_sub_unsigned(0, 1, 10, 0, NULL);
     map2check_binop_mul_unsigned(4294967295u, 2, 10, 0, NULL);
     map2check_binop_div_unsigned(1, 0, 10, 0, NULL);
-    map2check_binop_neg_int(-2147483648, 11, 0, NULL);
+    map2check_binop_neg_int(-2147483648, 0, 11, 0, NULL);
     map2check_binop_shl_int(1, 31, 11, 0, NULL);
     map2check_binop_shr_int(-1, 32, 11, 0, NULL);
     map2check_binop_shr_unsigned(4294967295u, 32, 11, 0, NULL);
@@ -122,26 +110,36 @@ static void run_bad_inputs(void) {
  * sane arguments (belt-and-suspenders alongside the hostile round above so
  * every symbol is proven reachable, not just tolerant of garbage). ────── */
 static void run_valid_pass(void) {
+    int32_t int_value = 42;
+    uint32_t uint_value = 42;
+    long long_value = 42;
+    char char_value = 'a';
+    float float_value = 1.5f;
+    double double_value = 1.5;
+
     map2check_map_malloc(NULL, 16);
     map2check_map_calloc(NULL, 4, 8);
     map2check_map_alloca("buf", NULL, 8, 8, 20, 1);
+    map2check_map_non_static_alloca("stack", NULL, 8, 8, 20, 1);
+    map2check_map_funct_address("main", (void *)0x1);
     map2check_map_store_pointer((void *)0x1, (void *)0x2, 1, "buf", 21, "main");
     map2check_map_free("buf", (void *)0x1, 1, 22, "main");
 
     map2check_check_load((void *)0x1, 23, 1, 4, "main");
     map2check_check_deref((void *)0x1, 1, 24, "main");
     map2check_check_free("buf", (void *)0x1, 1, 25, "main");
+    map2check_check_free_resolved_address(NULL, 25, "main", 1);
     map2check_check_mem_endprog();
 
     map2check_save_basic_block_log(26, "main");
     (void)map2check_is_in_trackbb_container(26);
 
-    map2check_save_nondet_log_int(27, 0, 42, "main");
-    map2check_save_nondet_log_uint(27, 0, 42u, "main");
-    map2check_save_nondet_log_long(27, 0, 42, "main");
-    map2check_save_nondet_log_char(27, 0, 'a', "main");
-    map2check_save_nondet_log_float(27, 0, 1.5f, "main");
-    map2check_save_nondet_log_double(27, 0, 1.5, "main");
+    (void)map2check_save_nondet_log_int(27, 0, INT_ID, &int_value, "main");
+    (void)map2check_save_nondet_log_uint(27, 0, UNIT_ID, &uint_value, "main");
+    (void)map2check_save_nondet_log_long(27, 0, LONG_ID, &long_value, "main");
+    (void)map2check_save_nondet_log_char(27, 0, CHAR_ID, &char_value, "main");
+    (void)map2check_save_nondet_log_float(27, 0, FLOAT_ID, &float_value, "main");
+    (void)map2check_save_nondet_log_double(27, 0, DOUBLE_ID, &double_value, "main");
 
     map2check_is_valid_assert(28, "main", 1);
     map2check_binop_add_int(1, 2, 29, 0, "main");
@@ -152,7 +150,7 @@ static void run_valid_pass(void) {
     map2check_binop_sub_unsigned(2u, 1u, 29, 0, "main");
     map2check_binop_mul_unsigned(2u, 3u, 29, 0, "main");
     map2check_binop_div_unsigned(6u, 3u, 29, 0, "main");
-    map2check_binop_neg_int(5, 29, 0, "main");
+    map2check_binop_neg_int(5, 0, 29, 0, "main");
     map2check_binop_shl_int(1, 2, 29, 0, "main");
     map2check_binop_shr_int(8, 2, 29, 0, "main");
     map2check_binop_shr_unsigned(8u, 2u, 29, 0, "main");
@@ -179,7 +177,58 @@ static void run_valid_pass(void) {
     print_all_containers_as_json();
 }
 
+static int test_result_and_control_flags(void) {
+    map2check_reset();
+    int32_t legacy_value = 17;
+    non_det_log_t *legacy_nondet =
+        map2check_save_nondet_log_int(1, 0, INT_ID, &legacy_value, "main");
+    bbtrack_log_t *legacy_bb = map2check_save_basic_block_log(2, "main");
+    if (legacy_nondet == NULL || legacy_nondet->line != 1 ||
+        legacy_nondet->value.i != &legacy_value || legacy_bb == NULL ||
+        legacy_bb->line != 2) {
+        return 6;
+    }
+
+    map2check_reset();
+    set_false_result(MemsafetyDeref, 42, "main");
+    map2check_success();
+    if (get_current_property() != MemsafetyDeref) {
+        return 1;
+    }
+
+    map2check_reset();
+    map2check_set_null_is_valid();
+    map2check_check_load(NULL, 1, 0, 0, NULL);
+    if (get_current_property() != None) {
+        return 2;
+    }
+
+    map2check_reset();
+    map2check_map_malloc((void *)0x1000, 4);
+    map2check_check_mem_endprog();
+    if (get_current_property() != None) {
+        return 3;
+    }
+    map2check_set_memcleanup();
+    map2check_check_mem_endprog();
+    if (get_current_property() != MemsafetyMemcleanup) {
+        return 4;
+    }
+
+    map2check_reset();
+    set_false_result(Overflow, 10, "main");
+    map2check_check_free(NULL, NULL, 0, 11, NULL);
+    if (get_current_property() != None) {
+        return 5;
+    }
+    return 0;
+}
+
 int main(void) {
+    if (test_result_and_control_flags() != 0) {
+        return 1;
+    }
+
     /* round 1: adversarial inputs before init */
     run_bad_inputs();
 

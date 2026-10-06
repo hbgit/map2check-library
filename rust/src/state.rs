@@ -20,6 +20,10 @@ pub struct AnalysisState {
     pub nondets: Vec<NonDetEntry>,
     pub memtrack: Vec<MemTrackEntry>,
     pub bbtrack: Vec<BasicBlockEntry>,
+    pub memcleanup_enabled: bool,
+    pub null_is_valid: bool,
+    pub legacy_nondet_logs: Vec<Box<crate::ffi::non_det_log_t>>,
+    pub legacy_bbtrack_logs: Vec<Box<crate::ffi::bbtrack_log_t>>,
 }
 
 impl AnalysisState {
@@ -59,6 +63,7 @@ pub fn reset() {
         Err(poisoned) => {
             let mut guard = poisoned.into_inner();
             guard.reset();
+            state.clear_poison();
         }
     }
 }

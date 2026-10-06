@@ -4,11 +4,11 @@
 
 # Map2Check-Library
 
-Biblioteca de suporte à ferramenta [Map2Check](https://github.com/hbgit/map2check), reescrita em **Rust** (rewrite completo do C original). Provê rastreamento dinâmico e verificação de propriedades de segurança para programas analisados por KLEE ou LibFuzzer:
+Biblioteca de suporte à ferramenta [Map2Check](https://github.com/hbgit/map2check), reescrita em **Rust** (rewrite completo do C original). Provê rastreamento dinâmico e verificação de propriedades de segurança para programas analisados por LibFuzzer:
 
 - Rastreamento de blocos básicos (`bbtrack`)
 - Rastreamento de endereços de memória e operações de gerenciamento de memória (`memtrack`)
-- Rastreamento de valores não-determinísticos gerados por KLEE e LibFuzzer (`nondet`)
+- Rastreamento de valores não-determinísticos gerados por LibFuzzer (`nondet`)
 - Verificação de propriedades de segurança: overflow aritmético, memória inválida, assert definido pelo usuário (`analysismode`)
 - API C compatível via FFI (`ffi.rs`) para integração direta com a LLVM Pass do Map2Check
 
@@ -22,7 +22,6 @@ Ferramentas necessárias:
 - Componentes Rust `clippy` e `rustfmt`
 - Docker, para o build da imagem
 - `cargo-tarpaulin`, `cargo-audit`, `cargo-deny` e `cbindgen` para cobertura, auditoria e desenvolvimento
-- `clang` e `llvm-link` para a geração do bitcode usado pelo KLEE
 
 ```sh
 rustup component add clippy rustfmt
@@ -34,7 +33,6 @@ cargo install cargo-tarpaulin cargo-audit cargo-deny cbindgen
 As features configuradas no `Cargo.toml` são:
 
 - `libfuzzer`: habilita a integração com o LibFuzzer.
-- `klee`: habilita o build de bitcode para integração com o KLEE.
 
 ## Build e testes
 
@@ -72,17 +70,10 @@ O arquivo `include/map2check.h` é gerado automaticamente durante a compilação
 
 ### Build via Docker
 
-O `Dockerfile` na raiz usa um build multi-stage para compilar a biblioteca, gerar o bitcode do KLEE, executar os testes e gerar a cobertura:
+O `Dockerfile` na raiz usa um build multi-stage para compilar a biblioteca, executar os testes e gerar a cobertura:
 
 ```sh
 docker build -t hbgit/map2check-library .
-```
-
-Para executar o script de integração com KLEE:
-
-```sh
-docker pull klee/klee:2.2
-./run_klee_test.sh
 ```
 
 ## Linting e auditoria
@@ -124,7 +115,7 @@ Map2Check Tool (LLVM Pass / Instrumentação)
         │  extern "C" ABI  (ffi.rs)
         ▼
 ┌─────────────────────────────────────────────┐
-│           libmap2check.a / .bc              │
+│             libmap2check.a                  │
 │                                             │
 │  caller ─┐                                 │
 │  nondet  ├──► AnalysisState                │
@@ -134,10 +125,6 @@ Map2Check Tool (LLVM Pass / Instrumentação)
 │  analysismode ──► VccChecker trait          │
 │  output   ──► serde_json                   │
 └─────────────────────────────────────────────┘
-        │
-        │  llvm-link-8
-        ▼
-libmap2check_klee.bc / libmap2check_libfuzzer.bc
 ```
 
 ### Decisões de Segurança
