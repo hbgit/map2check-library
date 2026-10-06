@@ -22,10 +22,14 @@ pub struct LoadChecker {
 
 impl VccChecker for LoadChecker {
     fn check(&self, _ctx: &VccContext) -> Result<VccOutcome, Map2CheckError> {
-        if self.address == 0 && !self.is_null_valid {
-            return Ok(VccOutcome::Violated {
-                property: ViolatedProperty::MemsafetyDeref,
-            });
+        if self.address == 0 {
+            return if self.is_null_valid {
+                Ok(VccOutcome::Safe)
+            } else {
+                Ok(VccOutcome::Violated {
+                    property: ViolatedProperty::MemsafetyDeref,
+                })
+            };
         }
         state::with_state(|s| {
             if memtrack::is_invalid_address(&s.memtrack, self.address, self.size) {
@@ -108,5 +112,37 @@ impl VccChecker for MemCleanupChecker {
                 Ok(VccOutcome::Safe)
             }
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn null_load_obeys_null_valid_flag() {
+        let ctx = VccContext::new(1, 0, "test");
+        assert_eq!(
+            LoadChecker {
+                address: 0,
+                size: 0,
+                is_null_valid: true,
+            }
+            .check(&ctx)
+            .unwrap(),
+            VccOutcome::Safe
+        );
+        assert_eq!(
+            LoadChecker {
+                address: 0,
+                size: 0,
+                is_null_valid: false,
+            }
+            .check(&ctx)
+            .unwrap(),
+            VccOutcome::Violated {
+                property: ViolatedProperty::MemsafetyDeref,
+            }
+        );
     }
 }

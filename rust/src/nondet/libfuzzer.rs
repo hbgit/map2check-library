@@ -4,13 +4,21 @@
 // Replaces nondet_gen_libfuzzer.c — eliminates all union type-punning
 // by using f32::from_bits() / f64::from_bits() from safe Rust.
 
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicPtr, AtomicUsize, Ordering};
 
 static FUZZER_CURSOR: AtomicUsize = AtomicUsize::new(0);
 static FUZZER_SIZE: AtomicUsize = AtomicUsize::new(0);
+static FUZZER_DATA: AtomicPtr<u8> = AtomicPtr::new(std::ptr::null_mut());
 
-// Safety: written once from LLVMFuzzerTestOneInput before any reads.
-static mut FUZZER_DATA: *const u8 = std::ptr::null();
+struct FuzzerStateReset;
+
+impl Drop for FuzzerStateReset {
+    fn drop(&mut self) {
+        FUZZER_DATA.store(std::ptr::null_mut(), Ordering::SeqCst);
+        FUZZER_SIZE.store(0, Ordering::SeqCst);
+        FUZZER_CURSOR.store(0, Ordering::SeqCst);
+    }
+}
 
 /// Called by LibFuzzer before the test target runs.
 ///
@@ -19,27 +27,46 @@ static mut FUZZER_DATA: *const u8 = std::ptr::null();
 /// This is guaranteed by the LibFuzzer runtime contract.
 #[no_mangle]
 pub unsafe extern "C" fn LLVMFuzzerTestOneInput(data: *const u8, size: usize) -> i32 {
-    // SAFETY: LibFuzzer guarantees `data` is valid for `size` bytes.
-    FUZZER_DATA = data;
-    FUZZER_SIZE.store(size, Ordering::SeqCst);
-    FUZZER_CURSOR.store(0, Ordering::SeqCst);
+    let _reset = FuzzerStateReset;
+    crate::ffi::ffi_guard(
+        || {
+            crate::state::reset();
 
-    extern "C" {
-        fn __map2check_main__() -> i32;
-    }
-    // SAFETY: user-defined entry point, linked by Map2Check instrumentation.
-    __map2check_main__()
+            if data.is_null() && size != 0 {
+                return 0;
+            }
+
+            // SAFETY: LibFuzzer guarantees `data` is valid for `size` bytes.
+            FUZZER_DATA.store(data as *mut u8, Ordering::SeqCst);
+            FUZZER_SIZE.store(size, Ordering::SeqCst);
+            FUZZER_CURSOR.store(0, Ordering::SeqCst);
+
+            unsafe extern "C" {
+                fn __map2check_main__() -> i32;
+            }
+            // SAFETY: user-defined entry point, linked by Map2Check instrumentation.
+            unsafe { __map2check_main__() }
+        },
+        0,
+    )
 }
 
 fn read_bytes(n: usize) -> Option<&'static [u8]> {
     let cursor = FUZZER_CURSOR.load(Ordering::SeqCst);
     let size = FUZZER_SIZE.load(Ordering::SeqCst);
-    if cursor + n > size {
+    let end = match cursor.checked_add(n) {
+        Some(end) if end <= size => end,
+        _ => return None,
+    };
+
+    let ptr = FUZZER_DATA.load(Ordering::SeqCst);
+    if ptr.is_null() {
         return None;
     }
+
     // SAFETY: FUZZER_DATA was set from a valid LibFuzzer buffer; cursor+n <= size.
-    let slice = unsafe { std::slice::from_raw_parts(FUZZER_DATA.add(cursor), n) };
-    FUZZER_CURSOR.store(cursor + n, Ordering::SeqCst);
+    let slice = unsafe { std::slice::from_raw_parts(ptr.add(cursor), n) };
+    FUZZER_CURSOR.store(end, Ordering::SeqCst);
     Some(slice)
 }
 
@@ -63,68 +90,78 @@ fn read_u64() -> u64 {
 
 #[no_mangle]
 pub extern "C" fn __VERIFIER_nondet_bool() -> bool {
-    read_u8() % 2 == 0
+    crate::ffi::ffi_guard(|| read_u8() % 2 == 0, false)
 }
 
 #[no_mangle]
 pub extern "C" fn __VERIFIER_nondet_char() -> i8 {
-    read_u8() as i8
+    crate::ffi::ffi_guard(|| read_u8() as i8, 0)
 }
 
 #[no_mangle]
 pub extern "C" fn __VERIFIER_nondet_uchar() -> u8 {
-    read_u8()
+    crate::ffi::ffi_guard(read_u8, 0)
 }
 
 #[no_mangle]
 pub extern "C" fn __VERIFIER_nondet_short() -> i16 {
-    read_bytes(2)
-        .map(|b| i16::from_le_bytes(b.try_into().unwrap_or([0; 2])))
-        .unwrap_or(0)
+    crate::ffi::ffi_guard(
+        || {
+            read_bytes(2)
+                .map(|b| i16::from_le_bytes(b.try_into().unwrap_or([0; 2])))
+                .unwrap_or(0)
+        },
+        0,
+    )
 }
 
 #[no_mangle]
 pub extern "C" fn __VERIFIER_nondet_ushort() -> u16 {
-    read_bytes(2)
-        .map(|b| u16::from_le_bytes(b.try_into().unwrap_or([0; 2])))
-        .unwrap_or(0)
+    crate::ffi::ffi_guard(
+        || {
+            read_bytes(2)
+                .map(|b| u16::from_le_bytes(b.try_into().unwrap_or([0; 2])))
+                .unwrap_or(0)
+        },
+        0,
+    )
 }
 
 #[no_mangle]
 pub extern "C" fn __VERIFIER_nondet_int() -> i32 {
-    read_u32() as i32
+    crate::ffi::ffi_guard(|| read_u32() as i32, 0)
 }
 
 #[no_mangle]
 pub extern "C" fn __VERIFIER_nondet_uint() -> u32 {
-    read_u32()
+    crate::ffi::ffi_guard(read_u32, 0)
 }
 
 #[no_mangle]
 pub extern "C" fn __VERIFIER_nondet_long() -> i64 {
-    read_u64() as i64
+    crate::ffi::ffi_guard(|| read_u64() as i64, 0)
 }
 
 #[no_mangle]
 pub extern "C" fn __VERIFIER_nondet_ulong() -> u64 {
-    read_u64()
+    crate::ffi::ffi_guard(read_u64, 0)
 }
 
 #[no_mangle]
 pub extern "C" fn __VERIFIER_nondet_float() -> f32 {
     // Uses f32::from_bits — replaces C union FloatPattern type-punning safely
-    f32::from_bits(read_u32())
+    crate::ffi::ffi_guard(|| f32::from_bits(read_u32()), 0.0)
 }
 
 #[no_mangle]
 pub extern "C" fn __VERIFIER_nondet_double() -> f64 {
     // Uses f64::from_bits — replaces C union DoublePattern type-punning safely
-    f64::from_bits(read_u64())
+    crate::ffi::ffi_guard(|| f64::from_bits(read_u64()), 0.0)
 }
 
 #[no_mangle]
 pub extern "C" fn __VERIFIER_nondet_size_t() -> usize {
-    read_u64() as usize
+    crate::ffi::ffi_guard(|| read_u64() as usize, 0)
 }
 
 //lv

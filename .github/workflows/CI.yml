@@ -2,21 +2,22 @@ name: CI Map2Check Rust
 
 on:
   push:
-    branches: [ "master", "feature/rust" ]
+    branches: [ "master", "feature/rust", "feat/update_rust" ]
   pull_request:
-    branches: [ "master", "feature/rust" ]
+    branches: [ "master", "feature/rust", "feat/update_rust" ]
 
 jobs:
   build_and_test:
     runs-on: ubuntu-latest
-    
-    
     steps:
       - name: Baixar o código do repositório
         uses: actions/checkout@v4
 
+      - name: Instalar Clang e runtime dos sanitizers
+        run: sudo apt-get update && sudo apt-get install -y clang
+
       - name: Instalar o compilador Rust
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@1.82.0
         with:
           components: clippy, rustfmt
 
@@ -31,6 +32,14 @@ jobs:
 
       - name: Rodar todos os testes
         run: cargo test --all-features
+
+      - name: Compilar e executar harness FFI com ASan e UBSan
+        run: |
+          cargo build --release --all-features
+          clang -fsanitize=address,undefined -fno-omit-frame-pointer \
+            tests/ffi_harness.c target/release/libmap2check.a \
+            -ldl -lpthread -lm -o target/ffi_harness
+          target/ffi_harness
 
       - name: Checar segurança de dependências (cargo-deny)
         uses: EmbarkStudios/cargo-deny-action@v2

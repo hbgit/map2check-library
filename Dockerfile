@@ -4,7 +4,6 @@
 FROM rust:1.82-slim-bookworm AS builder
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    clang-14 llvm-14 llvm-14-dev llvm-14-tools lld-14 \
     cmake make git \
     && rm -rf /var/lib/apt/lists/*
 
@@ -26,17 +25,7 @@ RUN mkdir -p include && cargo build --release
 
 
 
-# ── Stage 2: KLEE BC build ────────────────────────────────────────────────────
-FROM builder AS klee-bc
-
-RUN RUSTFLAGS="-C instrument-coverage=no --emit=llvm-bc" \
-    cargo build --release --features klee 2>/dev/null || \
-    RUSTFLAGS="-C instrument-coverage=no" \
-    cargo build --release --features klee
-
-RUN find target/release/deps -name "*.bc" -exec llvm-link-14 {} + -o libmap2check_klee.bc || true
-
-# ── Stage 3: Test + Coverage ──────────────────────────────────────────────────
+# ── Stage 2: Test + Coverage ──────────────────────────────────────────────────
 FROM builder AS test
 
 COPY test/ ./test/
@@ -50,7 +39,7 @@ RUN cargo tarpaulin \
     --exclude-files "rust/src/ffi.rs" 
     
 
-# ── Stage 4: Final minimal runtime image ──────────────────────────────────────
+# ── Stage 3: Final minimal runtime image ──────────────────────────────────────
 FROM debian:bookworm-slim AS final
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
