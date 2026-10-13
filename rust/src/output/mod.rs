@@ -18,13 +18,14 @@ struct Map2CheckLog<'a> {
 #[derive(Serialize)]
 struct LogBody<'a> {
     result: &'static str,
+    step: u64,
     #[serde(skip_serializing_if = "Option::is_none")]
     property: Option<&'static str>,
     #[serde(skip_serializing_if = "Option::is_none")]
     line_number: Option<u32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     function_name: Option<&'a str>,
-    #[serde(rename = "Container_BasicBlockLog")]
+    #[serde(rename = "Container_TrackBBLog")]
     bbtrack: &'a [crate::bbtrack::BasicBlockEntry],
     #[serde(rename = "Container_NonDetLog")]
     nondets: &'a [crate::nondet::NonDetEntry],
@@ -50,6 +51,7 @@ pub fn to_json(state: &AnalysisState) -> Result<String, Map2CheckError> {
     let log = Map2CheckLog {
         map2check_log: LogBody {
             result: if result.ok { "TRUE" } else { "FALSE" },
+            step: result.step,
             property: if result.ok {
                 None
             } else {
@@ -97,15 +99,19 @@ mod tests {
             nondets: vec![NonDetEntry::new(1, 10, 0, "main", NonDetValue::Int(42))],
             memtrack: vec![],
             bbtrack: vec![BasicBlockEntry::new(1, 5, "main")],
+            ..AnalysisState::default()
         }
     }
 
     #[test]
     fn ok_result_serializes_true() {
-        let state = state_ok();
+        let mut state = state_ok();
+        state.result.step = 42;
         let json = to_json(&state).unwrap();
         assert!(json.contains("\"TRUE\""));
         assert!(!json.contains("\"FALSE\""));
+        assert!(json.contains("\"Container_TrackBBLog\""));
+        assert!(json.contains("\"step\": 42"));
     }
 
     #[test]
@@ -132,8 +138,13 @@ mod tests {
         assert!(!json_overflow.contains("Container_AllocationLog"));
 
         state.result.property = ViolatedProperty::MemsafetyFree;
+        state.memtrack.push(crate::memtrack::MemTrackEntry::new(
+            1, 10, 0, 0x100, 0x200, true, false, "ptr", "main", 8, 1, false,
+        ));
         let json_mem = to_json(&state).unwrap();
         assert!(json_mem.contains("Container_AllocationLog"));
+        assert!(json_mem.contains("var_mem_address"));
+        assert!(json_mem.contains("mem_address_points_to"));
     }
 
     #[test]

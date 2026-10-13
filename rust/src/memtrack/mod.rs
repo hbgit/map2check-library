@@ -2,6 +2,7 @@
 #![deny(unsafe_code)]
 
 use serde::Serialize;
+use std::collections::HashSet;
 
 /// Single memory tracking record — analogous to `memtrack_log_t` in C.
 /// Addresses are `usize` (platform pointer width) instead of `long`.
@@ -11,8 +12,10 @@ pub struct MemTrackEntry {
     pub line: u32,
     pub scope: u32,
     /// Address of the variable holding the pointer (cast from `*const T`).
+    #[serde(rename = "var_mem_address")]
     pub var_addr: usize,
     /// Address the variable points to.
+    #[serde(rename = "mem_address_points_to")]
     pub points_to: usize,
     pub is_dynamic: bool,
     pub is_free: bool,
@@ -62,13 +65,18 @@ impl MemTrackEntry {
         self.is_free = false;
     }
 
-    pub fn set_calloc(&mut self, quantity: usize) {
-        self.size_destiny *= quantity;
+    pub fn set_calloc(&mut self, quantity: usize) -> bool {
+        let Some(size) = self.size_destiny.checked_mul(quantity) else {
+            return false;
+        };
+        self.size_destiny = size;
         self.set_malloc();
+        true
     }
 
     pub fn set_free(&mut self) {
         self.is_free = true;
+        self.is_dynamic = false;
         self.size_destiny = 0;
     }
 
@@ -91,41 +99,53 @@ pub fn is_invalid_free(entries: &[MemTrackEntry], address: usize) -> bool {
     entries
         .iter()
         .rev()
-        .find(|e| e.var_addr == address)
-        .map(|e| e.is_free)
-        .unwrap_or(false)
+        .find(|e| (e.is_dynamic || e.is_free) && (e.var_addr == address || e.points_to == address))
+        .map(|e| e.is_free || !e.is_dynamic)
+        .unwrap_or(true)
 }
 
 /// Checks whether dereferencing `address` is invalid (not allocated or already freed).
 /// Replaces `is_addr_a_deref_error_in_cntr`.
 pub fn is_deref_error(entries: &[MemTrackEntry], address: usize) -> bool {
-    match entries.iter().rev().find(|e| e.var_addr == address) {
-        None => true,
-        Some(e) => e.is_free,
+    if let Some(entry) = entries
+        .iter()
+        .rev()
+        .find(|e| (e.is_dynamic || e.is_free) && (e.var_addr == address || e.points_to == address))
+    {
+        return entry.is_free || !entry.is_dynamic;
     }
+
+    !entries.iter().rev().any(|e| e.var_addr == address)
 }
 
 /// Checks whether there is a memory cleanup error (leaked allocation still referenced).
 /// Replaces `has_a_memcleanup_error_in_cntr`.
 pub fn has_memcleanup_error(entries: &[MemTrackEntry]) -> bool {
-    entries.iter().rev().any(|e| {
-        e.is_dynamic && !e.is_free && {
-            // Check if any later entry still holds a pointer to this allocation
-            let leaked_addr = e.points_to;
-            entries
-                .iter()
-                .rev()
-                .take_while(|later| !std::ptr::eq(*later, e))
-                .any(|later| later.points_to == leaked_addr)
+    let mut resolved = HashSet::new();
+    entries.iter().rev().any(|entry| {
+        if !entry.is_dynamic && !entry.is_free {
+            return false;
         }
+        if !resolved.insert(entry.points_to) {
+            return false;
+        }
+        entry.is_dynamic && !entry.is_free
     })
 }
 
 /// Checks whether `address` is a valid allocation (within any live allocation's range).
 /// Replaces `is_a_invalid_address_in_cntr`.
 pub fn is_invalid_address(entries: &[MemTrackEntry], address: usize, size: usize) -> bool {
-    !entries.iter().rev().any(|e| {
-        !e.is_free && address >= e.points_to && address + size <= e.points_to + e.size_destiny
+    let Some(address_end) = address.checked_add(size) else {
+        return true;
+    };
+    !entries.iter().rev().any(|entry| {
+        !entry.is_free
+            && address >= entry.points_to
+            && entry
+                .points_to
+                .checked_add(entry.size_destiny)
+                .is_some_and(|allocation_end| address_end <= allocation_end)
     })
 }
 
@@ -206,14 +226,54 @@ mod tests {
         let mut e = make_entry(0x100, 0x200, true, false, 8);
         e.set_free();
         assert!(e.is_free);
+        assert!(!e.is_dynamic);
         assert_eq!(e.size_destiny, 0);
     }
 
     #[test]
     fn set_calloc_multiplies_size() {
         let mut e = make_entry(0x100, 0x200, false, false, 4);
-        e.set_calloc(3);
+        assert!(e.set_calloc(3));
         assert_eq!(e.size_destiny, 12);
         assert!(e.is_dynamic);
+    }
+
+    #[test]
+    fn calloc_size_multiplication_is_checked() {
+        let mut e = make_entry(0x100, 0x200, false, false, usize::MAX);
+        assert!(!e.set_calloc(2));
+        assert_eq!(e.size_destiny, usize::MAX);
+        assert!(!e.is_dynamic);
+    }
+
+    #[test]
+    fn unknown_free_is_invalid() {
+        assert!(is_invalid_free(&[], 0xdead));
+    }
+
+    #[test]
+    fn cleanup_detects_live_allocation_and_ignores_freed_allocation() {
+        let live = vec![make_entry(0x100, 0x200, true, false, 8)];
+        assert!(has_memcleanup_error(&live));
+
+        let mut freed = make_entry(0x100, 0x200, true, false, 8);
+        freed.set_free();
+        assert!(!has_memcleanup_error(&[live[0].clone(), freed]));
+    }
+
+    #[test]
+    fn deref_resolves_allocation_through_stored_pointer() {
+        let entries = vec![
+            make_entry(0x100, 0x200, true, false, 8),
+            make_entry(0x300, 0x200, false, false, 0),
+        ];
+        assert!(!is_deref_error(&entries, 0x200));
+    }
+
+    #[test]
+    fn invalid_address_rejects_wrapping_ranges() {
+        let entries = vec![make_entry(0x100, usize::MAX - 3, true, false, 16)];
+        assert!(is_invalid_address(&entries, usize::MAX - 1, 8));
+        assert!(is_invalid_address(&entries, usize::MAX - 1, 4));
     }
 }
