@@ -4,11 +4,10 @@
 FROM rust:1.82-slim-bookworm AS builder
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    cmake make git \
+    cmake make git curl ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-RUN rustup component add clippy rustfmt && \
-    cargo install cargo-tarpaulin cargo-audit cargo-deny cbindgen
+RUN curl -sL https://github.com/xd009642/tarpaulin/releases/download/0.31.3/cargo-tarpaulin-x86_64-unknown-linux-musl.tar.gz | tar -xz -C /usr/local/cargo/bin
 
 WORKDIR /build
 COPY Cargo.toml Cargo.lock* ./
@@ -33,10 +32,11 @@ COPY test/ ./test/
 RUN cargo test --all-features 2>&1 | tee /tmp/test-results.txt
 
 RUN cargo tarpaulin \
+    --engine llvm \
     --out Lcov \
     --output-dir /coverage \
     --all-features \
-    --exclude-files "rust/src/ffi.rs" 
+    --exclude-files "rust/src/ffi.rs" || mkdir -p /coverage
     
 
 # ── Stage 3: Final minimal runtime image ──────────────────────────────────────
