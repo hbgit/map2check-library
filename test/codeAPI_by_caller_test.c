@@ -11,10 +11,6 @@
 
 #include "../include/map2check.h"
 
-/* Manual declaration for a macro-generated export not covered by cbindgen
- * (see rust/src/ffi.rs: nondet_ffi!). */
-extern void map2check_save_nondet_log_int(int32_t line, int32_t scope, int32_t value, const char *function_name);
-
 int main(void) {
     map2check_init();
 
@@ -32,7 +28,7 @@ int main(void) {
 
     /* Function-address tracking: registers a target as always valid to load. */
     static int dummy_target = 7;
-    map2check_map_funct_address("dummy_fn", (void *)&dummy_target, 13, 0);
+    map2check_map_funct_address("dummy_fn", (void *)&dummy_target);
     map2check_check_load((void *)&dummy_target, 14, 0, sizeof(dummy_target), "main");
     assert(get_current_property() == None);
 
@@ -41,14 +37,14 @@ int main(void) {
     map2check_map_malloc(heap_ptr, 16);
     map2check_check_free("heap_obj", heap_ptr, 0, 15, "main");
     assert(get_current_property() == None);
-    map2check_check_free_resolved_address(heap_ptr, 15, "main");
+    map2check_check_free_resolved_address(heap_ptr, 15, "main", 0);
     assert(get_current_property() == None);
 
     /* After the free is recorded, both checks must flag the double free. */
     map2check_map_free("heap_obj", heap_ptr, 0, 16, "main");
     map2check_check_free("heap_obj", heap_ptr, 0, 17, "main");
     assert(get_current_property() == MemsafetyFree);
-    map2check_check_free_resolved_address(heap_ptr, 17, "main");
+    map2check_check_free_resolved_address(heap_ptr, 17, "main", 0);
     assert(get_current_property() == MemsafetyFree);
     vcc_reset_meta_data();
     assert(get_current_property() == None);
@@ -56,7 +52,8 @@ int main(void) {
     /* Basic-block + nondet + step-counter tracking. */
     map2check_save_basic_block_log(18, "main");
     assert(map2check_is_in_trackbb_container(18) == 1);
-    map2check_save_nondet_log_int(19, 0, 7, "main");
+    int32_t nondet_value = 7;
+    (void)map2check_save_nondet_log_int(19, 0, INT_ID, &nondet_value, "main");
     uint64_t step_before = get_current_step();
     uint64_t step_after = get_next_step();
     assert(step_after == step_before + 1);

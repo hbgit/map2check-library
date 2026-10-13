@@ -71,6 +71,32 @@ fn run_vcc_check(checker: impl VccChecker, ctx: &VccContext, line: u32, fname: &
     }
 }
 
+fn reset_result_metadata() {
+    if let Err(e) = state::with_state(|s| {
+        s.result.ok = true;
+        s.result.property = ViolatedProperty::None;
+        s.result.line = 0;
+        s.result.function_name.clear();
+        Ok(())
+    }) {
+        log_error(&e);
+    }
+}
+
+fn violated_property_from_raw(raw: i32) -> Option<ViolatedProperty> {
+    match raw {
+        0 => Some(ViolatedProperty::Overflow),
+        1 => Some(ViolatedProperty::MemsafetyFree),
+        2 => Some(ViolatedProperty::MemsafetyDeref),
+        3 => Some(ViolatedProperty::MemsafetyMemtrack),
+        4 => Some(ViolatedProperty::MemsafetyMemcleanup),
+        5 => Some(ViolatedProperty::Reachability),
+        6 => Some(ViolatedProperty::Concurrency),
+        7 => Some(ViolatedProperty::None),
+        _ => None,
+    }
+}
+
 pub(crate) fn ffi_guard<T>(f: impl FnOnce() -> T, default: T) -> T {
     match std::panic::catch_unwind(std::panic::AssertUnwindSafe(f)) {
         Ok(value) => value,
@@ -102,10 +128,7 @@ pub extern "C" fn map2check_reset() {
 pub extern "C" fn map2check_success() {
     ffi_guard(
         || {
-            if let Err(e) = state::with_state(|s| {
-                s.result.ok = true;
-                output::print_json(s)
-            }) {
+            if let Err(e) = state::with_state(|s| output::print_json(s)) {
                 log_error(&e);
             }
         },
@@ -119,16 +142,20 @@ pub extern "C" fn map2check_success() {
 /// `function_name` must be null or a valid null-terminated C string.
 #[no_mangle]
 pub unsafe extern "C" fn set_false_result(
-    prp: ViolatedProperty,
+    prp: i32,
     line_number: i32,
     function_name: *const std::os::raw::c_char,
 ) {
     ffi_guard(
         || {
+            let Some(property) = violated_property_from_raw(prp) else {
+                eprintln!("[map2check] invalid violated-property value: {prp}");
+                return;
+            };
             // SAFETY: caller guarantees function_name is a valid C string or null.
             let fname = unsafe { c_str(function_name) };
             if let Err(e) = state::with_state(|s| {
-                s.set_false(prp, line_number as u32, fname);
+                s.set_false(property, line_number as u32, fname);
                 Ok(())
             }) {
                 log_error(&e);
@@ -234,49 +261,135 @@ pub extern "C" fn map2check_set_null_is_valid() {
 
 // ── NonDet tracking ───────────────────────────────────────────────────────────
 
+#[repr(C)]
+#[derive(Debug)]
+#[allow(non_camel_case_types)]
+pub struct non_det_log_t {
+    pub tqe_next: *mut non_det_log_t,
+    pub tqe_prev: *mut *mut non_det_log_t,
+    pub step: std::os::raw::c_long,
+    pub line: std::os::raw::c_int,
+    pub scope: std::os::raw::c_int,
+    pub type_var: std::os::raw::c_int,
+    pub value: LegacyNonDetData,
+    pub function_name: *const std::os::raw::c_char,
+}
+
+#[repr(C)]
+pub union LegacyNonDetData {
+    pub i: *mut i32,
+    pub u: *mut u32,
+    pub l: *mut std::os::raw::c_long,
+    pub c: *mut std::os::raw::c_char,
+    pub str: [std::os::raw::c_char; 20],
+    pub f: *mut f32,
+    pub d: *mut f64,
+}
+
+impl std::fmt::Debug for LegacyNonDetData {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("LegacyNonDetData")
+    }
+}
+
+// SAFETY: C pointers in these compatibility records are opaque values; Rust
+// stores and drops the records without dereferencing those pointers.
+unsafe impl Send for non_det_log_t {}
+
 macro_rules! nondet_ffi {
-    ($fn_name:ident, $variant:ident, $rust_ty:ty, $c_ty:ty) => {
+    ($fn_name:ident, $variant:ident, $rust_ty:ty, $c_ty:ty, $field:ident) => {
         /// # Safety
+        /// `value` must be null or point to a valid value of the expected type.
         /// `function_name` must be null or a valid null-terminated C string.
         #[no_mangle]
         pub unsafe extern "C" fn $fn_name(
             line: i32,
             scope: i32,
-            value: $c_ty,
+            type_var: i32,
+            value: *mut $c_ty,
             function_name: *const std::os::raw::c_char,
-        ) {
+        ) -> *mut non_det_log_t {
             ffi_guard(
                 || {
                     // SAFETY: caller guarantees function_name is a valid C string or null.
                     let fname = unsafe { c_str(function_name) };
-                    if let Err(e) = state::with_state(|s| {
+                    let raw_value = if value.is_null() {
+                        <$c_ty>::default()
+                    } else {
+                        // SAFETY: caller guarantees value points to a valid value.
+                        unsafe { *value }
+                    };
+                    match state::with_state(|s| {
                         let step = s.next_step();
                         s.nondets.push(NonDetEntry::new(
                             step,
                             line as u32,
                             scope as u32,
                             fname,
-                            NonDetValue::$variant(value as $rust_ty),
+                            NonDetValue::$variant(raw_value as $rust_ty),
                         ));
-                        Ok(())
+                        let entry = Box::new(non_det_log_t {
+                            tqe_next: std::ptr::null_mut(),
+                            tqe_prev: std::ptr::null_mut(),
+                            step: step as std::os::raw::c_long,
+                            line,
+                            scope,
+                            type_var,
+                            value: LegacyNonDetData { $field: value },
+                            function_name,
+                        });
+                        let pointer = (&*entry) as *const non_det_log_t as *mut non_det_log_t;
+                        s.legacy_nondet_logs.push(entry);
+                        Ok(pointer)
                     }) {
-                        log_error(&e);
+                        Ok(pointer) => pointer,
+                        Err(e) => {
+                            log_error(&e);
+                            std::ptr::null_mut()
+                        }
                     }
                 },
-                (),
-            );
+                std::ptr::null_mut(),
+            )
         }
     };
 }
 
-nondet_ffi!(map2check_save_nondet_log_int, Int, i32, i32);
-nondet_ffi!(map2check_save_nondet_log_uint, UInt, u32, u32);
-nondet_ffi!(map2check_save_nondet_log_long, Long, i64, i64);
-nondet_ffi!(map2check_save_nondet_log_char, Char, i8, i8);
-nondet_ffi!(map2check_save_nondet_log_float, Float, f32, f32);
-nondet_ffi!(map2check_save_nondet_log_double, Double, f64, f64);
+nondet_ffi!(map2check_save_nondet_log_int, Int, i32, i32, i);
+nondet_ffi!(map2check_save_nondet_log_uint, UInt, u32, u32, u);
+nondet_ffi!(
+    map2check_save_nondet_log_long,
+    Long,
+    i64,
+    std::os::raw::c_long,
+    l
+);
+nondet_ffi!(
+    map2check_save_nondet_log_char,
+    Char,
+    i8,
+    std::os::raw::c_char,
+    c
+);
+nondet_ffi!(map2check_save_nondet_log_float, Float, f32, f32, f);
+nondet_ffi!(map2check_save_nondet_log_double, Double, f64, f64, d);
 
 // ── Basic-block tracking ──────────────────────────────────────────────────────
+
+#[repr(C)]
+#[derive(Debug)]
+#[allow(non_camel_case_types)]
+pub struct bbtrack_log_t {
+    pub tqe_next: *mut bbtrack_log_t,
+    pub tqe_prev: *mut *mut bbtrack_log_t,
+    pub step: std::os::raw::c_long,
+    pub line: std::os::raw::c_int,
+    pub function_name: *const std::os::raw::c_char,
+}
+
+// SAFETY: C pointers in this compatibility record are opaque values; Rust
+// stores and drops the record without dereferencing those pointers.
+unsafe impl Send for bbtrack_log_t {}
 
 /// Records execution of a basic block.
 ///
@@ -286,22 +399,35 @@ nondet_ffi!(map2check_save_nondet_log_double, Double, f64, f64);
 pub unsafe extern "C" fn map2check_save_basic_block_log(
     line: i32,
     function_name: *const std::os::raw::c_char,
-) {
+) -> *mut bbtrack_log_t {
     ffi_guard(
         || {
             // SAFETY: caller guarantees function_name is a valid C string or null.
             let fname = unsafe { c_str(function_name) };
-            if let Err(e) = state::with_state(|s| {
+            match state::with_state(|s| {
                 let step = s.next_step();
                 s.bbtrack
                     .push(BasicBlockEntry::new(step, line as u32, fname));
-                Ok(())
+                let entry = Box::new(bbtrack_log_t {
+                    tqe_next: std::ptr::null_mut(),
+                    tqe_prev: std::ptr::null_mut(),
+                    step: step as std::os::raw::c_long,
+                    line,
+                    function_name,
+                });
+                let pointer = (&*entry) as *const bbtrack_log_t as *mut bbtrack_log_t;
+                s.legacy_bbtrack_logs.push(entry);
+                Ok(pointer)
             }) {
-                log_error(&e);
+                Ok(pointer) => pointer,
+                Err(e) => {
+                    log_error(&e);
+                    std::ptr::null_mut()
+                }
             }
         },
-        (),
-    );
+        std::ptr::null_mut(),
+    )
 }
 
 /// Returns 1 if `line` was recorded as executed, 0 otherwise.
@@ -337,6 +463,9 @@ pub unsafe extern "C" fn map2check_map_alloca(
 ) {
     ffi_guard(
         || {
+            if size < 0 || size_primitive < 0 {
+                return;
+            }
             // SAFETY: caller guarantees var_name is a valid C string or null.
             let name = unsafe { c_str(var_name) };
             let addr = ptr_address as usize;
@@ -383,6 +512,9 @@ pub unsafe extern "C" fn map2check_map_non_static_alloca(
 ) {
     ffi_guard(
         || {
+            if size < 0 || size_primitive < 0 {
+                return;
+            }
             // SAFETY: caller guarantees var_name is a valid C string or null.
             let name = unsafe { c_str(var_name) };
             let addr = ptr_address as usize;
@@ -419,26 +551,24 @@ pub unsafe extern "C" fn map2check_map_non_static_alloca(
 /// `map2check_check_deref` when it is later read or called through.
 ///
 /// # Safety
-/// `var_name` must be null or a valid null-terminated C string; `funct_address` may be null.
+/// `var_name` must be null or a valid null-terminated C string; `ptr_address` may be null.
 #[no_mangle]
 pub unsafe extern "C" fn map2check_map_funct_address(
     var_name: *const std::os::raw::c_char,
-    funct_address: *const std::os::raw::c_void,
-    line_number: i32,
-    scope: i32,
+    ptr_address: *const std::os::raw::c_void,
 ) {
     ffi_guard(
         || {
             // SAFETY: caller guarantees var_name is a valid C string or null.
             let name = unsafe { c_str(var_name) };
-            let addr = funct_address as usize;
+            let addr = ptr_address as usize;
             let pointer_width = std::mem::size_of::<*const std::os::raw::c_void>();
             if let Err(e) = state::with_state(|s| {
                 let step = s.next_step();
                 s.memtrack.push(MemTrackEntry::new(
                     step,
-                    line_number as u32,
-                    scope as u32,
+                    0,
+                    0,
                     addr,
                     addr,
                     false,
@@ -464,6 +594,9 @@ pub unsafe extern "C" fn map2check_map_funct_address(
 pub unsafe extern "C" fn map2check_map_malloc(ptr_address: *const std::os::raw::c_void, size: i32) {
     ffi_guard(
         || {
+            if size < 0 {
+                return;
+            }
             let addr = ptr_address as usize;
             if let Err(e) = state::with_state(|s| {
                 let step = s.next_step();
@@ -502,24 +635,23 @@ pub unsafe extern "C" fn map2check_map_calloc(
 ) {
     ffi_guard(
         || {
+            if quantity < 0 || size < 0 {
+                return;
+            }
+            let quantity = quantity as usize;
+            let size = size as usize;
+            if size.checked_mul(quantity).is_none() {
+                return;
+            }
             let addr = ptr_address as usize;
             if let Err(e) = state::with_state(|s| {
                 let step = s.next_step();
                 let mut entry = MemTrackEntry::new(
-                    step,
-                    0,
-                    0,
-                    addr,
-                    addr,
-                    false,
-                    false,
-                    "",
-                    "",
-                    size as usize,
-                    1,
-                    false,
+                    step, 0, 0, addr, addr, false, false, "", "", size, 1, false,
                 );
-                entry.set_calloc(quantity as usize);
+                if !entry.set_calloc(quantity) {
+                    return Ok(());
+                }
                 s.memtrack.push(entry);
                 Ok(())
             }) {
@@ -724,6 +856,7 @@ macro_rules! overflow_ffi_shift {
 #[no_mangle]
 pub unsafe extern "C" fn map2check_binop_neg_int(
     param1: i32,
+    _param2: i32,
     line: u32,
     scope: u32,
     function_name: *const std::os::raw::c_char,
@@ -767,8 +900,18 @@ pub unsafe extern "C" fn map2check_check_load(
 ) {
     ffi_guard(
         || {
+            reset_result_metadata();
             // SAFETY: caller guarantees function_name is valid or null.
             let fname = unsafe { c_str(function_name) };
+            if size < 0 {
+                if let Err(e) = state::with_state(|s| {
+                    s.set_false(ViolatedProperty::MemsafetyDeref, line as u32, fname);
+                    Ok(())
+                }) {
+                    log_error(&e);
+                }
+                return;
+            }
             let ctx = VccContext::new(line as u32, scope, fname);
             let is_null_valid = state::with_state(|s| Ok(s.null_is_valid)).unwrap_or(false);
             run_vcc_check(
@@ -800,6 +943,7 @@ pub unsafe extern "C" fn map2check_check_free(
 ) {
     ffi_guard(
         || {
+            reset_result_metadata();
             // SAFETY: caller guarantees function_name is valid or null.
             let fname = unsafe { c_str(function_name) };
             let ctx = VccContext::new(line, 0, fname);
@@ -827,11 +971,16 @@ pub unsafe extern "C" fn map2check_check_free_resolved_address(
     ptr: *const std::os::raw::c_void,
     line: u32,
     function_name: *const std::os::raw::c_char,
+    is_null_valid: i16,
 ) {
     ffi_guard(
         || {
+            reset_result_metadata();
             // SAFETY: caller guarantees function_name is valid or null.
             let fname = unsafe { c_str(function_name) };
+            if ptr.is_null() && is_null_valid != 0 {
+                return;
+            }
             let ctx = VccContext::new(line, 0, fname);
             run_vcc_check(
                 FreeResolvedChecker {
@@ -859,6 +1008,7 @@ pub unsafe extern "C" fn map2check_check_deref(
 ) {
     ffi_guard(
         || {
+            reset_result_metadata();
             // SAFETY: caller guarantees function_name is valid or null.
             let fname = unsafe { c_str(function_name) };
             let ctx = VccContext::new(line, scope, fname);
@@ -881,8 +1031,8 @@ pub unsafe extern "C" fn map2check_check_deref(
 pub extern "C" fn map2check_check_mem_endprog() {
     ffi_guard(
         || {
-            let enabled = state::with_state(|s| Ok(s.memcleanup_enabled)).unwrap_or(false);
-            if !enabled {
+            reset_result_metadata();
+            if !state::with_state(|s| Ok(s.memcleanup_enabled)).unwrap_or(false) {
                 return;
             }
             let ctx = VccContext::new(0, 0, "end_of_program");

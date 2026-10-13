@@ -17,8 +17,6 @@
 
 #include "../include/map2check.h"
 
-extern void map2check_save_nondet_log_int(int32_t line, int32_t scope, int32_t value, const char *function_name);
-
 /* Local stubs — see file header note. */
 void klee_make_symbolic(void *addr, size_t nbytes, const char *name) {
     (void)addr;
@@ -37,7 +35,7 @@ int main(void) {
     klee_make_symbolic(&value, sizeof(value), "value");
     klee_assume(value >= 0);
 
-    map2check_save_nondet_log_int(12, 0, value, "main");
+    (void)map2check_save_nondet_log_int(12, 0, INT_ID, &value, "main");
     map2check_save_basic_block_log(12, "main");
     assert(map2check_is_in_trackbb_container(12) == 1);
 

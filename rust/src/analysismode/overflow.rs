@@ -82,9 +82,12 @@ impl VccChecker for DivI32 {
 
 impl VccChecker for ShlI32 {
     fn check(&self, _ctx: &VccContext) -> Result<VccOutcome, Map2CheckError> {
-        Ok(check_result(
-            self.rhs < i32::BITS && self.lhs.checked_shl(self.rhs).is_some(),
-        ))
+        let safe = self.rhs < i32::BITS
+            && self.lhs >= 0
+            && (self.lhs as i64)
+                .checked_shl(self.rhs)
+                .is_some_and(|value| value <= i32::MAX as i64);
+        Ok(check_result(safe))
     }
 }
 
@@ -254,6 +257,20 @@ mod tests {
     fn shr_i32_over_31_detected() {
         assert_eq!(
             ShrI32 { lhs: 1, rhs: 32 }.check(&ctx()).unwrap(),
+            overflow_outcome()
+        );
+    }
+    #[test]
+    fn shl_i32_overflow_detected() {
+        assert_eq!(
+            ShlI32 { lhs: 1, rhs: 31 }.check(&ctx()).unwrap(),
+            overflow_outcome()
+        );
+    }
+    #[test]
+    fn shl_i32_negative_operand_detected() {
+        assert_eq!(
+            ShlI32 { lhs: -1, rhs: 0 }.check(&ctx()).unwrap(),
             overflow_outcome()
         );
     }

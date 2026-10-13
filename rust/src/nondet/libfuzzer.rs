@@ -10,6 +10,16 @@ static FUZZER_CURSOR: AtomicUsize = AtomicUsize::new(0);
 static FUZZER_SIZE: AtomicUsize = AtomicUsize::new(0);
 static FUZZER_DATA: AtomicPtr<u8> = AtomicPtr::new(std::ptr::null_mut());
 
+struct FuzzerStateReset;
+
+impl Drop for FuzzerStateReset {
+    fn drop(&mut self) {
+        FUZZER_DATA.store(std::ptr::null_mut(), Ordering::SeqCst);
+        FUZZER_SIZE.store(0, Ordering::SeqCst);
+        FUZZER_CURSOR.store(0, Ordering::SeqCst);
+    }
+}
+
 /// Called by LibFuzzer before the test target runs.
 ///
 /// # Safety
@@ -17,6 +27,7 @@ static FUZZER_DATA: AtomicPtr<u8> = AtomicPtr::new(std::ptr::null_mut());
 /// This is guaranteed by the LibFuzzer runtime contract.
 #[no_mangle]
 pub unsafe extern "C" fn LLVMFuzzerTestOneInput(data: *const u8, size: usize) -> i32 {
+    let _reset = FuzzerStateReset;
     crate::ffi::ffi_guard(
         || {
             crate::state::reset();

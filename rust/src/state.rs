@@ -24,6 +24,8 @@ pub struct AnalysisState {
     pub null_is_valid: bool,
     /// Set by `map2check_set_memcleanup()`; read by `map2check_check_mem_endprog`.
     pub memcleanup_enabled: bool,
+    pub legacy_nondet_logs: Vec<Box<crate::ffi::non_det_log_t>>,
+    pub legacy_bbtrack_logs: Vec<Box<crate::ffi::bbtrack_log_t>>,
 }
 
 impl AnalysisState {
@@ -63,6 +65,7 @@ pub fn reset() {
         Err(poisoned) => {
             let mut guard = poisoned.into_inner();
             guard.reset();
+            state.clear_poison();
         }
     }
 }
