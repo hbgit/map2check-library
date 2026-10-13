@@ -178,10 +178,12 @@ pub extern "C" fn __VERIFIER_nondet_pointer() -> *mut std::ffi::c_void {
 //
 // Design note (documented per the project convention of registering
 // trade-offs where they are made): LibFuzzer runs many inputs within a
-// single process, and this crate builds with `panic = "abort"` in release
-// (see Cargo.toml), so there is no portable way to unwind out of an
-// arbitrarily deep call stack back to `LLVMFuzzerTestOneInput` when an
-// assumption is violated. Following the same convention used by SV-COMP's
+// single process, and an assumption is violated arbitrarily deep in a call
+// stack that began at `LLVMFuzzerTestOneInput`. There is no portable way to
+// unwind out of it: the entry point is `extern "C"`, and a Rust panic must
+// not cross an FFI boundary regardless of the release profile's panic
+// strategy, so an unwind-based `assume` would be unsound rather than merely
+// awkward. Following the same convention used by SV-COMP's
 // native/concrete-execution harnesses, `__VERIFIER_assume` ends the current
 // process with exit code 0 (treated as "uninteresting", not a crash) instead
 // of unwinding. This does end the fuzzing campaign for the current process —

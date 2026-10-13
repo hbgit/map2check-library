@@ -34,7 +34,7 @@ jobs:
         run: cargo test --all-features
 
       # NOTE: a static lib built with this crate's [profile.release] (LTO +
-      # panic = "abort") linked into a clang -fsanitize=address,undefined
+      # codegen-units = 1) linked into a clang -fsanitize=address,undefined
       # binary has a known, pre-existing intermittent SIGSEGV (~20-25% of
       # runs) unrelated to any actual memory-safety bug — confirmed by
       # bisection: it reproduces even for the most trivial call sequence

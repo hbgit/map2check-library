@@ -29,10 +29,11 @@ of resurrecting the old kernel-typed names.
 
 `__VERIFIER_assume(0)` and `map2check_fuzzer_assume(0)` call
 `std::process::exit(0)` instead of unwinding back to the caller. LibFuzzer
-runs many inputs within a single process, and this crate builds with
-`panic = "abort"` in release (`Cargo.toml`), so there is no portable way to
-unwind out of an arbitrarily deep call stack back to
-`LLVMFuzzerTestOneInput` when an assumption is violated. This matches the
+runs many inputs within a single process, and the assumption is violated
+arbitrarily deep in a call stack that began at `LLVMFuzzerTestOneInput`.
+There is no portable way to unwind out of it: the entry point is
+`extern "C"`, and a Rust panic must not cross an FFI boundary regardless of
+the release profile's panic strategy. This matches the
 convention used by SV-COMP's native/concrete-execution harnesses. It does end
 the fuzzing campaign for the current process — accepted as a known
 limitation; full symbolic-execution semantics (path pruning under KLEE) is
