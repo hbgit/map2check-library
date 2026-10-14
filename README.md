@@ -56,13 +56,14 @@ O artefato principal é gerado em `target/release/libmap2check.a`.
 
 ### Cobertura
 
-Para gerar o relatório de cobertura localmente:
+A cobertura é medida com `cargo-tarpaulin` (engine LLVM), excluindo `rust/src/ffi*.rs`, e o build falha abaixo de **80%**. O CI e o `Dockerfile` usam o mesmo script:
 
 ```sh
-cargo tarpaulin --out Html --output-dir coverage/ --all-features
+scripts/coverage.sh                        # gate padrão de 80%
+COVERAGE_FAIL_UNDER=0 scripts/coverage.sh  # só gera o relatório, sem gate
 ```
 
-O relatório HTML fica em `coverage/tarpaulin-report.html`.
+Os relatórios ficam em `coverage/lcov.info` e `coverage/tarpaulin-report.html`. No CI, eles são publicados como o artefato `coverage`.
 
 ### Geração do header C
 

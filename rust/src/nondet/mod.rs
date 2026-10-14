@@ -93,4 +93,20 @@ mod tests {
         let _entry = NonDetEntry::new(1, 1, 0, "main", NonDetValue::Double(val));
         assert!((val - 1.0_f64).abs() < f64::EPSILON);
     }
+
+    #[test]
+    fn type_name_covers_every_variant() {
+        let cases = [
+            (NonDetValue::Int(-1), "INT"),
+            (NonDetValue::UInt(1), "UINT"),
+            (NonDetValue::Long(-1), "LONG"),
+            (NonDetValue::Char(-1), "CHAR"),
+            (NonDetValue::Float(0.5), "FLOAT"),
+            (NonDetValue::Double(0.5), "DOUBLE"),
+        ];
+        for (value, name) in cases {
+            assert_eq!(value.type_name(), name);
+            assert!(serde_json::to_string(&value).unwrap().contains(name));
+        }
+    }
 }

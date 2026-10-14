@@ -300,4 +300,72 @@ mod tests {
             overflow_outcome()
         );
     }
+
+    #[test]
+    fn mul_and_shr_u32_bounds() {
+        assert_eq!(
+            MulU32 {
+                lhs: u32::MAX,
+                rhs: 2
+            }
+            .check(&ctx())
+            .unwrap(),
+            overflow_outcome()
+        );
+        assert_eq!(
+            MulU32 { lhs: 3, rhs: 4 }.check(&ctx()).unwrap(),
+            VccOutcome::Safe
+        );
+        assert_eq!(
+            ShrU32 { lhs: 1, rhs: 32 }.check(&ctx()).unwrap(),
+            overflow_outcome()
+        );
+        assert_eq!(
+            ShrU32 { lhs: 1, rhs: 31 }.check(&ctx()).unwrap(),
+            VccOutcome::Safe
+        );
+    }
+
+    #[test]
+    fn i64_checkers_detect_overflow_and_accept_normal_values() {
+        assert_eq!(
+            AddI64 {
+                lhs: i64::MAX,
+                rhs: 1
+            }
+            .check(&ctx())
+            .unwrap(),
+            overflow_outcome()
+        );
+        assert_eq!(
+            AddI64 { lhs: 1, rhs: 2 }.check(&ctx()).unwrap(),
+            VccOutcome::Safe
+        );
+        assert_eq!(
+            SubI64 {
+                lhs: i64::MIN,
+                rhs: 1
+            }
+            .check(&ctx())
+            .unwrap(),
+            overflow_outcome()
+        );
+        assert_eq!(
+            SubI64 { lhs: 5, rhs: 3 }.check(&ctx()).unwrap(),
+            VccOutcome::Safe
+        );
+        assert_eq!(
+            MulI64 {
+                lhs: i64::MAX,
+                rhs: 2
+            }
+            .check(&ctx())
+            .unwrap(),
+            overflow_outcome()
+        );
+        assert_eq!(
+            MulI64 { lhs: -4, rhs: 3 }.check(&ctx()).unwrap(),
+            VccOutcome::Safe
+        );
+    }
 }

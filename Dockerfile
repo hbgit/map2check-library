@@ -28,16 +28,12 @@ RUN mkdir -p include && cargo build --release
 FROM builder AS test
 
 COPY test/ ./test/
+COPY scripts/coverage.sh ./scripts/coverage.sh
 
 RUN cargo test --all-features 2>&1 | tee /tmp/test-results.txt
 
-RUN cargo tarpaulin \
-    --engine llvm \
-    --out Lcov \
-    --output-dir /coverage \
-    --all-features \
-    --exclude-files "rust/src/ffi.rs" || mkdir -p /coverage
-    
+# Falha o build se a cobertura (fora de rust/src/ffi*.rs) ficar abaixo do gate.
+RUN COVERAGE_OUT_DIR=/coverage scripts/coverage.sh
 
 # ── Stage 3: Final minimal runtime image ──────────────────────────────────────
 FROM debian:bookworm-slim AS final

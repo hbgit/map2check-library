@@ -74,4 +74,24 @@ mod tests {
         assert_eq!(ViolatedProperty::Reachability.as_str(), "REACHABILITY");
         assert_eq!(ViolatedProperty::None.as_str(), "NONE");
     }
+
+    #[test]
+    fn violated_property_as_str_covers_every_variant() {
+        let cases = [
+            (ViolatedProperty::Overflow, "OVERFLOW"),
+            (ViolatedProperty::MemsafetyFree, "MEMSAFETY_FREE"),
+            (ViolatedProperty::MemsafetyDeref, "MEMSAFETY_DEREF"),
+            (ViolatedProperty::MemsafetyMemtrack, "MEMSAFETY_MEMTRACK"),
+            (
+                ViolatedProperty::MemsafetyMemcleanup,
+                "MEMSAFETY_MEMCLEANUP",
+            ),
+            (ViolatedProperty::Reachability, "REACHABILITY"),
+            (ViolatedProperty::Concurrency, "CONCURRENCY"),
+            (ViolatedProperty::None, "NONE"),
+        ];
+        for (property, name) in cases {
+            assert_eq!(property.as_str(), name);
+        }
+    }
 }

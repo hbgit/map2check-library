@@ -309,4 +309,23 @@ mod tests {
         assert!(is_invalid_address(&entries, usize::MAX - 1, 8));
         assert!(is_invalid_address(&entries, usize::MAX - 1, 4));
     }
+
+    #[test]
+    fn same_slot_compares_address_scope_flags_and_line() {
+        let a = make_entry(0x100, 0x200, true, false, 8);
+        let mut b = make_entry(0x100, 0x300, true, false, 16);
+        assert!(a.same_slot(&b)); // points_to and size do not matter
+        b.line = 11;
+        assert!(!a.same_slot(&b));
+        let c = make_entry(0x100, 0x200, true, true, 8);
+        assert!(!a.same_slot(&c));
+        let d = make_entry(0x104, 0x200, true, false, 8);
+        assert!(!a.same_slot(&d));
+    }
+
+    #[test]
+    fn cleanup_ignores_stack_entries() {
+        let entries = vec![make_entry(0x100, 0x100, false, false, 4)];
+        assert!(!has_memcleanup_error(&entries));
+    }
 }
