@@ -46,6 +46,7 @@ consult those files before changing how analysis modes are linked.
 ## Repository-specific conventions
 
 - Commits must have verified signatures.
+- Never include AI attributions, "Co-authored-by: Copilot", or "Generated with AI" labels in git commits or PR descriptions.
 - Keep C ABI declarations and conversions in `ffi.rs`; use `#[repr(C)]` for
   types crossing the ABI. Unsafe operations at FFI boundaries need a local
   `// SAFETY:` explanation describing the caller guarantee.
