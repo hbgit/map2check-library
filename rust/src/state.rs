@@ -90,12 +90,24 @@ where
     f(&mut guard)
 }
 
+/// Serializes unit tests that touch process-wide state (the analysis state and
+/// the LibFuzzer input atomics). `cargo test` runs tests in parallel threads,
+/// so without this a `reset()` in one test can wipe another test's setup.
+#[cfg(test)]
+pub(crate) fn test_lock() -> std::sync::MutexGuard<'static, ()> {
+    static TEST_LOCK: Mutex<()> = Mutex::new(());
+    TEST_LOCK
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
     fn reset_clears_global_state() {
+        let _guard = test_lock();
         init();
         with_state(|s| {
             s.set_false(ViolatedProperty::MemsafetyDeref, 42, "test_fn");
@@ -118,5 +130,30 @@ mod tests {
         assert!(guard.nondets.is_empty());
         assert!(guard.memtrack.is_empty());
         assert!(guard.bbtrack.is_empty());
+    }
+
+    #[test]
+    fn next_step_increments_and_current_step_reads_it() {
+        let mut s = AnalysisState::default();
+        assert_eq!(s.current_step(), 0);
+        assert_eq!(s.next_step(), 1);
+        assert_eq!(s.next_step(), 2);
+        assert_eq!(s.current_step(), 2);
+    }
+
+    #[test]
+    fn reset_recovers_from_poisoned_lock() {
+        let _guard = test_lock();
+        let _ = std::thread::spawn(|| {
+            let _held = ensure_state().lock().unwrap();
+            panic!("poison the analysis state on purpose");
+        })
+        .join();
+        assert!(ensure_state().is_poisoned());
+
+        reset();
+
+        assert!(!ensure_state().is_poisoned());
+        assert!(with_state(|s| Ok(s.result.ok)).unwrap());
     }
 }
