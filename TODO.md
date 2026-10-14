@@ -8,6 +8,9 @@ com os passes e o frontend do projeto Map2Check não foi validada aqui.
 Os módulos centrais de assert, overflow, memória, rastreamento de blocos,
 nondeterminismo e JSON já existem em Rust. As tarefas abaixo registram lacunas
 de ABI, comportamento e validação encontradas na comparação.
+As atividades adicionais abaixo foram extraídas de
+[docs/plano_map2check_library_rust.md](docs/plano_map2check_library_rust.md)
+e não repetem as tarefas já listadas.
 
 ## Prioridade alta — compatibilidade e correção
 
@@ -96,3 +99,91 @@ de ABI, comportamento e validação encontradas na comparação.
   schema JSON entre `master` e Rust. Classificar divergências intencionais e
   executar os casos no CI; os testes unitários existentes não demonstram essa
   paridade ponta a ponta.
+
+## Outras atividades do plano
+
+### Prioridade alta — robustez e cobertura do contrato
+
+- [ ] **Impedir que falhas atravessem a fronteira FFI sem tratamento.**
+  Definir o comportamento de panic por perfil de compilação e proteger exports
+  `extern "C"` contra unwinding quando o perfil permitir recuperação; no perfil
+  `panic = "abort"`, documentar que não há recuperação. Adicionar um harness C
+  que exercite exports antes da inicialização e entradas válidas de borda, e
+  executar verificações com ASan/UBSan. Não passar ponteiros inválidos
+  arbitrários: eles podem causar comportamento indefinido antes de qualquer
+  validação Rust.
+
+- [ ] **Completar ou descontinuar explicitamente os símbolos nondet restantes.**
+  Decidir o contrato para `__VERIFIER_nondet_pointer`,
+  `__VERIFIER_assume`, `__VERIFIER_assert`, `__VERIFIER_error`,
+  `map2check_fuzzer_assume` e os geradores `pchar`, `loff_t` e `sector_t`;
+  implementar os que têm consumidores e registrar a remoção dos demais.
+  Verificar as assinaturas/representações C e incluir testes de link e execução.
+
+- [ ] **Cobrir a API C com programas de integração.** Compilar, linkar e
+  executar `test/codeAPI_by_caller_test.c`,
+  `test/codefuzz_by_caller_test.c` e `test/codeklee_by_caller_test.c` contra a
+  biblioteca gerada; manter esses casos como testes de CI, além dos testes
+  unitários Rust.
+
+### Prioridade média — build, KLEE, desempenho e documentação
+
+- [ ] **Corrigir e tornar estritos os builds de release e CI.** Corrigir os
+  caminhos/estágios do Dockerfile para os diretórios Rust e testes atuais;
+  alinhar a versão Rust entre Dockerfile, `rust-toolchain.toml` e README; validar
+  que geração do header, lint, formato, auditoria de dependências e cobertura
+  executem no CI; remover artefatos de build legados que não sejam mais usados.
+  Falhas na geração ou no link de bitcode não devem ser mascaradas por `|| true`.
+
+- [ ] **Executar o gate de viabilidade de KLEE e registrar a decisão.**
+  Prototipar a feature `klee` com nondeterminismo via `klee_make_symbolic`,
+  estado compatível com execução simbólica e emissão/link de bitcode; testar o
+  programa KLEE de referência com uma versão LLVM compatível. Registrar
+  evidências, limitações e a decisão go/no-go em
+  `docs/klee-feasibility.md`; se Rust não for viável, formalizar a contingência
+  de manter a biblioteca C nesse fluxo.
+
+- [ ] **Medir e controlar a regressão de desempenho.** Criar benchmarks
+  reproduzíveis contra a biblioteca C, usando programas de referência e corpus
+  fixo para LibFuzzer; registrar medições e perfis quando o overhead exceder
+  10%. Adicionar execução periódica no CI e definir a regressão máxima aceitável
+  como 10% na mediana.
+
+- [ ] **Documentar desvios, compatibilidade e release.** Manter uma matriz de
+  símbolos/assinaturas com os desvios deliberados (`docs/api-deltas.md`),
+  classificar diferenças semânticas com casos reproduzíveis
+  (`docs/semantic-deltas.md`), atualizar o changelog e publicar o header C e
+  guia de integração junto à versão liberada.
+
+### Dependente do repositório externo `hbgit/Map2Check`
+
+- [ ] **Adicionar uma camada de compatibilidade para os passes atuais.**
+  Em `map2check-library`, implementar uma feature isolada que exporte os nomes
+  e assinaturas usados pelos passes de `Map2Check@develop`, delegando à API
+  núcleo; incluir a matriz completa de símbolos e resolver/documentar a colisão
+  de assinatura de `map2check_check_deref`. Excluir explicitamente símbolos
+  wasm se permanecerem fora do escopo.
+
+- [ ] **Compatibilizar o canal de resultado legado.** Além do JSON, implementar
+  a escrita dos arquivos-sentinela `map2check_property_*` nos nomes e formatos
+  aceitos pelo parser atual do Map2Check. Adicionar golden tests para arquivos
+  e JSON e validar propriedade, linha e função contra saídas da biblioteca C
+  embutida.
+
+- [ ] **Integrar Rust ao CMake do Map2Check sob uma opção opt-in.** No
+  repositório `hbgit/Map2Check`, adicionar `MAP2CHECK_RUST_RUNTIME` inicialmente
+  desligada, compilar/linkar `libmap2check.a` nos fluxos nativos e aplicar a
+  decisão de KLEE registrada acima. Impedir link simultâneo de runtimes com
+  símbolos duplicados e testar a opção com uma regressão pequena.
+
+- [ ] **Migrar consumidores e aposentar a compatibilidade somente após paridade.**
+  Após um ciclo de regressão sem diferenças não adjudicadas, migrar os passes
+  para a API núcleo e o frontend para o JSON; então remover a camada compatível
+  e o runtime C embutido apenas quando não houver símbolos ou consumidores
+  órfãos. Manter a opção de retorno ao runtime antigo durante a transição.
+
+- [ ] **Aplicar critérios de prontidão antes de promover a integração.**
+  Exigir cobertura dos símbolos necessários, regressões sem divergências não
+  adjudicadas, overhead dentro do limite acordado, fluxos None/LibFuzzer e a
+  decisão KLEE verificados, além da documentação e release versionada. Adiar a
+  promoção para default se qualquer gate estiver pendente.
