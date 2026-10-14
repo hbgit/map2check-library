@@ -1,0 +1,14 @@
+/build/rust/src/analysismode/assert.rs: 5/5
+/build/rust/src/analysismode/memory.rs: 6/42
+/build/rust/src/analysismode/mod.rs: 2/2
+/build/rust/src/analysismode/overflow.rs: 29/39
+/build/rust/src/bbtrack/mod.rs: 4/4
+/build/rust/src/caller/mod.rs: 8/12
+/build/rust/src/error.rs: 0/2
+/build/rust/src/memtrack/mod.rs: 45/52
+/build/rust/src/nondet/libfuzzer.rs: 20/85
+/build/rust/src/nondet/mod.rs: 6/10
+/build/rust/src/output/mod.rs: 4/6
+/build/rust/src/state.rs: 22/31
+TOTAL (sem ffi.rs, conforme Dockerfile): 151/290 = 52.1%
+total excl ffi*.rs: 151 / 290

@@ -1,0 +1,447 @@
+#0 building with "default" instance using docker driver
+
+#1 [internal] load build definition from Dockerfile
+#1 transferring dockerfile: 2.21kB done
+#1 DONE 0.0s
+
+#2 [internal] load metadata for docker.io/library/rust:1.82-slim-bookworm
+#2 ...
+
+#3 [internal] load metadata for docker.io/library/debian:bookworm-slim
+#3 DONE 0.7s
+
+#2 [internal] load metadata for docker.io/library/rust:1.82-slim-bookworm
+#2 DONE 0.7s
+
+#4 [internal] load .dockerignore
+#4 transferring context: 2B done
+#4 DONE 0.0s
+
+#5 [final 1/5] FROM docker.io/library/debian:bookworm-slim@sha256:7c7b2c966bc9ee8cedfeef67e0e279108992c77681fa595db4a9d65c06ccc587
+#5 resolve docker.io/library/debian:bookworm-slim@sha256:7c7b2c966bc9ee8cedfeef67e0e279108992c77681fa595db4a9d65c06ccc587 0.0s done
+#5 DONE 0.0s
+
+#6 [builder  1/11] FROM docker.io/library/rust:1.82-slim-bookworm@sha256:1111c28d995d06a7863ba6cea3b3dcb87bebe65af8ec5517caaf2c8c26f38010
+#6 resolve docker.io/library/rust:1.82-slim-bookworm@sha256:1111c28d995d06a7863ba6cea3b3dcb87bebe65af8ec5517caaf2c8c26f38010 0.0s done
+#6 DONE 0.0s
+
+#7 [internal] load build context
+#7 transferring context: 117.92kB 0.0s done
+#7 DONE 0.0s
+
+#8 [builder  4/11] WORKDIR /build
+#8 CACHED
+
+#9 [builder  2/11] RUN apt-get update && apt-get install -y --no-install-recommends     cmake make git curl ca-certificates     && rm -rf /var/lib/apt/lists/*
+#9 CACHED
+
+#10 [builder  6/11] COPY clippy.toml deny.toml cbindgen.toml ./
+#10 CACHED
+
+#11 [builder  5/11] COPY Cargo.toml Cargo.lock* ./
+#11 CACHED
+
+#12 [builder  3/11] RUN curl -sL https://github.com/xd009642/tarpaulin/releases/download/0.31.3/cargo-tarpaulin-x86_64-unknown-linux-musl.tar.gz | tar -xz -C /usr/local/cargo/bin
+#12 CACHED
+
+#13 [builder  7/11] COPY rust-toolchain.toml ./
+#13 CACHED
+
+#14 [builder  8/11] COPY rust/ ./rust/
+#14 DONE 0.0s
+
+#15 [builder  9/11] COPY build.rs ./
+#15 DONE 0.0s
+
+#16 [builder 10/11] RUN cargo fetch
+#16 0.166 info: syncing channel updates for '1.82.0-x86_64-unknown-linux-gnu'
+#16 26.13 info: latest update on 2024-10-17, rust version 1.82.0 (f6e511eec 2024-10-15)
+#16 26.15 info: downloading component 'clippy'
+#16 26.47 info: downloading component 'rustfmt'
+#16 100.9 info: installing component 'clippy'
+#16 101.1 info: installing component 'rustfmt'
+#16 101.4     Updating crates.io index
+#16 106.4  Downloading crates ...
+#16 106.9   Downloaded thiserror-impl v2.0.18
+#16 107.0   Downloaded cfg-if v1.0.4
+#16 107.1   Downloaded downcast v0.11.0
+#16 107.1   Downloaded windows-targets v0.52.6
+#16 107.2   Downloaded windows-link v0.2.1
+#16 107.2   Downloaded predicates-core v1.0.10
+#16 107.2   Downloaded clap_lex v0.2.4
+#16 107.2   Downloaded winapi-util v0.1.11
+#16 107.2   Downloaded termtree v0.5.1
+#16 107.2   Downloaded atty v0.2.14
+#16 107.2   Downloaded heck v0.4.1
+#16 107.2   Downloaded errno v0.3.14
+#16 107.2   Downloaded predicates-tree v1.0.13
+#16 107.2   Downloaded itoa v1.0.18
+#16 107.3   Downloaded futures-core v0.3.32
+#16 107.3   Downloaded strsim v0.10.0
+#16 107.3   Downloaded zmij v1.0.21
+#16 107.3   Downloaded bitflags v1.3.2
+#16 107.3   Downloaded termcolor v1.4.1
+#16 107.3   Downloaded fragile v2.1.0
+#16 107.3   Downloaded os_str_bytes v6.6.1
+#16 107.3   Downloaded fastrand v2.5.0
+#16 107.3   Downloaded anstyle v1.0.14
+#16 107.3   Downloaded quote v1.0.45
+#16 107.3   Downloaded thiserror v2.0.18
+#16 107.3   Downloaded autocfg v1.5.1
+#16 107.4   Downloaded unicode-ident v1.0.24
+#16 107.4   Downloaded mockall_derive v0.13.1
+#16 107.4   Downloaded tempfile v3.10.1
+#16 107.4   Downloaded mockall v0.13.1
+#16 107.4   Downloaded serde_derive v1.0.228
+#16 107.4   Downloaded textwrap v0.16.2
+#16 107.4   Downloaded log v0.4.33
+#16 107.4   Downloaded bitflags v2.13.1
+#16 107.4   Downloaded indexmap v1.9.3
+#16 107.4   Downloaded toml v0.5.11
+#16 107.4   Downloaded predicates v3.1.4
+#16 107.4   Downloaded proc-macro2 v1.0.106
+#16 107.4   Downloaded serde_core v1.0.228
+#16 107.4   Downloaded serde v1.0.228
+#16 107.5   Downloaded hashbrown v0.12.3
+#16 107.5   Downloaded memchr v2.8.2
+#16 107.5   Downloaded serde_json v1.0.150
+#16 107.5   Downloaded clap v3.2.25
+#16 107.5   Downloaded syn v1.0.109
+#16 107.6   Downloaded syn v2.0.118
+#16 107.6   Downloaded rustix v0.38.44
+#16 107.6   Downloaded windows_aarch64_gnullvm v0.52.6
+#16 107.6   Downloaded windows_x86_64_gnullvm v0.52.6
+#16 107.6   Downloaded windows_i686_gnullvm v0.52.6
+#16 107.6   Downloaded cbindgen v0.26.0
+#16 107.7   Downloaded windows_aarch64_msvc v0.52.6
+#16 107.9   Downloaded windows_x86_64_gnu v0.52.6
+#16 107.9   Downloaded libc v0.2.189
+#16 107.9   Downloaded windows_x86_64_msvc v0.52.6
+#16 107.9   Downloaded windows_i686_gnu v0.52.6
+#16 107.9   Downloaded windows_i686_msvc v0.52.6
+#16 107.9   Downloaded hermit-abi v0.1.19
+#16 107.9   Downloaded winapi v0.3.9
+#16 108.0   Downloaded linux-raw-sys v0.4.15
+#16 108.1   Downloaded windows-sys v0.59.0
+#16 108.1   Downloaded windows-sys v0.61.2
+#16 108.2   Downloaded windows-sys v0.52.0
+#16 108.2   Downloaded winapi-i686-pc-windows-gnu v0.4.0
+#16 108.3   Downloaded winapi-x86_64-pc-windows-gnu v0.4.0
+#16 DONE 108.6s
+
+#17 [builder 11/11] RUN mkdir -p include && cargo build --release
+#17 0.221    Compiling proc-macro2 v1.0.106
+#17 0.221    Compiling quote v1.0.45
+#17 0.221    Compiling unicode-ident v1.0.24
+#17 0.221    Compiling serde_core v1.0.228
+#17 0.221    Compiling zmij v1.0.21
+#17 0.221    Compiling serde v1.0.228
+#17 0.221    Compiling serde_json v1.0.150
+#17 0.221    Compiling autocfg v1.5.1
+#17 0.221    Compiling libc v0.2.189
+#17 0.222    Compiling rustix v0.38.44
+#17 0.223    Compiling os_str_bytes v6.6.1
+#17 0.224    Compiling syn v1.0.109
+#17 0.224    Compiling hashbrown v0.12.3
+#17 0.225    Compiling linux-raw-sys v0.4.15
+#17 0.226    Compiling bitflags v2.13.1
+#17 0.227    Compiling strsim v0.10.0
+#17 0.645    Compiling cbindgen v0.26.0
+#17 1.224    Compiling itoa v1.0.18
+#17 1.574    Compiling clap_lex v0.2.4
+#17 1.741    Compiling textwrap v0.16.2
+#17 1.745    Compiling fastrand v2.5.0
+#17 1.784    Compiling memchr v2.8.2
+#17 2.106    Compiling cfg-if v1.0.4
+#17 2.188    Compiling termcolor v1.4.1
+#17 2.239    Compiling bitflags v1.3.2
+#17 2.333    Compiling log v0.4.33
+#17 2.396    Compiling heck v0.4.1
+#17 2.906    Compiling thiserror v2.0.18
+#17 3.713    Compiling indexmap v1.9.3
+#17 5.620    Compiling syn v2.0.118
+#17 6.444    Compiling atty v0.2.14
+#17 6.498    Compiling clap v3.2.25
+#17 7.138    Compiling tempfile v3.10.1
+#17 8.142    Compiling serde_derive v1.0.228
+#17 8.142    Compiling thiserror-impl v2.0.18
+#17 10.91    Compiling toml v0.5.11
+#17 12.94    Compiling map2check-library v1.0.0 (/build)
+#17 15.33     Finished `release` profile [optimized] target(s) in 15.16s
+#17 DONE 15.5s
+
+#18 [test 1/3] COPY test/ ./test/
+#18 DONE 0.0s
+
+#19 [final 2/5] RUN apt-get update && apt-get install -y --no-install-recommends     ca-certificates     && rm -rf /var/lib/apt/lists/*
+#19 CACHED
+
+#20 [final 3/5] COPY --from=builder /build/target/release/libmap2check.a /usr/local/lib/
+#20 DONE 0.0s
+
+#21 [final 4/5] COPY --from=builder /build/include/map2check.h /usr/local/include/
+#21 DONE 0.0s
+
+#22 [test 2/3] RUN cargo test --all-features 2>&1 | tee /tmp/test-results.txt
+#22 0.166    Compiling proc-macro2 v1.0.106
+#22 0.166    Compiling quote v1.0.45
+#22 0.166    Compiling unicode-ident v1.0.24
+#22 0.166    Compiling serde_core v1.0.228
+#22 0.166    Compiling libc v0.2.189
+#22 0.166    Compiling autocfg v1.5.1
+#22 0.166    Compiling rustix v0.38.44
+#22 0.167    Compiling zmij v1.0.21
+#22 0.168    Compiling cfg-if v1.0.4
+#22 0.168    Compiling serde v1.0.228
+#22 0.169    Compiling bitflags v2.13.1
+#22 0.169    Compiling syn v1.0.109
+#22 0.170    Compiling hashbrown v0.12.3
+#22 0.171    Compiling os_str_bytes v6.6.1
+#22 0.171    Compiling serde_json v1.0.150
+#22 0.173    Compiling linux-raw-sys v0.4.15
+#22 0.196    Compiling itoa v1.0.18
+#22 0.230    Compiling bitflags v1.3.2
+#22 0.297    Compiling memchr v2.8.2
+#22 0.462    Compiling fastrand v2.5.0
+#22 0.504    Compiling cbindgen v0.26.0
+#22 0.629    Compiling termcolor v1.4.1
+#22 0.644    Compiling textwrap v0.16.2
+#22 0.706    Compiling clap_lex v0.2.4
+#22 0.731    Compiling strsim v0.10.0
+#22 0.824    Compiling heck v0.4.1
+#22 0.841    Compiling log v0.4.33
+#22 1.179    Compiling mockall_derive v0.13.1
+#22 1.194    Compiling predicates-core v1.0.10
+#22 1.205    Compiling thiserror v2.0.18
+#22 1.245    Compiling termtree v0.5.1
+#22 1.300    Compiling futures-core v0.3.32
+#22 1.318    Compiling anstyle v1.0.14
+#22 1.345    Compiling downcast v0.11.0
+#22 1.398    Compiling predicates-tree v1.0.13
+#22 1.512    Compiling indexmap v1.9.3
+#22 1.525    Compiling fragile v2.1.0
+#22 1.609    Compiling predicates v3.1.4
+#22 2.004    Compiling syn v2.0.118
+#22 2.697    Compiling atty v0.2.14
+#22 2.746    Compiling clap v3.2.25
+#22 3.402    Compiling tempfile v3.10.1
+#22 5.672    Compiling serde_derive v1.0.228
+#22 5.672    Compiling thiserror-impl v2.0.18
+#22 7.670    Compiling mockall v0.13.1
+#22 7.932    Compiling toml v0.5.11
+#22 10.01    Compiling map2check-library v1.0.0 (/build)
+#22 12.25     Finished `test` profile [unoptimized + debuginfo] target(s) in 12.11s
+#22 12.25      Running unittests rust/src/lib.rs (target/debug/deps/map2check-0705f554f100a70b)
+#22 12.25 
+#22 12.25 running 52 tests
+#22 12.25 test analysismode::assert::tests::false_expression_yields_reachability_violation ... ok
+#22 12.25 test analysismode::assert::tests::nonzero_expression_is_safe ... ok
+#22 12.25 test analysismode::assert::tests::true_expression_is_safe ... ok
+#22 12.25 test analysismode::memory::tests::null_load_obeys_null_valid_flag ... ok
+#22 12.25 test analysismode::overflow::tests::add_i32_normal_is_safe ... ok
+#22 12.25 test analysismode::overflow::tests::add_i32_overflow_detected ... ok
+#22 12.25 test analysismode::overflow::tests::add_u32_overflow_detected ... ok
+#22 12.25 test analysismode::overflow::tests::div_u32_by_zero_detected ... ok
+#22 12.25 test analysismode::overflow::tests::mul_i32_overflow_detected ... ok
+#22 12.25 test analysismode::overflow::tests::neg_i32_min_detected ... ok
+#22 12.25 test analysismode::overflow::tests::div_i32_by_zero_detected ... ok
+#22 12.25 test analysismode::overflow::tests::shl_i32_negative_operand_detected ... ok
+#22 12.25 test analysismode::overflow::tests::shl_i32_overflow_detected ... ok
+#22 12.25 test analysismode::overflow::tests::shr_i32_over_31_detected ... ok
+#22 12.25 test analysismode::overflow::tests::sub_i32_underflow_detected ... ok
+#22 12.25 test analysismode::overflow::tests::sub_u32_underflow_detected ... ok
+#22 12.25 test bbtrack::tests::contains_line_finds_existing ... ok
+#22 12.25 test bbtrack::tests::basic_block_entry_created_correctly ... ok
+#22 12.25 test bbtrack::tests::contains_line_returns_false_when_absent ... ok
+#22 12.25 test caller::tests::default_result_is_ok_with_none_property ... ok
+#22 12.25 test bbtrack::tests::entry_serializes_to_json ... ok
+#22 12.25 test memtrack::tests::deref_resolves_allocation_through_stored_pointer ... ok
+#22 12.25 test memtrack::tests::calloc_size_multiplication_is_checked ... ok
+#22 12.25 test caller::tests::violated_property_as_str ... ok
+#22 12.25 test memtrack::tests::free_resolved_unknown_address_not_flagged ... ok
+#22 12.25 test memtrack::tests::invalid_address_rejects_wrapping_ranges ... ok
+#22 12.25 test memtrack::tests::deref_error_on_freed_address ... ok
+#22 12.25 test memtrack::tests::invalid_free_detected_when_already_freed ... ok
+#22 12.25 test memtrack::tests::invalid_free_resolved_detected_when_already_freed ... ok
+#22 12.25 test memtrack::tests::set_calloc_multiplies_size ... ok
+#22 12.25 test memtrack::tests::set_malloc_marks_dynamic ... ok
+#22 12.25 test memtrack::tests::set_free_marks_freed_and_clears_size ... ok
+#22 12.25 test memtrack::tests::find_by_address_returns_none_when_not_found ... ok
+#22 12.25 test memtrack::tests::cleanup_detects_live_allocation_and_ignores_freed_allocation ... ok
+#22 12.25 test memtrack::tests::unknown_free_is_invalid ... ok
+#22 12.25 test memtrack::tests::invalid_address_outside_allocation ... ok
+#22 12.25 test memtrack::tests::deref_ok_on_live_address ... ok
+#22 12.25 test memtrack::tests::valid_address_inside_allocation ... ok
+#22 12.25 test memtrack::tests::valid_free_not_flagged ... ok
+#22 12.25 test memtrack::tests::valid_free_resolved_not_flagged ... ok
+#22 12.25 test nondet::libfuzzer::tests::map2check_fuzzer_assume_true_is_a_no_op ... ok
+#22 12.25 test nondet::libfuzzer::tests::verifier_assume_true_is_a_no_op ... ok
+#22 12.25 test nondet::libfuzzer::tests::verifier_assert_true_is_a_no_op ... ok
+#22 12.25 test nondet::libfuzzer::tests::verifier_nondet_pointer_does_not_panic ... ok
+#22 12.25 test nondet::tests::nondet_double_from_bits_is_safe ... ok
+#22 12.25 test nondet::tests::nondet_float_from_bits_is_safe ... ok
+#22 12.25 test nondet::tests::nondet_entry_int_serializes ... ok
+#22 12.25 test output::tests::false_result_includes_property_and_line ... ok
+#22 12.25 test output::tests::ok_result_serializes_true ... ok
+#22 12.25 test state::tests::reset_clears_global_state ... ok
+#22 12.25 test output::tests::memtrack_included_only_for_memory_violations ... ok
+#22 12.25 test output::tests::output_is_valid_json ... ok
+#22 12.25 
+#22 12.25 test result: ok. 52 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+#22 12.25 
+#22 12.25    Doc-tests map2check
+#22 12.29 
+#22 12.29 running 0 tests
+#22 12.29 
+#22 12.29 test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+#22 12.29 
+#22 DONE 12.4s
+
+#23 [test 3/3] RUN cargo tarpaulin     --engine llvm     --out Lcov     --output-dir /coverage     --all-features     --exclude-files "rust/src/ffi.rs" || mkdir -p /coverage
+#23 0.150 [2m2026-10-14T20:59:41.396384Z[0m [32m INFO[0m [2mcargo_tarpaulin::config[0m[2m:[0m Creating config
+#23 0.219 [2m2026-10-14T20:59:41.465591Z[0m [32m INFO[0m [2mcargo_tarpaulin[0m[2m:[0m Running Tarpaulin
+#23 0.219 [2m2026-10-14T20:59:41.465602Z[0m [32m INFO[0m [2mcargo_tarpaulin[0m[2m:[0m Building project
+#23 0.219 [2m2026-10-14T20:59:41.465605Z[0m [32m INFO[0m [2mcargo_tarpaulin::cargo[0m[2m:[0m Cleaning project
+#23 0.312    Compiling proc-macro2 v1.0.106
+#23 0.312    Compiling quote v1.0.45
+#23 0.312    Compiling unicode-ident v1.0.24
+#23 0.312    Compiling serde_core v1.0.228
+#23 0.312    Compiling autocfg v1.5.1
+#23 0.312    Compiling libc v0.2.189
+#23 0.312    Compiling zmij v1.0.21
+#23 0.312    Compiling serde v1.0.228
+#23 0.312    Compiling cfg-if v1.0.4
+#23 0.314    Compiling rustix v0.38.44
+#23 0.314    Compiling hashbrown v0.12.3
+#23 0.315    Compiling syn v1.0.109
+#23 0.316    Compiling linux-raw-sys v0.4.15
+#23 0.317    Compiling os_str_bytes v6.6.1
+#23 0.317    Compiling bitflags v2.13.1
+#23 0.319    Compiling serde_json v1.0.150
+#23 0.337    Compiling termcolor v1.4.1
+#23 0.460    Compiling fastrand v2.5.0
+#23 0.707    Compiling clap_lex v0.2.4
+#23 0.722    Compiling bitflags v1.3.2
+#23 0.782    Compiling cbindgen v0.26.0
+#23 0.985    Compiling memchr v2.8.2
+#23 1.100    Compiling textwrap v0.16.2
+#23 1.217    Compiling itoa v1.0.18
+#23 1.240    Compiling strsim v0.10.0
+#23 1.439    Compiling predicates-core v1.0.10
+#23 1.602    Compiling mockall_derive v0.13.1
+#23 1.613    Compiling heck v0.4.1
+#23 1.635    Compiling log v0.4.33
+#23 1.669    Compiling thiserror v2.0.18
+#23 1.822    Compiling futures-core v0.3.32
+#23 1.961    Compiling termtree v0.5.1
+#23 1.985    Compiling anstyle v1.0.14
+#23 2.004    Compiling fragile v2.1.0
+#23 2.048    Compiling downcast v0.11.0
+#23 2.114    Compiling indexmap v1.9.3
+#23 2.140    Compiling predicates-tree v1.0.13
+#23 2.312    Compiling predicates v3.1.4
+#23 2.521    Compiling syn v2.0.118
+#23 3.277    Compiling atty v0.2.14
+#23 3.348    Compiling clap v3.2.25
+#23 4.312    Compiling tempfile v3.10.1
+#23 8.626    Compiling serde_derive v1.0.228
+#23 8.626    Compiling thiserror-impl v2.0.18
+#23 11.51    Compiling mockall v0.13.1
+#23 12.61    Compiling toml v0.5.11
+#23 16.01    Compiling map2check-library v1.0.0 (/build)
+#23 18.90     Finished `test` profile [unoptimized + debuginfo] target(s) in 18.62s
+#23 18.92 [2m2026-10-14T21:00:00.162623Z[0m [32m INFO[0m [2mcargo_tarpaulin::process_handling[0m[2m:[0m running /build/target/debug/deps/map2check-0705f554f100a70b
+#23 18.92 [2m2026-10-14T21:00:00.162671Z[0m [32m INFO[0m [2mcargo_tarpaulin::process_handling[0m[2m:[0m Setting LLVM_PROFILE_FILE
+#23 18.92 
+#23 18.92 running 52 tests
+#23 18.92 test analysismode::assert::tests::false_expression_yields_reachability_violation ... ok
+#23 18.92 test analysismode::assert::tests::nonzero_expression_is_safe ... ok
+#23 18.92 test analysismode::assert::tests::true_expression_is_safe ... ok
+#23 18.92 test analysismode::memory::tests::null_load_obeys_null_valid_flag ... ok
+#23 18.92 test analysismode::overflow::tests::add_i32_normal_is_safe ... ok
+#23 18.92 test analysismode::overflow::tests::add_i32_overflow_detected ... ok
+#23 18.92 test analysismode::overflow::tests::add_u32_overflow_detected ... ok
+#23 18.92 test analysismode::overflow::tests::div_i32_by_zero_detected ... ok
+#23 18.92 test analysismode::overflow::tests::div_u32_by_zero_detected ... ok
+#23 18.92 test analysismode::overflow::tests::mul_i32_overflow_detected ... ok
+#23 18.92 test analysismode::overflow::tests::neg_i32_min_detected ... ok
+#23 18.92 test analysismode::overflow::tests::shl_i32_negative_operand_detected ... ok
+#23 18.92 test analysismode::overflow::tests::shl_i32_overflow_detected ... ok
+#23 18.92 test analysismode::overflow::tests::shr_i32_over_31_detected ... ok
+#23 18.92 test analysismode::overflow::tests::sub_i32_underflow_detected ... ok
+#23 18.92 test analysismode::overflow::tests::sub_u32_underflow_detected ... ok
+#23 18.92 test bbtrack::tests::basic_block_entry_created_correctly ... ok
+#23 18.92 test bbtrack::tests::contains_line_finds_existing ... ok
+#23 18.92 test bbtrack::tests::contains_line_returns_false_when_absent ... ok
+#23 18.92 test bbtrack::tests::entry_serializes_to_json ... ok
+#23 18.92 test caller::tests::default_result_is_ok_with_none_property ... ok
+#23 18.92 test caller::tests::violated_property_as_str ... ok
+#23 18.92 test memtrack::tests::calloc_size_multiplication_is_checked ... ok
+#23 18.92 test memtrack::tests::cleanup_detects_live_allocation_and_ignores_freed_allocation ... ok
+#23 18.92 test memtrack::tests::deref_error_on_freed_address ... ok
+#23 18.92 test memtrack::tests::deref_ok_on_live_address ... ok
+#23 18.92 test memtrack::tests::deref_resolves_allocation_through_stored_pointer ... ok
+#23 18.92 test memtrack::tests::find_by_address_returns_none_when_not_found ... ok
+#23 18.92 test memtrack::tests::free_resolved_unknown_address_not_flagged ... ok
+#23 18.92 test memtrack::tests::invalid_address_outside_allocation ... ok
+#23 18.92 test memtrack::tests::invalid_address_rejects_wrapping_ranges ... ok
+#23 18.92 test memtrack::tests::invalid_free_detected_when_already_freed ... ok
+#23 18.92 test memtrack::tests::invalid_free_resolved_detected_when_already_freed ... ok
+#23 18.92 test memtrack::tests::set_calloc_multiplies_size ... ok
+#23 18.92 test memtrack::tests::set_free_marks_freed_and_clears_size ... ok
+#23 18.92 test memtrack::tests::set_malloc_marks_dynamic ... ok
+#23 18.92 test memtrack::tests::unknown_free_is_invalid ... ok
+#23 18.92 test memtrack::tests::valid_address_inside_allocation ... ok
+#23 18.92 test memtrack::tests::valid_free_not_flagged ... ok
+#23 18.92 test memtrack::tests::valid_free_resolved_not_flagged ... ok
+#23 18.92 test nondet::libfuzzer::tests::map2check_fuzzer_assume_true_is_a_no_op ... ok
+#23 18.92 test nondet::libfuzzer::tests::verifier_assert_true_is_a_no_op ... ok
+#23 18.92 test nondet::libfuzzer::tests::verifier_assume_true_is_a_no_op ... ok
+#23 18.92 test nondet::libfuzzer::tests::verifier_nondet_pointer_does_not_panic ... ok
+#23 18.92 test nondet::tests::nondet_double_from_bits_is_safe ... ok
+#23 18.92 test nondet::tests::nondet_entry_int_serializes ... ok
+#23 18.92 test nondet::tests::nondet_float_from_bits_is_safe ... ok
+#23 18.92 test output::tests::false_result_includes_property_and_line ... ok
+#23 18.92 test output::tests::memtrack_included_only_for_memory_violations ... ok
+#23 18.92 test output::tests::ok_result_serializes_true ... ok
+#23 18.92 test output::tests::output_is_valid_json ... ok
+#23 18.92 test state::tests::reset_clears_global_state ... ok
+#23 18.92 
+#23 18.92 test result: ok. 52 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+#23 18.92 
+#23 18.92 [2m2026-10-14T21:00:00.168174Z[0m [32m INFO[0m [2mcargo_tarpaulin::statemachine::instrumented[0m[2m:[0m For binary: target/debug/deps/map2check-0705f554f100a70b
+#23 18.92 [2m2026-10-14T21:00:00.168183Z[0m [32m INFO[0m [2mcargo_tarpaulin::statemachine::instrumented[0m[2m:[0m Generated: target/tarpaulin/profraws/map2check-0705f554f100a70b_18322787566261675535_0-1055.profraw
+#23 18.92 [2m2026-10-14T21:00:00.168186Z[0m [32m INFO[0m [2mcargo_tarpaulin::statemachine::instrumented[0m[2m:[0m Merging coverage reports
+#23 18.93 [2m2026-10-14T21:00:00.177104Z[0m [32m INFO[0m [2mcargo_tarpaulin::statemachine::instrumented[0m[2m:[0m Mapping coverage data to source
+#23 18.95 [2m2026-10-14T21:00:00.199344Z[0m [32m INFO[0m [2mcargo_tarpaulin::report[0m[2m:[0m Coverage Results:
+#23 18.95 || Tested/Total Lines:
+#23 18.95 || rust/src/analysismode/assert.rs: 5/5
+#23 18.95 || rust/src/analysismode/memory.rs: 6/42
+#23 18.95 || rust/src/analysismode/mod.rs: 2/2
+#23 18.95 || rust/src/analysismode/overflow.rs: 29/39
+#23 18.95 || rust/src/bbtrack/mod.rs: 4/4
+#23 18.95 || rust/src/caller/mod.rs: 8/12
+#23 18.95 || rust/src/error.rs: 0/2
+#23 18.95 || rust/src/memtrack/mod.rs: 45/52
+#23 18.95 || rust/src/nondet/libfuzzer.rs: 20/85
+#23 18.95 || rust/src/nondet/mod.rs: 6/10
+#23 18.95 || rust/src/output/mod.rs: 4/6
+#23 18.95 || rust/src/state.rs: 22/31
+#23 18.95 || 
+#23 18.95 52.07% coverage, 151/290 lines covered
+#23 DONE 19.1s
+
+#24 [final 5/5] COPY --from=test /coverage /coverage
+#24 DONE 0.0s
+
+#25 exporting to image
+#25 exporting layers
+#25 exporting layers 0.4s done
+#25 exporting manifest sha256:8349762ef4fa5297a2f11e775d8533fcc3dacec777150a2856f1463bbc69cae6 done
+#25 exporting config sha256:e775d0b9517c628057282e12638098e5e1dbc2aa9b7cfabc3dd80a152259501e done
+#25 exporting attestation manifest sha256:4ad26bf14dadcf97b6302652eed4ff807defdc0b4fa736b6e72c45bc8151cf9c done
+#25 exporting manifest list sha256:2baec06ee442d9e46edc0b2c16048821e5c5f371f1293e18ee0655a15027f67f done
+#25 naming to moby-dangling@sha256:2baec06ee442d9e46edc0b2c16048821e5c5f371f1293e18ee0655a15027f67f done
+#25 unpacking to moby-dangling@sha256:2baec06ee442d9e46edc0b2c16048821e5c5f371f1293e18ee0655a15027f67f 0.1s done
+#25 DONE 0.6s
+rc=0

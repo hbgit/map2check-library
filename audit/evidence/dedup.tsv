@@ -1,0 +1,87 @@
+ID	status	ação	issue	critério
+M1-E1	PARCIAL	COBERTO POR M1-AC8		incluído no corpo de M1-AC8
+M1-E5	PARCIAL	COMENTAR #16	16	tema; comentário agrupado sob Audit-ID M1-I4
+M1-I4	PARCIAL	COMENTAR #16	16	tema; comentário agrupado sob Audit-ID M1-I4
+M1-I5	PARCIAL	CRIAR		novo — nenhuma issue cobre o tema
+M1-I6	PARCIAL	COMENTAR #16	16	tema; comentário agrupado sob Audit-ID M1-I4
+M1-AC7	PARCIAL	COMENTAR #13	13	tema; comentário agrupado sob Audit-ID M3-AC1
+M1-AC8	PENDENTE	CRIAR		novo — nenhuma issue cobre o tema
+M1-DoD1	PENDENTE	COBERTO POR M1-DoD2		incluído no corpo de M1-DoD2
+M1-DoD2	PENDENTE	CRIAR		novo — nenhuma issue cobre o tema
+M2-E3	PARCIAL	COMENTAR #8	8	tema; comentário agrupado sob Audit-ID M2-I6
+M2-I6	PARCIAL	COMENTAR #8	8	tema; comentário agrupado sob Audit-ID M2-I6
+M2-AC1	PARCIAL	COMENTAR #8	8	tema; comentário agrupado sob Audit-ID M2-I6
+M2-AC2	PARCIAL	COMENTAR #9	9	tema; comentário agrupado sob Audit-ID M2-AC2
+M2-DoD2	PENDENTE	JÁ ABERTA #5	5	tema (issue aberta, sem ação nova)
+M3-E1	PARCIAL	COMENTAR #13	13	tema; comentário agrupado sob Audit-ID M3-AC1
+M3-E3	PARCIAL	CRIAR		novo — nenhuma issue cobre o tema
+M3-I2	PARCIAL	COMENTAR #13	13	tema; comentário agrupado sob Audit-ID M3-AC1
+M3-AC1	PARCIAL	COMENTAR #13	13	tema; comentário agrupado sob Audit-ID M3-AC1
+M3-AC3	PENDENTE	COBERTO POR M1-AC8		incluído no corpo de M1-AC8
+M3-DoD1	PENDENTE	CRIAR		novo — nenhuma issue cobre o tema
+M4-E1	PENDENTE	JÁ ABERTA #20	20	tema (issue aberta, sem ação nova)
+M4-E2	PENDENTE	JÁ ABERTA #20	20	tema (issue aberta, sem ação nova)
+M4-E3	PENDENTE	JÁ ABERTA #20	20	tema (issue aberta, sem ação nova)
+M4-E4	PENDENTE	JÁ ABERTA #20	20	tema (issue aberta, sem ação nova)
+M4-I1	PENDENTE	JÁ ABERTA #20	20	tema (issue aberta, sem ação nova)
+M4-I2	PENDENTE	JÁ ABERTA #20	20	tema (issue aberta, sem ação nova)
+M4-I3	PENDENTE	JÁ ABERTA #20	20	tema (issue aberta, sem ação nova)
+M4-I4	PENDENTE	JÁ ABERTA #17	17	tema (issue aberta, sem ação nova)
+M4-I5	PENDENTE	JÁ ABERTA #20	20	tema (issue aberta, sem ação nova)
+M4-AC1	PENDENTE	JÁ ABERTA #20	20	tema (issue aberta, sem ação nova)
+M4-AC2	PENDENTE	JÁ ABERTA #20	20	tema (issue aberta, sem ação nova)
+M4-DoD1	PENDENTE	JÁ ABERTA #20	20	tema (issue aberta, sem ação nova)
+M5-E1	PENDENTE	JÁ ABERTA #21	21	tema (issue aberta, sem ação nova)
+M5-E2	PENDENTE	JÁ ABERTA #19	19	tema (issue aberta, sem ação nova)
+M5-E3	PENDENTE	JÁ ABERTA #21	21	tema (issue aberta, sem ação nova)
+M5-I1	PENDENTE	JÁ ABERTA #21	21	tema (issue aberta, sem ação nova)
+M5-I2	PENDENTE	JÁ ABERTA #21	21	tema (issue aberta, sem ação nova)
+M5-I3	PENDENTE	JÁ ABERTA #21	21	tema (issue aberta, sem ação nova)
+M5-I4	PENDENTE	JÁ ABERTA #19	19	tema (issue aberta, sem ação nova)
+M5-I5	PENDENTE	JÁ ABERTA #19	19	tema (issue aberta, sem ação nova)
+M5-AC1	PENDENTE	JÁ ABERTA #21	21	tema (issue aberta, sem ação nova)
+M5-AC2	PENDENTE	JÁ ABERTA #19	19	tema (issue aberta, sem ação nova)
+M5-DoD1	PENDENTE	JÁ ABERTA #21	21	tema (issue aberta, sem ação nova)
+M5-DoD2	PENDENTE	JÁ ABERTA #21	21	tema (issue aberta, sem ação nova)
+M6-E1	PENDENTE	JÁ ABERTA #15	15	tema (issue aberta, sem ação nova)
+M6-E2	PENDENTE	JÁ ABERTA #5	5	tema (issue aberta, sem ação nova)
+M6-E3	PENDENTE	JÁ ABERTA #18	18	tema (issue aberta, sem ação nova)
+M6-I1	PENDENTE	JÁ ABERTA #15	15	tema (issue aberta, sem ação nova)
+M6-I4	PENDENTE	JÁ ABERTA #18	18	tema (issue aberta, sem ação nova)
+M6-I5	PENDENTE	JÁ ABERTA #18	18	tema (issue aberta, sem ação nova)
+M6-AC1	PENDENTE	JÁ ABERTA #15	15	tema (issue aberta, sem ação nova)
+M6-AC2	PENDENTE	JÁ ABERTA #18	18	tema (issue aberta, sem ação nova)
+M6-AC3	PENDENTE	JÁ ABERTA #18	18	tema (issue aberta, sem ação nova)
+M6-DoD1	PENDENTE	JÁ ABERTA #5	5	tema (issue aberta, sem ação nova)
+M6-I2	PARCIAL	COMENTAR #11	11	tema; comentário agrupado sob Audit-ID M6-I2
+M6-I3	PARCIAL	COMENTAR #15	15	tema; comentário agrupado sob Audit-ID M6-I3
+M7-E1	PENDENTE	JÁ ABERTA #22	22	tema (issue aberta, sem ação nova)
+M7-E2	PENDENTE	JÁ ABERTA #22	22	tema (issue aberta, sem ação nova)
+M7-E3	PENDENTE	JÁ ABERTA #5	5	tema (issue aberta, sem ação nova)
+M7-I1	PENDENTE	JÁ ABERTA #22	22	tema (issue aberta, sem ação nova)
+M7-I2	PENDENTE	JÁ ABERTA #22	22	tema (issue aberta, sem ação nova)
+M7-I3	PENDENTE	JÁ ABERTA #22	22	tema (issue aberta, sem ação nova)
+M7-I4	PENDENTE	JÁ ABERTA #5	5	tema (issue aberta, sem ação nova)
+M7-AC1	PENDENTE	JÁ ABERTA #22	22	tema (issue aberta, sem ação nova)
+M7-AC2	PENDENTE	JÁ ABERTA #22	22	tema (issue aberta, sem ação nova)
+M7-AC3	PENDENTE	JÁ ABERTA #18	18	tema (issue aberta, sem ação nova)
+M7-DoD1	PENDENTE	JÁ ABERTA #22	22	tema (issue aberta, sem ação nova)
+M7-DoD2	PENDENTE	JÁ ABERTA #22	22	tema (issue aberta, sem ação nova)
+M8-I1	PENDENTE	JÁ ABERTA #24	24	tema (issue aberta, sem ação nova)
+M8-I2	PENDENTE	JÁ ABERTA #23	23	tema (issue aberta, sem ação nova)
+M8-I3	PENDENTE	JÁ ABERTA #23	23	tema (issue aberta, sem ação nova)
+M8-I4	PENDENTE	JÁ ABERTA #23	23	tema (issue aberta, sem ação nova)
+M8-I5	PENDENTE	JÁ ABERTA #23	23	tema (issue aberta, sem ação nova)
+M8-I6	PENDENTE	JÁ ABERTA #23	23	tema (issue aberta, sem ação nova)
+M8-AC1	PENDENTE	JÁ ABERTA #24	24	tema (issue aberta, sem ação nova)
+M8-AC2	PENDENTE	JÁ ABERTA #23	23	tema (issue aberta, sem ação nova)
+M8-DoD1	PENDENTE	JÁ ABERTA #24	24	tema (issue aberta, sem ação nova)
+M8-DoD2	PENDENTE	JÁ ABERTA #24	24	tema (issue aberta, sem ação nova)
+M8-DoD3	PENDENTE	JÁ ABERTA #5	5	tema (issue aberta, sem ação nova)
+G-1	PENDENTE	COBERTO POR M1-AC8		incluído no corpo de M1-AC8
+G-2	PENDENTE	JÁ ABERTA #21	21	tema (issue aberta, sem ação nova)
+G-3	PENDENTE	JÁ ABERTA #15	15	tema (issue aberta, sem ação nova)
+G-4	PENDENTE	JÁ ABERTA #22	22	tema (issue aberta, sem ação nova)
+G-5	PENDENTE	JÁ ABERTA #18	18	tema (issue aberta, sem ação nova)
+G-6	PARCIAL	COMENTAR #8	8	tema; comentário agrupado sob Audit-ID M2-I6
+G-7	PENDENTE	JÁ ABERTA #5	5	tema (issue aberta, sem ação nova)

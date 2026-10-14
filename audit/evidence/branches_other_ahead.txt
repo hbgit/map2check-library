@@ -1,0 +1,22 @@
+== origin/feat/M3_paridade
+d86e5d5 docs: correct panic = "abort" premise dropped by the base
+753b4bb Merge branch 'feature/rust' into feat/M3_paridade
+672a84c Merge pull request #2 from hbgit/feat/update_rust
+dfcce06 docs: add implementation plan for verifying and resolving PR 2
+38841ee ci: fix cargo-audit installation for rust 1.82 and optimize Dockerfile
+6c4e6e2 Merge branch 'feature/rust' into feat/update_rust
+860368c Fix Rust FFI review findings
+a951802 feat:implementação do M3
+a0f494d 15 de set. de 2026, 09:21
+346271f test: expand FFI stress harness to cover 100% of exported symbols
+67f6a19 10 de set. de 2026, 16:13
+1acb208 3 de set. de 2026, 14:50
+== origin/feat/update_rust
+dfcce06 docs: add implementation plan for verifying and resolving PR 2
+38841ee ci: fix cargo-audit installation for rust 1.82 and optimize Dockerfile
+6c4e6e2 Merge branch 'feature/rust' into feat/update_rust
+860368c Fix Rust FFI review findings
+a0f494d 15 de set. de 2026, 09:21
+346271f test: expand FFI stress harness to cover 100% of exported symbols
+67f6a19 10 de set. de 2026, 16:13
+1acb208 3 de set. de 2026, 14:50

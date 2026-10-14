@@ -1,0 +1,28 @@
+#0 building with "default" instance using docker driver
+
+#1 [internal] load build definition from Dockerfile
+#1 transferring dockerfile: 2.67kB done
+#1 DONE 0.0s
+
+#2 [internal] load metadata for docker.io/library/rust:1.82-slim-bookworm
+#2 DONE 0.7s
+
+#3 [internal] load .dockerignore
+#3 transferring context: 2B done
+#3 DONE 0.0s
+
+#4 [builder  1/11] FROM docker.io/library/rust:1.82-slim-bookworm@sha256:1111c28d995d06a7863ba6cea3b3dcb87bebe65af8ec5517caaf2c8c26f38010
+#4 resolve docker.io/library/rust:1.82-slim-bookworm@sha256:1111c28d995d06a7863ba6cea3b3dcb87bebe65af8ec5517caaf2c8c26f38010 done
+#4 DONE 0.0s
+
+#5 [builder  2/11] RUN apt-get update && apt-get install -y --no-install-recommends     clang-14 llvm-14 llvm-14-dev llvm-14-tools lld-14     cmake make git     && rm -rf /var/lib/apt/lists/*
+#5 CACHED
+
+#6 [internal] load build context
+#6 transferring context: 3.31kB 0.1s done
+#6 DONE 0.1s
+
+#7 [builder  3/11] RUN rustup component add clippy rustfmt &&     cargo install cargo-tarpaulin cargo-audit cargo-deny cbindgen
+#7 0.160 info: downloading component 'clippy'
+#7 CANCELED
+ERROR: failed to build: failed to solve: Canceled: context canceled

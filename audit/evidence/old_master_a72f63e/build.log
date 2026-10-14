@@ -1,0 +1,10 @@
+   Compiling itoa v1.0.18
+   Compiling serde_core v1.0.228
+   Compiling zmij v1.0.21
+   Compiling memchr v2.8.2
+   Compiling thiserror v2.0.18
+   Compiling map2check-library v1.0.0 (/home/rock/Documents/Dev/map2check-library)
+   Compiling serde_json v1.0.150
+   Compiling serde v1.0.228
+    Finished `release` profile [optimized] target(s) in 4.21s
+rc=0

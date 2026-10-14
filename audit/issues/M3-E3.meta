@@ -1,0 +1,5 @@
+ACTION=create
+NUMBER=
+TITLE=test: add Rust unit tests for each exported FFI symbol
+MILESTONE=M3 — Completar paridade da API núcleo
+LABELS=kind:test

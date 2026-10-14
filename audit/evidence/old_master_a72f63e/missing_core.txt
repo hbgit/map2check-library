@@ -1,0 +1,6 @@
+get_next_step
+map2check_check_free_resolved_address
+map2check_fuzzer_assume
+map2check_map_funct_address
+map2check_map_non_static_alloca
+next_current_step

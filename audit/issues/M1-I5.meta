@@ -1,0 +1,5 @@
+ACTION=create
+NUMBER=
+TITLE=chore: remove C-era dead artifacts (.clangd, compile_commands.json, .travis.yml, .vscode, stale docs)
+MILESTONE=M1 — Restaurar build, CI e higiene
+LABELS=kind:feature

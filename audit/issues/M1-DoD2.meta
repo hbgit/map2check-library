@@ -1,0 +1,5 @@
+ACTION=create
+NUMBER=
+TITLE=ci: protect feature/rust and require green CI on PRs
+MILESTONE=M1 — Restaurar build, CI e higiene
+LABELS=area:ci
