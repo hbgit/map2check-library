@@ -154,4 +154,9 @@ mod tests {
         let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
         assert!(parsed["map2check_log"].is_object());
     }
+
+    #[test]
+    fn print_json_succeeds_for_valid_state() {
+        assert!(print_json(&state_ok()).is_ok());
+    }
 }
