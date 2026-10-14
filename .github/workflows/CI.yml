@@ -33,6 +33,22 @@ jobs:
       - name: Rodar todos os testes
         run: cargo test --all-features
 
+      - name: Instalar cargo-tarpaulin
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-tarpaulin@0.31.3
+
+      - name: Cobertura (cargo-tarpaulin, gate de 80% fora de ffi*.rs)
+        run: scripts/coverage.sh
+
+      - name: Publicar relatório de cobertura
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: coverage/
+          if-no-files-found: error
+
       # NOTE: a static lib built with this crate's [profile.release] (LTO +
       # codegen-units = 1) linked into a clang -fsanitize=address,undefined
       # binary has a known, pre-existing intermittent SIGSEGV (~20-25% of
