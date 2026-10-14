@@ -20,8 +20,10 @@ pub struct AnalysisState {
     pub nondets: Vec<NonDetEntry>,
     pub memtrack: Vec<MemTrackEntry>,
     pub bbtrack: Vec<BasicBlockEntry>,
-    pub memcleanup_enabled: bool,
+    /// Set by `map2check_set_null_is_valid()`; read by `map2check_check_load`.
     pub null_is_valid: bool,
+    /// Set by `map2check_set_memcleanup()`; read by `map2check_check_mem_endprog`.
+    pub memcleanup_enabled: bool,
     pub legacy_nondet_logs: Vec<Box<crate::ffi::non_det_log_t>>,
     pub legacy_bbtrack_logs: Vec<Box<crate::ffi::bbtrack_log_t>>,
 }

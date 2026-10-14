@@ -42,6 +42,7 @@ static void run_bad_inputs(void) {
     set_false_result(100, 1, NULL);
     (void)get_current_property();
     (void)get_current_step();
+    (void)get_next_step();
     print_all_containers_as_json();
     vcc_reset_meta_data();
     map2check_set_memcleanup();
@@ -104,6 +105,15 @@ static void run_bad_inputs(void) {
     (void)__VERIFIER_nondet_float();
     (void)__VERIFIER_nondet_double();
     (void)__VERIFIER_nondet_size_t();
+    (void)__VERIFIER_nondet_pointer();
+
+    /* __VERIFIER_assume/assert/map2check_fuzzer_assume only with a truthy
+     * condition here: a falsy one calls exit(0)/abort() by design (see
+     * rust/src/nondet/libfuzzer.rs), which would end this harness process
+     * instead of just this check. */
+    __VERIFIER_assume(1);
+    __VERIFIER_assert(1);
+    map2check_fuzzer_assume(1);
 }
 
 /* ── Round 2: a well-formed pass after init(), touching every export with
@@ -167,10 +177,20 @@ static void run_valid_pass(void) {
     (void)__VERIFIER_nondet_float();
     (void)__VERIFIER_nondet_double();
     (void)__VERIFIER_nondet_size_t();
+    (void)__VERIFIER_nondet_pointer();
+
+    /* __VERIFIER_assume/assert/map2check_fuzzer_assume only with a truthy
+     * condition here: a falsy one calls exit(0)/abort() by design (see
+     * rust/src/nondet/libfuzzer.rs), which would end this harness process
+     * instead of just this check. */
+    __VERIFIER_assume(1);
+    __VERIFIER_assert(1);
+    map2check_fuzzer_assume(1);
 
     set_false_result(MemsafetyMemtrack, 30, "main");
     (void)get_current_property();
     (void)get_current_step();
+    (void)get_next_step();
     vcc_reset_meta_data();
     map2check_set_memcleanup();
     map2check_set_null_is_valid();

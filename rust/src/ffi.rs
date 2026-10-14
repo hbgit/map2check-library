@@ -10,6 +10,7 @@ use std::ffi::CStr;
 use crate::analysismode::assert::AssertChecker;
 use crate::analysismode::memory::DerefChecker;
 use crate::analysismode::memory::FreeChecker;
+use crate::analysismode::memory::FreeResolvedChecker;
 use crate::analysismode::memory::LoadChecker;
 use crate::analysismode::memory::MemCleanupChecker;
 use crate::analysismode::overflow::AddI32;
@@ -182,6 +183,14 @@ pub extern "C" fn get_current_step() -> u64 {
     )
 }
 
+/// Advances and returns the step counter. Unlike `get_current_step`, this
+/// mutates the counter — analogous to `get_next_step`/`next_current_step` in
+/// the C library.
+#[no_mangle]
+pub extern "C" fn get_next_step() -> u64 {
+    ffi_guard(|| state::with_state(|s| Ok(s.next_step())).unwrap_or(0), 0)
+}
+
 /// Prints the full JSON report to stdout.
 #[no_mangle]
 pub extern "C" fn print_all_containers_as_json() {
@@ -215,6 +224,8 @@ pub extern "C" fn vcc_reset_meta_data() {
 }
 
 /// Enables memcleanup checking at end of program.
+/// Effect: `map2check_check_mem_endprog` only runs the leak check once this
+/// has been called; before that it is a no-op.
 #[no_mangle]
 pub extern "C" fn map2check_set_memcleanup() {
     ffi_guard(
@@ -231,6 +242,8 @@ pub extern "C" fn map2check_set_memcleanup() {
 }
 
 /// Marks NULL as valid for the current scope's pointer checks.
+/// Effect: `map2check_check_load` treats a NULL `ptr` as safe once this has
+/// been called, instead of always flagging it as `MemsafetyDeref`.
 #[no_mangle]
 pub extern "C" fn map2check_set_null_is_valid() {
     ffi_guard(
@@ -354,7 +367,7 @@ nondet_ffi!(
 nondet_ffi!(
     map2check_save_nondet_log_char,
     Char,
-    u8,
+    i8,
     std::os::raw::c_char,
     c
 );
@@ -481,7 +494,10 @@ pub unsafe extern "C" fn map2check_map_alloca(
     );
 }
 
-/// Records a non-static stack allocation.
+/// Registers a non-static (dynamically-sized) stack allocation, e.g. a
+/// variable-length array whose size is only known at runtime. Unlike
+/// `map2check_map_alloca`, the resulting entry is marked dynamic so that
+/// `map2check_check_mem_endprog` accounts for it like a heap allocation.
 ///
 /// # Safety
 /// `var_name` must be null or a valid null-terminated C string; `ptr_address` may be null.
@@ -495,24 +511,47 @@ pub unsafe extern "C" fn map2check_map_non_static_alloca(
     scope: i32,
 ) {
     ffi_guard(
-        || unsafe {
-            map2check_map_alloca(
-                var_name,
-                ptr_address,
-                size,
-                size_primitive,
-                line_number,
-                scope,
-            )
+        || {
+            if size < 0 || size_primitive < 0 {
+                return;
+            }
+            // SAFETY: caller guarantees var_name is a valid C string or null.
+            let name = unsafe { c_str(var_name) };
+            let addr = ptr_address as usize;
+            if let Err(e) = state::with_state(|s| {
+                let step = s.next_step();
+                let mut entry = MemTrackEntry::new(
+                    step,
+                    line_number as u32,
+                    scope as u32,
+                    addr,
+                    addr,
+                    false,
+                    false,
+                    name,
+                    "",
+                    size as usize,
+                    size_primitive as usize,
+                    false,
+                );
+                entry.set_malloc();
+                s.memtrack.push(entry);
+                Ok(())
+            }) {
+                log_error(&e);
+            }
         },
         (),
     );
 }
 
-/// Records a function address.
+/// Registers the address of a function as a valid pointer target, so that a
+/// variable holding a function pointer (e.g. `void (*f)(void) = &foo;`) does
+/// not get flagged as an invalid address by `map2check_check_load` /
+/// `map2check_check_deref` when it is later read or called through.
 ///
 /// # Safety
-/// `var_name` must be null or a valid null-terminated C string.
+/// `var_name` must be null or a valid null-terminated C string; `ptr_address` may be null.
 #[no_mangle]
 pub unsafe extern "C" fn map2check_map_funct_address(
     var_name: *const std::os::raw::c_char,
@@ -523,10 +562,22 @@ pub unsafe extern "C" fn map2check_map_funct_address(
             // SAFETY: caller guarantees var_name is a valid C string or null.
             let name = unsafe { c_str(var_name) };
             let addr = ptr_address as usize;
+            let pointer_width = std::mem::size_of::<*const std::os::raw::c_void>();
             if let Err(e) = state::with_state(|s| {
                 let step = s.next_step();
                 s.memtrack.push(MemTrackEntry::new(
-                    step, 0, 0, addr, 0, false, false, name, "", 0, 0, false,
+                    step,
+                    0,
+                    0,
+                    addr,
+                    addr,
+                    false,
+                    false,
+                    name,
+                    "",
+                    pointer_width,
+                    pointer_width,
+                    false,
                 ));
                 Ok(())
             }) {
@@ -861,8 +912,8 @@ pub unsafe extern "C" fn map2check_check_load(
                 }
                 return;
             }
-            let is_null_valid = state::with_state(|s| Ok(s.null_is_valid)).unwrap_or(false);
             let ctx = VccContext::new(line as u32, scope, fname);
+            let is_null_valid = state::with_state(|s| Ok(s.null_is_valid)).unwrap_or(false);
             run_vcc_check(
                 LoadChecker {
                     address: ptr as usize,
@@ -909,7 +960,9 @@ pub unsafe extern "C" fn map2check_check_free(
     );
 }
 
-/// Checks whether freeing a resolved address is valid.
+/// Checks whether freeing an already-resolved heap `ptr` is valid — `ptr` is
+/// the heap address itself (post-indirection), not the address of the
+/// pointer variable that holds it (that case is `map2check_check_free`).
 ///
 /// # Safety
 /// `function_name` must be null or a valid null-terminated C string; `ptr` may be null.
@@ -930,7 +983,7 @@ pub unsafe extern "C" fn map2check_check_free_resolved_address(
             }
             let ctx = VccContext::new(line, 0, fname);
             run_vcc_check(
-                FreeChecker {
+                FreeResolvedChecker {
                     address: ptr as usize,
                 },
                 &ctx,
@@ -973,6 +1026,7 @@ pub unsafe extern "C" fn map2check_check_deref(
 }
 
 /// Checks for memory leaks at end of program.
+/// No-op unless `map2check_set_memcleanup()` was called first.
 #[no_mangle]
 pub extern "C" fn map2check_check_mem_endprog() {
     ffi_guard(

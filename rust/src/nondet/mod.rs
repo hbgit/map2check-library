@@ -15,7 +15,7 @@ pub enum NonDetValue {
     #[serde(rename = "LONG")]
     Long(i64),
     #[serde(rename = "CHAR")]
-    Char(u8),
+    Char(i8),
     #[serde(rename = "FLOAT")]
     Float(f32),
     #[serde(rename = "DOUBLE")]
