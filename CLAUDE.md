@@ -4,99 +4,75 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Map2Check-Library is a C library (with C++ tests) that supports the Map2Check program verification tool. It tracks memory, basic blocks, and nondeterministic values, and checks safety properties (overflow, memory safety, assert reachability) in programs analyzed by KLEE or LibFuzzer. The build produces both a static library (`libmap2check.a`) and LLVM bitcode files (`.bc`) for linking with KLEE or LibFuzzer.
+Map2Check-Library is a Rust library (crate `map2check-library`, lib name `map2check`) that supports the Map2Check program verification tool. It tracks memory, basic blocks, and nondeterministic values, and checks safety properties (overflow, memory safety, assert reachability) in programs analyzed by KLEE or LibFuzzer. It is built as a static library (`libmap2check.a`) plus an `rlib`, and exposes a C ABI consumed by LLVM instrumentation. The original C/CMake implementation was removed; the Rust port is still reaching parity with it (see [TODO.md](TODO.md) and [docs/plano_map2check_library_rust.md](docs/plano_map2check_library_rust.md)).
 
-## Build Commands
+## Build, Test and Lint
 
-The project requires `clang-8`/`clang++-8` and `llvm-link-8`. All build commands run from the repo root via `build.sh`, which always creates/uses the `build/` directory internally.
-
-```sh
-# Debug build with tests and coverage (most common during development)
-./build.sh --debug
-
-# Release build (static library + install to release-library/)
-./build.sh --release
-
-# Simple build (no tests, no coverage, no install)
-./build.sh --simple-build
-```
-
-Manual CMake (from `build/` directory):
-```sh
-mkdir -p build && cd build
-
-# Testing build
-cmake .. -DCMAKE_C_COMPILER=/usr/bin/clang-8 -DCMAKE_CXX_COMPILER=/usr/bin/clang++-8 \
-  -DCMAKE_INSTALL_PREFIX=../release-library/ -DENABLE_TEST=ON -DENABLE_COVCODE=ON -DBUILD_DOC=OFF
-cmake --build . -- VERBOSE=1
-
-# Release build
-cmake .. -DCMAKE_INSTALL_PREFIX=../release-library/ -DENABLE_TEST=OFF -DENABLE_COVCODE=OFF -DBUILD_DOC=ON
-make && make install
-```
-
-## Running Tests
-
-After a debug build, the test binary is at `build/test/unit_tests`:
+Run from the repo root. The toolchain (Rust 1.82.0, with clippy and rustfmt) is pinned by `rust-toolchain.toml`.
 
 ```sh
-# Run all unit tests
-cd build/test && LLVM_PROFILE_FILE="map2check.profraw" ./unit_tests
-
-# Run a single test suite (GTest filter)
-./unit_tests --gtest_filter="NonDetLogTest.*"
-
-# KLEE-based integration test
-./run_klee_test.sh
+cargo build --release
+cargo test --all-features
+cargo test --all-features analysismode::overflow::tests::add_i32_overflow_detected   # single test (name filter)
+cargo fmt --check
+cargo clippy --all-targets --all-features -- -D warnings
+cargo audit
+cargo deny check
+docker build .
 ```
 
-Coverage reports (after debug build):
-```sh
-cd build/test
-llvm-profdata-8 merge -sparse map2check.profraw -o map2check.profdata
-llvm-cov-8 report ./unit_tests -instr-profile=map2check.profdata
-```
+CI (`.github/workflows/CI.yml`) runs formatting, Clippy, release build, all-feature tests, dependency checks, and the Docker build. The Dockerfile also has a KLEE bitcode stage (`--features klee`) and a tarpaulin coverage stage that excludes `rust/src/ffi.rs`. `run_klee_test.sh` is the KLEE integration check (expects `build/fullprogram_2.bc` and Docker).
+
+Cargo features: `klee` and `libfuzzer` select the analysis mode.
 
 ## Architecture
 
 ### Source Layout
 
-- [src/](src/) — C implementation files, mirrored by [include/](include/) headers
-- [lib/](lib/) — Third-party C libraries: `json-maker` (JSON serialization) and `lib/to_string/ftoa` (float-to-string)
-- [test/](test/) — C++ unit tests using Google Test (fetched via CMake at configure time)
-- [cmake/](cmake/) — CMake helpers: `FindGTest.cmake` downloads GoogleTest; `googletest-download.cmake` handles the fetch
+- [rust/src/lib.rs](rust/src/lib.rs) — crate root (`[lib] path` in `Cargo.toml`)
+- [rust/src/ffi.rs](rust/src/ffi.rs) — all `extern "C"` exports; the only place with `unsafe`
+- [rust/src/state.rs](rust/src/state.rs) — global `AnalysisState`, accessed via `state::with_state`
+- [rust/src/error.rs](rust/src/error.rs) — `Map2CheckError` (thiserror)
+- [include/map2check.h](include/map2check.h) — **generated** C header; do not edit
+- [test/](test/) — C sample programs (`codeAPI_by_caller_test.c`, `codeklee_by_caller_test.c`, `codefuzz_by_caller_test.c`) used for KLEE/LibFuzzer integration; unit tests live inline in the Rust modules
+- [docs/](docs/) — Rust migration plan, Doxyfile, UML diagrams
 
-### Module Packages
+### Modules (`rust/src/`)
 
-Each package lives in a subdirectory of `src/` and `include/`:
-
-| Package | Purpose |
+| Module | Purpose |
 |---|---|
-| `caller/` | Entry point API (`caller_lib_result`). Manages global step counter, verification result state, and calls `print_all_containers_as_json()` at end of analysis. |
-| `nondet/` | Nondeterministic value tracking (`nondetlog`, `container_nondet`, `nondet_gen_libfuzzer`). Stores values generated by `__VERIFIER_nondet_*` functions. |
-| `memtrack/` | Memory allocation tracking (`memtracklog`, `container_memtracklog`). Tracks alloca/malloc/calloc/free operations and pointer stores; provides VCC functions for memory safety checks. |
-| `bbtrack/` | Basic block tracking (`trackbblog`, `container_trackbb`). Records program execution path through basic blocks. |
-| `analysismode/` | Verification condition checkers: `analysis_assert` (assert reachability), `analysis_overflow` (arithmetic overflow), `analysis_memory` (memory safety). |
+| `caller/` | C-represented violated property and result metadata |
+| `nondet/` | Nondeterministic value tracking; `libfuzzer.rs` (feature `libfuzzer`) has the LibFuzzer callback and input generators |
+| `memtrack/` | Allocation tracking (alloca/malloc/calloc/free, pointer stores) and memory-safety lookups |
+| `bbtrack/` | Basic-block execution path records |
+| `analysismode/` | Verification condition checkers (`assert`, `overflow`, `memory`) behind the `VccChecker` trait |
+| `output/` | Serializes state to the JSON report on stdout (serde_json) |
 
-### Container Pattern
+Checkers use `VccContext` for source location and return `Result<VccOutcome, Map2CheckError>`; `VccOutcome` is `Safe` or a violated property. The FFI layer records violations in the shared state.
 
-Each data type follows a two-file pattern: a log struct file (e.g., `nondetlog`) defining the data and operations on a single record, and a container file (e.g., `container_nondet`) managing a `TAILQ` linked list of those records. Containers are global singletons initialized by `map2check_init()` in `caller_lib_result.c`.
+### Key Design Decisions
 
-### Output Format
+- Global state is a single `OnceLock<Arc<Mutex<AnalysisState>>>`; don't create parallel globals for existing logs/results.
+- `unsafe` is confined to `ffi.rs`; other modules use `#![deny(unsafe_code)]`. Every unsafe block at an FFI boundary needs a `// SAFETY:` comment.
+- Exports use `#[unsafe(no_mangle)]` and `#[repr(C)]` for types crossing the ABI.
+- Verification rules go in `analysismode`; reusable tracking/query logic goes in `bbtrack`, `nondet`, or `memtrack`.
+- JSON field names and omission rules are part of the output contract — update the focused tests in `output/mod.rs` when changing them.
 
-At analysis end, `print_all_containers_as_json()` serializes all containers to a JSON string (RFC 8259) on stdout. The `lib/json-maker` library handles JSON construction.
+### Generated Header
 
-### Dual Output Targets
+`build.rs` runs `cbindgen` (config in `cbindgen.toml`) on every build and rewrites `include/map2check.h`. Change Rust exports or `cbindgen.toml`, never the header.
 
-The build generates two LLVM BC bundles linked with `llvm-link-8`:
-- `libmap2check_klee.bc` — excludes `nondet_gen_libfuzzer.bc` and `ftoa.bc`
-- `libmap2check_libfuzzer.bc` — excludes `ftoa.bc`
+## Repository Conventions
 
-These are linked against target programs under KLEE/LibFuzzer analysis.
+- Commits must have verified signatures.
+- Never add AI attributions (e.g. "Co-authored-by", "Generated with ...") to commits or PR descriptions.
+- See [.github/copilot-instructions.md](.github/copilot-instructions.md) for the same conventions in more detail.
 
-## Key Entry Points
+## Key Entry Points (C ABI)
 
-- `map2check_init()` — initializes all containers; must be called before any tracking
+- `map2check_init()` — initialize state; call before any tracking
 - `map2check_success()` / `set_false_result(prp, line, func)` — set final verification result
-- `print_all_containers_as_json()` — emits the JSON result report
-- `map2check_is_valid_assert()`, `map2check_map_malloc()`, `map2check_map_free()` etc. — called by LLVM instrumentation passes in the Map2Check tool
+- `print_all_containers_as_json()` — emit the JSON report
+- `map2check_is_valid_assert()`, `map2check_map_malloc()`, `map2check_map_free()`, `map2check_save_nondet_log_*` — called by Map2Check's LLVM instrumentation passes
+
+Some legacy C entry points (`get_next_step`, `map2check_map_non_static_alloca`, `map2check_map_funct_address`, `map2check_check_free_resolved_address`) and the C signatures of `map2check_save_nondet_log_*` are not yet matched in Rust; see TODO.md.
