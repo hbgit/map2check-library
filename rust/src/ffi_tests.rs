@@ -600,3 +600,172 @@ fn binop_shr_unsigned_detects_wide_shift() {
         || unsafe { map2check_binop_shr_unsigned(1, 32, 4, 0, c"f".as_ptr()) },
     );
 }
+
+// ── Analysis mode: memory ───────────────────────────────────────────────────
+
+#[test]
+fn check_load_accepts_access_inside_allocation() {
+    let _guard = fresh();
+    // SAFETY: C-string literal is valid; fake addresses are never dereferenced.
+    unsafe {
+        map2check_map_malloc(addr(0x1000), 16);
+        map2check_check_load(addr(0x1008), 12, 0, 8, c"main".as_ptr());
+    }
+    assert_ok();
+}
+
+#[test]
+fn check_load_rejects_access_past_allocation_end() {
+    let _guard = fresh();
+    // SAFETY: C-string literal is valid; fake addresses are never dereferenced.
+    unsafe {
+        map2check_map_malloc(addr(0x1000), 16);
+        map2check_check_load(addr(0x100c), 12, 0, 8, c"main".as_ptr());
+    }
+    assert_violated(ViolatedProperty::MemsafetyDeref, 12, "main");
+}
+
+#[test]
+fn check_load_rejects_negative_size() {
+    let _guard = fresh();
+    // SAFETY: C-string literal is valid; fake addresses are never dereferenced.
+    unsafe {
+        map2check_map_malloc(addr(0x1000), 16);
+        map2check_check_load(addr(0x1000), 12, 0, -1, c"main".as_ptr());
+    }
+    assert_violated(ViolatedProperty::MemsafetyDeref, 12, "main");
+}
+
+#[test]
+fn check_load_null_depends_on_null_is_valid() {
+    let _guard = fresh();
+    // SAFETY: C-string literal is valid; null is never dereferenced.
+    unsafe { map2check_check_load(std::ptr::null(), 12, 0, 4, c"main".as_ptr()) };
+    assert_violated(ViolatedProperty::MemsafetyDeref, 12, "main");
+
+    map2check_set_null_is_valid();
+    // SAFETY: as above.
+    unsafe { map2check_check_load(std::ptr::null(), 12, 0, 4, c"main".as_ptr()) };
+    assert_ok();
+}
+
+#[test]
+fn check_load_clears_a_previous_violation_when_safe() {
+    let _guard = fresh();
+    // SAFETY: C-string literals are valid; fake addresses are never dereferenced.
+    unsafe {
+        map2check_map_malloc(addr(0x1000), 16);
+        set_false_result(0, 1, c"earlier".as_ptr());
+        map2check_check_load(addr(0x1000), 12, 0, 4, c"main".as_ptr());
+    }
+    assert_ok();
+}
+
+#[test]
+fn check_free_accepts_live_allocation_and_null() {
+    let _guard = fresh();
+    // SAFETY: C-string literals are valid; fake addresses are never dereferenced.
+    unsafe {
+        map2check_map_malloc(addr(0x1000), 16);
+        map2check_check_free(c"p".as_ptr(), addr(0x1000), 0, 20, c"main".as_ptr());
+    }
+    assert_ok();
+    // SAFETY: as above.
+    unsafe { map2check_check_free(c"p".as_ptr(), std::ptr::null(), 0, 20, c"main".as_ptr()) };
+    assert_ok();
+}
+
+#[test]
+fn check_free_rejects_double_free_and_untracked_address() {
+    let _guard = fresh();
+    // SAFETY: C-string literals are valid; fake addresses are never dereferenced.
+    unsafe {
+        map2check_map_malloc(addr(0x1000), 16);
+        map2check_map_free(c"p".as_ptr(), addr(0x1000), 0, 19, c"main".as_ptr());
+        map2check_check_free(c"p".as_ptr(), addr(0x1000), 0, 20, c"main".as_ptr());
+    }
+    assert_violated(ViolatedProperty::MemsafetyFree, 20, "main");
+
+    state::reset();
+    // SAFETY: as above.
+    unsafe { map2check_check_free(c"p".as_ptr(), addr(0x9000), 0, 21, c"main".as_ptr()) };
+    assert_violated(ViolatedProperty::MemsafetyFree, 21, "main");
+}
+
+#[test]
+fn check_free_resolved_address_rejects_freed_target() {
+    let _guard = fresh();
+    // SAFETY: C-string literals are valid; fake addresses are never dereferenced.
+    unsafe {
+        map2check_map_malloc(addr(0x1000), 16);
+        map2check_check_free_resolved_address(addr(0x1000), 30, c"main".as_ptr(), 0);
+    }
+    assert_ok();
+
+    // SAFETY: as above.
+    unsafe {
+        map2check_map_free(c"p".as_ptr(), addr(0x1000), 0, 30, c"main".as_ptr());
+        map2check_check_free_resolved_address(addr(0x1000), 31, c"main".as_ptr(), 0);
+    }
+    assert_violated(ViolatedProperty::MemsafetyFree, 31, "main");
+}
+
+#[test]
+fn check_free_resolved_address_null_depends_on_flag() {
+    let _guard = fresh();
+    // SAFETY: C-string literal is valid; null is never dereferenced.
+    unsafe { map2check_check_free_resolved_address(std::ptr::null(), 32, c"main".as_ptr(), 1) };
+    assert_ok();
+}
+
+#[test]
+fn check_deref_accepts_live_and_rejects_freed_null_or_untracked() {
+    let _guard = fresh();
+    // SAFETY: C-string literals are valid; fake addresses are never dereferenced.
+    unsafe {
+        map2check_map_malloc(addr(0x1000), 16);
+        map2check_check_deref(addr(0x1000), 0, 40, c"main".as_ptr());
+    }
+    assert_ok();
+
+    // SAFETY: as above.
+    unsafe {
+        map2check_map_free(c"p".as_ptr(), addr(0x1000), 0, 41, c"main".as_ptr());
+        map2check_check_deref(addr(0x1000), 0, 42, c"main".as_ptr());
+    }
+    assert_violated(ViolatedProperty::MemsafetyDeref, 42, "main");
+
+    // SAFETY: as above.
+    unsafe { map2check_check_deref(std::ptr::null(), 0, 43, c"main".as_ptr()) };
+    assert_violated(ViolatedProperty::MemsafetyDeref, 43, "main");
+
+    // SAFETY: as above.
+    unsafe { map2check_check_deref(addr(0x9000), 0, 44, c"main".as_ptr()) };
+    assert_violated(ViolatedProperty::MemsafetyDeref, 44, "main");
+}
+
+#[test]
+fn check_mem_endprog_is_a_no_op_until_memcleanup_is_enabled() {
+    let _guard = fresh();
+    // SAFETY: fake address is never dereferenced.
+    unsafe { map2check_map_malloc(addr(0x1000), 16) };
+    map2check_check_mem_endprog();
+    assert_ok();
+
+    map2check_set_memcleanup();
+    map2check_check_mem_endprog();
+    assert_violated(ViolatedProperty::MemsafetyMemcleanup, 0, "end_of_program");
+}
+
+#[test]
+fn check_mem_endprog_accepts_freed_allocation() {
+    let _guard = fresh();
+    map2check_set_memcleanup();
+    // SAFETY: C-string literals are valid; fake address is never dereferenced.
+    unsafe {
+        map2check_map_malloc(addr(0x1000), 16);
+        map2check_map_free(c"p".as_ptr(), addr(0x1000), 0, 50, c"main".as_ptr());
+    }
+    map2check_check_mem_endprog();
+    assert_ok();
+}
