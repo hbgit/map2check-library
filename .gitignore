@@ -17,3 +17,6 @@ tarpaulin-report.html
 
 # Header C gerado por cbindgen
 map2check.h
+
+# Arquivos de release (scripts/package-release.sh)
+dist/
