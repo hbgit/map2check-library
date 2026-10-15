@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #![deny(unsafe_code)]
 
-use std::sync::{Arc, Mutex, OnceLock};
+use std::sync::{LazyLock, Mutex};
 
 use crate::{
     bbtrack::BasicBlockEntry,
@@ -11,7 +11,8 @@ use crate::{
     nondet::NonDetEntry,
 };
 
-static ANALYSIS_STATE: OnceLock<Arc<Mutex<AnalysisState>>> = OnceLock::new();
+static ANALYSIS_STATE: LazyLock<Mutex<AnalysisState>> =
+    LazyLock::new(|| Mutex::new(AnalysisState::default()));
 
 #[derive(Debug, Default)]
 pub struct AnalysisState {
@@ -19,6 +20,12 @@ pub struct AnalysisState {
     pub nondets: Vec<NonDetEntry>,
     pub memtrack: Vec<MemTrackEntry>,
     pub bbtrack: Vec<BasicBlockEntry>,
+    /// Set by `map2check_set_null_is_valid()`; read by `map2check_check_load`.
+    pub null_is_valid: bool,
+    /// Set by `map2check_set_memcleanup()`; read by `map2check_check_mem_endprog`.
+    pub memcleanup_enabled: bool,
+    pub legacy_nondet_logs: Vec<Box<crate::ffi::non_det_log_t>>,
+    pub legacy_bbtrack_logs: Vec<Box<crate::ffi::bbtrack_log_t>>,
 }
 
 impl AnalysisState {
@@ -43,23 +50,110 @@ impl AnalysisState {
     }
 }
 
+fn ensure_state() -> &'static Mutex<AnalysisState> {
+    &ANALYSIS_STATE
+}
+
 pub fn init() {
-    ANALYSIS_STATE.get_or_init(|| Arc::new(Mutex::new(AnalysisState::default())));
+    let _ = ensure_state();
 }
 
-pub fn get() -> Result<Arc<Mutex<AnalysisState>>, Map2CheckError> {
-    ANALYSIS_STATE
-        .get()
-        .cloned()
-        .ok_or(Map2CheckError::NotInitialized)
+pub fn reset() {
+    let state = ensure_state();
+    match state.lock() {
+        Ok(mut guard) => guard.reset(),
+        Err(poisoned) => {
+            let mut guard = poisoned.into_inner();
+            guard.reset();
+            state.clear_poison();
+        }
+    }
 }
 
-/// Convenience: lock the global state and apply a closure.
+pub fn get() -> Result<&'static Mutex<AnalysisState>, Map2CheckError> {
+    Ok(ensure_state())
+}
+
+/// Locks the process-wide analysis state and applies a closure.
+///
+/// This function is intentionally non-reentrant: it serializes access to the
+/// singleton state via a global mutex and should not be called from a path that
+/// can re-enter the same FFI boundary while the lock is held. Code that needs to
+/// mutate the state should do so within a single closure and avoid nested calls
+/// into other exported `extern "C"` functions.
 pub fn with_state<F, R>(f: F) -> Result<R, Map2CheckError>
 where
     F: FnOnce(&mut AnalysisState) -> Result<R, Map2CheckError>,
 {
-    let arc = get()?;
-    let mut guard = arc.lock()?;
+    let state = get()?;
+    let mut guard = state.lock()?;
     f(&mut guard)
+}
+
+/// Serializes unit tests that touch process-wide state (the analysis state and
+/// the LibFuzzer input atomics). `cargo test` runs tests in parallel threads,
+/// so without this a `reset()` in one test can wipe another test's setup.
+#[cfg(test)]
+pub(crate) fn test_lock() -> std::sync::MutexGuard<'static, ()> {
+    static TEST_LOCK: Mutex<()> = Mutex::new(());
+    TEST_LOCK
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn reset_clears_global_state() {
+        let _guard = test_lock();
+        init();
+        with_state(|s| {
+            s.set_false(ViolatedProperty::MemsafetyDeref, 42, "test_fn");
+            s.nondets.push(NonDetEntry::new(
+                1,
+                42,
+                0,
+                "test_fn",
+                crate::nondet::NonDetValue::Int(7),
+            ));
+            Ok(())
+        })
+        .unwrap();
+
+        reset();
+
+        let state = ensure_state();
+        let guard = state.lock().unwrap();
+        assert!(guard.result.function_name.is_empty());
+        assert!(guard.nondets.is_empty());
+        assert!(guard.memtrack.is_empty());
+        assert!(guard.bbtrack.is_empty());
+    }
+
+    #[test]
+    fn next_step_increments_and_current_step_reads_it() {
+        let mut s = AnalysisState::default();
+        assert_eq!(s.current_step(), 0);
+        assert_eq!(s.next_step(), 1);
+        assert_eq!(s.next_step(), 2);
+        assert_eq!(s.current_step(), 2);
+    }
+
+    #[test]
+    fn reset_recovers_from_poisoned_lock() {
+        let _guard = test_lock();
+        let _ = std::thread::spawn(|| {
+            let _held = ensure_state().lock().unwrap();
+            panic!("poison the analysis state on purpose");
+        })
+        .join();
+        assert!(ensure_state().is_poisoned());
+
+        reset();
+
+        assert!(!ensure_state().is_poisoned());
+        assert!(with_state(|s| Ok(s.result.ok)).unwrap());
+    }
 }

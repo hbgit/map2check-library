@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: GPL-3.0-only
 [package]
 name = "map2check-library"
-version = "1.0.0"
+version = "1.0.0-rc1"
 edition = "2021"
 description = "Rust library to support Map2Check tool: tracks memory, basic blocks, and nondeterministic values, and checks safety properties"
 license = "GPL-3.0-only"
@@ -22,13 +22,11 @@ mockall = "0.13"
 
 [features]
 libfuzzer = []
-klee = []
 
 [profile.release]
 opt-level = 3
 lto = true
 codegen-units = 1
-panic = "abort"
 
 [profile.dev]
 opt-level = 0

@@ -82,9 +82,12 @@ impl VccChecker for DivI32 {
 
 impl VccChecker for ShlI32 {
     fn check(&self, _ctx: &VccContext) -> Result<VccOutcome, Map2CheckError> {
-        Ok(check_result(
-            self.rhs < i32::BITS && self.lhs.checked_shl(self.rhs).is_some(),
-        ))
+        let safe = self.rhs < i32::BITS
+            && self.lhs >= 0
+            && (self.lhs as i64)
+                .checked_shl(self.rhs)
+                .is_some_and(|value| value <= i32::MAX as i64);
+        Ok(check_result(safe))
     }
 }
 
@@ -258,6 +261,20 @@ mod tests {
         );
     }
     #[test]
+    fn shl_i32_overflow_detected() {
+        assert_eq!(
+            ShlI32 { lhs: 1, rhs: 31 }.check(&ctx()).unwrap(),
+            overflow_outcome()
+        );
+    }
+    #[test]
+    fn shl_i32_negative_operand_detected() {
+        assert_eq!(
+            ShlI32 { lhs: -1, rhs: 0 }.check(&ctx()).unwrap(),
+            overflow_outcome()
+        );
+    }
+    #[test]
     fn add_u32_overflow_detected() {
         assert_eq!(
             AddU32 {
@@ -281,6 +298,74 @@ mod tests {
         assert_eq!(
             DivU32 { lhs: 5, rhs: 0 }.check(&ctx()).unwrap(),
             overflow_outcome()
+        );
+    }
+
+    #[test]
+    fn mul_and_shr_u32_bounds() {
+        assert_eq!(
+            MulU32 {
+                lhs: u32::MAX,
+                rhs: 2
+            }
+            .check(&ctx())
+            .unwrap(),
+            overflow_outcome()
+        );
+        assert_eq!(
+            MulU32 { lhs: 3, rhs: 4 }.check(&ctx()).unwrap(),
+            VccOutcome::Safe
+        );
+        assert_eq!(
+            ShrU32 { lhs: 1, rhs: 32 }.check(&ctx()).unwrap(),
+            overflow_outcome()
+        );
+        assert_eq!(
+            ShrU32 { lhs: 1, rhs: 31 }.check(&ctx()).unwrap(),
+            VccOutcome::Safe
+        );
+    }
+
+    #[test]
+    fn i64_checkers_detect_overflow_and_accept_normal_values() {
+        assert_eq!(
+            AddI64 {
+                lhs: i64::MAX,
+                rhs: 1
+            }
+            .check(&ctx())
+            .unwrap(),
+            overflow_outcome()
+        );
+        assert_eq!(
+            AddI64 { lhs: 1, rhs: 2 }.check(&ctx()).unwrap(),
+            VccOutcome::Safe
+        );
+        assert_eq!(
+            SubI64 {
+                lhs: i64::MIN,
+                rhs: 1
+            }
+            .check(&ctx())
+            .unwrap(),
+            overflow_outcome()
+        );
+        assert_eq!(
+            SubI64 { lhs: 5, rhs: 3 }.check(&ctx()).unwrap(),
+            VccOutcome::Safe
+        );
+        assert_eq!(
+            MulI64 {
+                lhs: i64::MAX,
+                rhs: 2
+            }
+            .check(&ctx())
+            .unwrap(),
+            overflow_outcome()
+        );
+        assert_eq!(
+            MulI64 { lhs: -4, rhs: 3 }.check(&ctx()).unwrap(),
+            VccOutcome::Safe
         );
     }
 }
