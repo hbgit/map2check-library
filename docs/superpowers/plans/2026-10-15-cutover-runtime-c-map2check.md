@@ -4,9 +4,9 @@
 
 **Goal:** Substituir o runtime C do Map2Check (`hbgit/Map2Check:modules/backend/library`) pela biblioteca Rust deste repositório (`libmap2check`) e remover o runtime C, sem regressão de veredito nem de desempenho e com rollback possível até um ponto de não-retorno explícito.
 
-**Architecture:** O runtime C é compilado em 23 arquivos `.bc` (LLVM 16), e o frontend (`modules/frontend/caller.cpp:226`) os liga ao programa instrumentado com `llvm-link`, escolhendo o conjunto por modo (memtrack, memcleanup, overflow, assert, none), por gerador (none, KLEE, LibFuzzer), por estrutura de dados (Array ou BTree) e por wasm. A biblioteca Rust passa a ser o único runtime. A biblioteca só exporta a sua API núcleo, sem camada de compatibilidade (D5). Primeiro ela ganha paridade funcional. Depois, numa branch do Map2Check, os passes LLVM passam a emitir diretamente a API núcleo e o frontend passa a ligar `libmap2check.a` (migração direta, sem ABI dupla). A branch é validada contra o C por testes diferenciais e mergeada num único merge commit, revertível. Só depois de um ciclo de release o C é removido.
+**Architecture:** O runtime C (`develop` do Map2Check, `f01e8c3e`) são 21 arquivos `.c` compilados para `.bc` (LLVM 16). O frontend (`modules/frontend/caller.cpp:550`, `Caller::linkLLVM`) os liga ao programa instrumentado com `llvm-link`, escolhendo o conjunto por modo (memtrack, memcleanup, overflow, assert, reachability, cover-branches), por gerador (none, KLEE, AFL++), por estrutura de dados (Array ou BTree) e por wasm. A biblioteca Rust passa a ser o único runtime. A biblioteca só exporta a sua API núcleo, sem camada de compatibilidade (D5). Primeiro ela ganha paridade funcional. Depois, numa branch do Map2Check, os passes LLVM passam a emitir diretamente a API núcleo e o frontend passa a ligar `libmap2check.a` (migração direta, sem ABI dupla). A branch é validada contra o C por testes diferenciais e mergeada num único merge commit, revertível. Só depois de um ciclo de release o C é removido.
 
-**Tech Stack:** Rust 1.82 (LLVM 19), cbindgen 0.26, serde_json; Map2Check: C++17, CMake, LLVM/Clang 16, KLEE (z3/stp), LibFuzzer, wabt 1.0.41, benchexec.
+**Tech Stack:** Rust 1.82 (LLVM 19), cbindgen 0.26, serde_json; Map2Check (`develop`): C++17, CMake, LLVM/Clang 16, KLEE (z3/stp), AFL++ 4.40c (persistent mode, PCGUARD), wabt 1.0.41, benchexec.
 
 **Spec:** a mensagem do usuário que pediu este plano (cutover para Rust apenas), mais as respostas da sessão de 2026-10-15: **escopo = runtime C do Map2Check**; **programas C de teste da ABI deste repositório ficam como testes**; **D5: sem camada de compatibilidade** e **migração direta dos passes, sem tabela de ABI dupla** (decisões do usuário). Requisitos de paridade de referência: [TODO.md](../../../TODO.md), issues #6–#24 e #36–#38, [docs/api-deltas.md](../../api-deltas.md) e [docs/semantic-deltas.md](../../semantic-deltas.md).
 
@@ -16,7 +16,8 @@
 - Nenhuma funcionalidade é declarada obsoleta sem uma justificativa registrada em `docs/cutover/decisoes.md`, com evidência e aprovação explícita do mantenedor.
 - Passos pequenos e reversíveis: até a Fase 3, `develop` do Map2Check não muda de runtime; da Task 5.1 até o ponto de não-retorno (Fase 6), voltar ao C é um `git revert -m 1` do merge.
 - Regressão de desempenho máxima aceitável: **10% na mediana** do tempo de parede por tarefa (TODO.md, "Medir e controlar a regressão de desempenho").
-- Toolchain do Map2Check: **LLVM/Clang 16** (Dockerfile.dev:45-55, cmake/FindLibFuzzer.cmake:22). Toolchain deste repositório: **Rust 1.82.0 com LLVM 19.1.1** (`rust-toolchain.toml`).
+- Alvo no Map2Check: branch **`develop`** (`f01e8c3e` em 2026-10-15; 173 commits à frente de `master`). Números de linha citados neste plano referem-se a `develop`, salvo indicação.
+- Toolchain do Map2Check: **LLVM/Clang 16** e **AFL++ 4.40c** (`Dockerfile.dev`). Geradores aceitos pelo CLI: `afl` e `symex` (`modules/frontend/map2check.cpp:929`). Toolchain deste repositório: **Rust 1.82.0 com LLVM 19.1.1** (`rust-toolchain.toml`).
 - Commits com assinatura verificada; tags de preservação assinadas (`git tag -s`).
 - Sem atribuição de IA em commits, PRs ou issues ([CLAUDE.md](../../../CLAUDE.md)).
 - O header `include/map2check.h` é gerado por `build.rs`; nunca editá-lo à mão.
@@ -26,9 +27,9 @@
 
 ## Review Focus
 
-1. **Tarefa que gera `VERIFICATION SUCCEEDED`:** hoje, só o caminho KLEE (`--nondet-generator symex`) pode provar TRUE (`modules/frontend/map2check.cpp:270-285`). Se o runtime Rust não rodar sob KLEE, toda tarefa TRUE vira silêncio ou UNKNOWN. Esperado: a mesma contagem de TRUE que o C. O teste está na Task 4.2 (o gate exige paridade por gerador, incluindo `symex`).
+1. **Tarefa que gera `VERIFICATION SUCCEEDED`:** no inventário feito em `master`, só o caminho KLEE (`--nondet-generator symex`) prova TRUE (`master:modules/frontend/map2check.cpp:270-285`); a Task 0.2 confirmou 4 SUCCEEDED com `symex` em `develop`. Se o runtime Rust não rodar sob KLEE, toda tarefa TRUE vira silêncio ou UNKNOWN. Esperado: a mesma contagem de TRUE que o C. O teste está na Task 4.2 (o gate exige paridade por gerador, incluindo `symex`).
 2. **Duas execuções no mesmo diretório de trabalho:** o runtime C sobrescreve `map2check_property`, mas deixa arquivos antigos de propriedade (`map2check_property_free`, ...) que o frontend lê em ordem fixa (`tools.cpp:114-204`). Esperado: o veredito depende só da execução atual. O teste está na Task 2.4 (`stale_property_files_are_removed_on_init`).
-3. **Iterações sucessivas do LibFuzzer no mesmo processo:** o estado de uma entrada contamina a seguinte. Esperado: cada `LLVMFuzzerTestOneInput` parte do estado zerado. O teste está na Task 2.1 (#9).
+3. **Iterações sucessivas do AFL++ em persistent mode no mesmo processo:** o estado de uma entrada contamina a seguinte. Esperado: cada iteração (`__AFL_LOOP` ou `LLVMFuzzerTestOneInput` via driver) parte do estado zerado. O teste está na Task 2.1 (#9).
 4. **Programa sem violação que chama `exit()` no meio, com `--memcleanup-property`:** o C verifica vazamento no `atexit`. Esperado: FALSE-MEMCLEANUP quando há bloco alcançável não liberado. O teste está na Task 2.2 (`memcleanup_reports_leak_at_exit`).
 5. **Arquivo `.bc` Rust ligado com `llvm-link-16`:** bitcode do LLVM 19 não é lido pelo LLVM 16 ("Unknown attribute kind" / "Invalid record"). Esperado: o build falha alto e cedo, não na hora da verificação. O teste está na Task 1.1 (spike) e na Task 3.1 (o CMake falha se o artefato não for legível por `llvm-dis-16`).
 
@@ -36,11 +37,14 @@
 
 ## 0. Achados que corrigem a premissa do pedido
 
+> **Revisão de 2026-10-15 (durante a execução):** o inventário original foi feito sobre o `master` local do Map2Check (`83471fba`). O alvo é `develop` (`f01e8c3e`), que trocou LibFuzzer por **AFL++** (`NonDetGeneratorAFL.c` substitui `NonDetGeneratorLibFuzzy.c`; CLI `afl|symex`), acrescentou `--slice`, o modo `COVER_BRANCHES_MODE` e o símbolo `map2check_binop_srem`, e reduziu o runtime a 21 arquivos `.c` (3 039 linhas). As seções abaixo já refletem `develop`.
+
 - **Neste repositório já não há C legado.** A implementação C/C++ foi removida em `f1cbcfe` (84 arquivos, 8 083 linhas), e a remoção já está em `develop` e em `main`. O último commit com o C é `f4c43b5`. A tag `archive/memory_check` aponta para um commit de 2021 e **não** preserva esse estado. O que resta em C são três programas consumidores da ABI (`test/code*_by_caller_test.c`) e o harness `tests/ffi_harness.c`. Por decisão do usuário, eles **ficam** como testes.
-- **O runtime C ainda em uso está no Map2Check**, em `modules/backend/library` (3 893 linhas em 33 arquivos). Ele não é a mesma API desta biblioteca: os nomes divergem (`map2check_binop_add` × `map2check_binop_add_int`, `map2check_assert` × `map2check_is_valid_assert`, `map2check_malloc` × `map2check_map_malloc`, `map2check_non_det_int` × `__VERIFIER_nondet_int`). Dos nomes `map2check_*` que aparecem nos passes, cerca de 30 não existem no header Rust. A lista `audit/evidence/missing_compat.txt` dá 33, mas está inflada: `map2check_pointer_cast` (`OverflowPass.cpp:255`) e `map2check_nondet_cast_<t>` (`NonDetPass.cpp:167`) são só nomes de valores do IR (`Twine` de instruções de cast), não chamadas ao runtime. Recalcular na Task 0.3, porque a evidência é de `Map2Check@f01e8c3` e o `master` local está em `83471fba`. Como não haverá camada de compatibilidade (D5), essa diferença se resolve mudando o que os passes emitem (Task 3.2), não a biblioteca.
-- **O runtime é ligado como bitcode, não como `.a`.** `caller.cpp:226-312` faz `llvm-link` de `.bc` no programa instrumentado, e esse `.bc` final vai para `clang -fsanitize=fuzzer` ou para o KLEE. O rustc 1.82 emite bitcode LLVM 19, que o `llvm-link-16` não lê. **Esse é o bloqueio técnico central** (Fase 1).
+- **O runtime C ainda em uso está no Map2Check**, em `modules/backend/library` (`develop`: 21 `.c` com 3 039 linhas, 13 headers). Ele não é a mesma API desta biblioteca: os nomes divergem (`map2check_binop_add` × `map2check_binop_add_int`, `map2check_assert` × `map2check_is_valid_assert`, `map2check_malloc` × `map2check_map_malloc`, `map2check_non_det_int` × `__VERIFIER_nondet_int`). Dos nomes `map2check_*` que aparecem nos passes, cerca de 30 não existem no header Rust. A lista `audit/evidence/missing_compat.txt` dá 33, mas está inflada: `map2check_pointer_cast` (`OverflowPass.cpp:255`) e `map2check_nondet_cast_<t>` (`NonDetPass.cpp:167`) são só nomes de valores do IR (`Twine` de instruções de cast), não chamadas ao runtime. Recalcular na Task 0.3, porque a evidência é de `Map2Check@f01e8c3` e o `master` local está em `83471fba`. Como não haverá camada de compatibilidade (D5), essa diferença se resolve mudando o que os passes emitem (Task 3.2), não a biblioteca.
+- **O runtime é ligado como bitcode, não como `.a`.** `caller.cpp:550-641` faz `llvm-link` de `.bc` no programa instrumentado, e esse `.bc` final vai para `afl-clang-fast` (`caller.cpp:395-440`, binários `-fuzzed.out` e `-cmplog.out`) ou para o KLEE (`caller.cpp:729`). O rustc 1.82 emite bitcode LLVM 19, que o `llvm-link-16` não lê. **Esse é o bloqueio técnico central** (Fase 1).
 - **O runtime C é composto por modo na hora do link.** Cada `AnalysisMode*.c` define os mesmos símbolos (`analysis_init`, `map2check_malloc`, ...), e o frontend escolhe qual `.bc` ligar. Uma biblioteca Rust única precisa selecionar o modo em tempo de execução.
 - **O canal de resultado é por arquivos, não JSON.** O frontend lê `map2check_property`, `map2check_property_{free,deref,assert,overflow,memtrack,memcleanup,unknown}`, `list_log.csv`, `klee_log.csv`, `track_bb_log.st` e `map2check_checked_error` (`tools.hpp:43-54`, `tools.cpp:114-204`, `caller.cpp:44`).
+- **Gerador de fuzzing divergente:** a biblioteca Rust implementa o gerador para **LibFuzzer** (`LLVMFuzzerTestOneInput`, `rust/src/nondet/libfuzzer.rs`), mas `develop` usa **AFL++ em persistent mode**: `NonDetGeneratorAFL.c` define o `main`, lê os bytes de `__AFL_FUZZ_TESTCASE_BUF` e cancela entradas com `longjmp` em `nondet_assume`. Há dois caminhos: ligar o harness LibFuzzer da biblioteca ao driver libFuzzer do AFL++ (`afl-clang-fast -fsanitize=fuzzer`) ou portar o loop persistente para Rust. A escolha entra na D1.
 - **Rust → C via FFI:** o único `extern "C"` importado é `__map2check_main__` (`rust/src/nondet/libfuzzer.rs:44`), o `main` renomeado do programa analisado. Não é código C legado, então **permanece por design**. Se o KLEE for adotado, entram também `klee_make_symbolic` e `klee_assume`, que são intrínsecos do KLEE e também permanecem. A libc chega via `std` (malloc, exit), e isso é aceitável. Não há C próprio chamado pelo Rust a eliminar.
 
 ## 1. Mapa de paridade
@@ -51,15 +55,15 @@ Status: **(a)** portado · **(b)** parcial · **(c)** não portado · **(d)** ca
 |---|---|---|---|---|---|---|
 | 1 | `Map2CheckFunctions.c`: init(isSvComp), passo, assume, `crab_assume`, `assume_loop`, `track_bb`, `__VERIFIER_error`, `target_function`, success/error/destroy/exit | `ffi.rs` (init, success, passo, assume, `__VERIFIER_error`) | b | M | 2.3 (modo), 3.2 (passes) | 2.3, 2.5, 3.2 |
 | 2 | `AnalysisModeAssert.c` | `analysismode/assert.rs` | b (nomes/assinatura: muda o passe) | P | 3.2 | 3.2 |
-| 3 | `AnalysisModeOverflow.c` (add/sub/mul/sdiv int e uint) | `analysismode/overflow.rs` | b (nomes: muda o passe; `sdiv` → `div_int`) | P–M | 3.2 | 3.2 |
+| 3 | `AnalysisModeOverflow.c` (add/sub/mul/sdiv/**srem** int e uint) | `analysismode/overflow.rs` | b (nomes: muda o passe; `sdiv` → `div_int`; `srem` sem equivalente → export novo) | P–M | 2.5, 3.2 | 2.5, 3.2 |
 | 4 | `AnalysisModeMemtrack.c` + `AllocationLog.c` + `ListLog.c` + `HeapLog.c` | `memtrack/`, `analysismode/memory.rs` | b (bugs #11, #36, #37, #38; CSVs) | G | 2.1 | 2.1, 2.4 |
 | 5 | `AnalysisModeMemcleanup.c` | stub `map2check_set_memcleanup` | c (#10) | M | 2.1 | 2.2 |
-| 6 | `AnalysisModeNone.c` | — | c (trivial) | P | 2.3 | 2.3 |
+| 6 | `AnalysisModeNone.c` (modos none e `COVER_BRANCHES_MODE`, `caller.cpp:604-609`) | — | c (trivial) | P | 2.3 | 2.3 |
 | 7 | `ContainerRealloc.c` | `Vec<T>` em `AnalysisState` | a (por design) | P (verificar) | — | 4.2 |
 | 8 | `ContainerBTree.c` + `BTree.c` (persistência em `*.map2check.bin`; opção `--btree`, marcada "experimental") | — | d? (decisão D3) | P se justificado; M se portado | 4.3 | 2.6 |
 | 9 | `NonDetLog.c` → `klee_log.csv` | `nondet/mod.rs` (JSON) | b (formato) | M | 2.4 | 2.4 |
 | 10 | `NonDetGeneratorNone.c` | `__VERIFIER_nondet_*` sem feature | b | P | 2.5, 3.2 | 2.5 |
-| 11 | `NonDetGeneratorLibFuzzy.c` | `nondet/libfuzzer.rs` | b (#12, #6) | M | 2.1 | 2.5 |
+| 11 | `NonDetGeneratorAFL.c` (AFL++ persistent mode: `main`, buffer de bytes, `longjmp` em `assume`) | `nondet/libfuzzer.rs` (LibFuzzer) | c (outro motor: decidir na D1 entre driver libFuzzer do AFL++ ou port do loop) | M–G | 1.1 (D1) | 2.5 |
 | 12 | `NonDetGeneratorKlee.c` (`klee_make_symbolic`, `klee_assume`) | — (feature `klee` removida do `Cargo.toml`) | c (#20) | G–GG | **1.1 (bloqueante)** | 2.7 |
 | 13 | `PropertyGenerator.c` → `map2check_property*` | `output/` (só JSON) | c (#19) | M | 2.3 | 2.4 |
 | 14 | `TrackBBLog.c` → `track_bb_log.st` | `bbtrack/` | b (formato) | M | 2.4 | 2.4 |
@@ -76,7 +80,7 @@ Itens fora deste repositório que **continuam em C++** por decisão de escopo: o
 
 | ID | Decisão | Opções | Recomendação | Bloqueia |
 |---|---|---|---|---|
-| D1 | Como o runtime Rust entra no pipeline LLVM 16 | (A) emitir bitcode legível pelo LLVM 16; (B) ligar `libmap2check.a` nativo no passo final do `clang`, sem `llvm-link`; (C) migrar o Map2Check para LLVM 19 | **B** para None/LibFuzzer; para KLEE, só o spike decide (A ou C). B não depende da versão do LLVM, porque o objeto é nativo. | 1.2, 2.7, 3.x |
+| D1 | Como o runtime Rust entra no pipeline LLVM 16 (e como o AFL++ dirige as entradas) | (A) emitir bitcode legível pelo LLVM 16; (B) ligar `libmap2check.a` nativo no passo final do `afl-clang-fast`, sem `llvm-link`; (C) migrar o Map2Check para LLVM 19. Para o AFL++: (B1) harness `LLVMFuzzerTestOneInput` da biblioteca + driver libFuzzer do AFL++; (B2) port do loop persistente (`__AFL_LOOP`) para Rust | **B** para None/AFL++, com B1 se o spike mostrar throughput ≥ 90% do C; para KLEE, só o spike decide (A ou C). B não depende da versão do LLVM, porque o objeto é nativo. | 1.2, 2.5, 2.7, 3.x |
 | D2 | O modo `--wasm` entra no cutover? | portar os stubs para Rust; ou manter fora do escopo | Portar. O CI do Map2Check tem o job `e2e-wasm` ativo (`ci.yml:213`), então não há base para declará-lo obsoleto. | 2.8 |
 | D3 | A opção `--btree` (disco) | portar; ou remover com justificativa | Medir antes (Task 4.3). Se o RSS do Rust nos casos grandes ficar ≤ o RSS do C com `--btree`, remover e registrar a justificativa. | 2.6 |
 | D4 | Limite de memória (pico de RSS) | — | ≤ 1,25× o C na mediana. O TODO só fixa o limite de tempo; este valor precisa de aprovação. | 4.2 |
@@ -141,7 +145,8 @@ Os critérios são medidos pelo gate da Task 4.2 sobre o corpus `tests/regressio
 | Sem ABI dupla, não há rollback por flag: depois do merge, voltar ao C exige revert | migração direta | trabalho isolado em `feat/rust-runtime`; merge único com merge commit; gate 4.2 duas vezes antes do merge; revert ensaiado no PR (Task 5.1); a branch é rebaseada semanalmente para que o revert continue limpo | 3.x, 5.1 |
 | Um passe chama função inexistente na biblioteca: o `clang` final só falha com `undefined reference` na hora da verificação | — | gate `symbol-matrix.sh` + `core_api_coverage` + teste de link ponta a ponta no CI do Map2Check | 0.3, 2.5, 3.2 |
 | Símbolos duplicados se C e Rust forem ligados juntos | os dois definem `__VERIFIER_*` | o build deixa de compilar/instalar os `.bc` C; o teste da Task 3.1 falha se algum for instalado | 3.1 |
-| Dependências externas: wabt 1.0.41 em `/opt`, klee-uclibc compilado com clang-16, solvers z3/stp/btor/yices2 | `Dockerfile.dev`, `caller.cpp:389-420` | gate em container `Dockerfile.dev` + toolchain Rust instalada nele; versões fixadas | 3.3 |
+| Dependências externas: wabt 1.0.41 em `/opt`, klee-uclibc compilado com clang-16, AFL++ 4.40c, solvers z3/stp/btor/yices2 | `Dockerfile.dev`; a imagem local de julho não tem AFL++ nem `/usr/bin/time` | gate numa imagem reconstruída do `Dockerfile.dev` de `develop` (`map2check-dev:cutover-f01e8c3e`) + toolchain Rust instalada nela; versões fixadas | 0.2, 3.4 |
+| O motor de fuzzing muda de semântica (LibFuzzer × AFL++: rejeição por `longjmp`, ciclo de bytes, `cmplog`) | `NonDetGeneratorAFL.c`, `caller.cpp:418-440` | o spike mede caminhos e throughput nas variantes B1/B2 antes de decidir; gate 4.2 por gerador `afl` | 1.1, 4.2 |
 | Diferença de alocador/endereços muda contraexemplos textuais | endereços aparecem na saída | o gate compara campos normalizados, não o texto | 4.1 |
 | Unwinding atravessando a FFI | #8 | `panic = "abort"` no perfil de runtime | 2.1 |
 
@@ -194,7 +199,7 @@ Expected: a tag aparece no remoto e `tag -v` mostra "Good signature".
 - Create (Map2Check): `tests/cutover/baseline-c.tsv` (gerado)
 
 **Interfaces:**
-- Produces: `run-corpus.sh <map2check-release-dir> <out.tsv>`, com as variáveis `GENS` (padrão `"fuzzer symex"`), `REPS` (padrão `5`) e `TIMEOUT` (padrão `45`). Gera um TSV com o cabeçalho exato `task	prp	gen	rep	verdict	tag	line	function	witness	wall_s	maxrss_kb`, consumido pela Task 4.1.
+- Produces: `run-corpus.sh <map2check-release-dir> <out.tsv>`, com as variáveis `GENS` (padrão `"afl symex"`), `REPS` (padrão `5`) e `TIMEOUT` (padrão `45`). Gera um TSV com o cabeçalho exato `task	prp	gen	rep	verdict	tag	line	function	witness	wall_s	maxrss_kb`, consumido pela Task 4.1.
 
 - [ ] **Step 1: Escrever o teste do runner com um `map2check` falso**
 
@@ -244,7 +249,7 @@ set -euo pipefail
 BIN_DIR="$(cd "$1" && pwd)"; OUT="$2"
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 CASES="${CASES:-$ROOT/tests/regression_test/test_cases/sv-benchmarks}"
-GENS="${GENS:-fuzzer symex}"; REPS="${REPS:-5}"; TIMEOUT="${TIMEOUT:-45}"
+GENS="${GENS:-afl symex}"; REPS="${REPS:-5}"; TIMEOUT="${TIMEOUT:-45}"
 
 flags_for() {
   case "$1" in
@@ -459,7 +464,7 @@ git commit -S -m "docs: map Map2Check pass ABI to the core Rust API and gate it 
 - Create (este repo, descartável): `spikes/llvm16/` (não vai para `develop`; fica na branch `spike/llvm16`)
 
 **Interfaces:**
-- Produces: a decisão D1 registrada em `docs/cutover/decisoes.md`, com a rota escolhida por gerador (`none`, `fuzzer`, `symex`) e os comandos exatos de build/link que a Task 3.1 implementa.
+- Produces: a decisão D1 registrada em `docs/cutover/decisoes.md`, com a rota escolhida por gerador (`none`, `afl`, `symex`) e os comandos exatos de build/link que a Task 3.1 implementa.
 
 - [ ] **Step 1: Montar o programa de prova**
 
@@ -497,6 +502,12 @@ clang-16 -fsanitize=fuzzer prog.bc target/release/libmap2check.a -ldl -lpthread 
 ```
 
 Expected: liga e roda. Registrar se há colisão de `main`/`LLVMFuzzerTestOneInput` com a instrumentação do LibFuzzer.
+
+Repetir com o AFL++ do `develop` (imagem `map2check-dev:cutover-f01e8c3e`), nas duas variantes da D1:
+- **B1:** `afl-clang-fast -fsanitize=fuzzer prog.bc target/release/libmap2check.a -ldl -lpthread -lm -o prog.afl` (driver libFuzzer do AFL++ chamando o `LLVMFuzzerTestOneInput` da biblioteca), seguido de `afl-fuzz -i in -o out -V 30 -- ./prog.afl`.
+- **B2:** o `NonDetGeneratorAFL.c` atual compilado com `afl-clang-fast`, como referência de throughput.
+
+Registrar `execs_per_sec` e `saved_crashes` de `out/default/fuzzer_stats` para as duas, e se B1 encontra o `x == 42`.
 
 - [ ] **Step 4: Rota B sob KLEE (`--load` da biblioteca nativa)**
 
@@ -1131,7 +1142,7 @@ Escrever um teste por hook do enum (28), mais `nonDetGenerator`/`nonDetLogger` p
 
 ```cpp
 TEST(CallerLink, LinksOnlyTheRustRuntime) {
-  Caller::LinkInputs in{"h", Map2CheckMode::MEMTRACK_MODE, NonDetGenerator::LibFuzzer,
+  Caller::LinkInputs in{"h", Map2CheckMode::MEMTRACK_MODE, NonDetGenerator::AFLPlusPlus,
                         DataStructure::Array, /*wasm=*/false, /*witness=*/false};
   std::string link = buildLinkCommand(in);
   EXPECT_EQ(link.find("${MAP2CHECK_PATH}/lib/"), std::string::npos);
@@ -1142,14 +1153,14 @@ TEST(CallerLink, EveryModeAndGeneratorLinksRuntime) {
   for (auto mode : {Map2CheckMode::MEMTRACK_MODE, Map2CheckMode::MEMCLEANUP_MODE,
                     Map2CheckMode::OVERFLOW_MODE, Map2CheckMode::ASSERT_MODE,
                     Map2CheckMode::REACHABILITY_MODE})
-    for (auto gen : {NonDetGenerator::LibFuzzer, NonDetGenerator::None}) {
+    for (auto gen : {NonDetGenerator::AFLPlusPlus, NonDetGenerator::None}) {
       Caller::LinkInputs in{"h", mode, gen, DataStructure::Array, false, false};
       EXPECT_NE(buildFuzzerCommand(in).find("libmap2check.a"), std::string::npos);
     }
 }
 ```
 
-Conferir os nomes exatos dos enumeradores em `modules/frontend/caller.hpp` antes de escrever o teste. Os nomes acima seguem `caller.cpp:254-280` e devem ser ajustados se diferirem.
+Os enumeradores seguem `modules/frontend/caller.hpp:21-45` de `develop`; incluir também `COVER_BRANCHES_MODE` no laço.
 
 - [ ] **Step 2–4:** Ver falhar, extrair as funções e implementar, `ctest --output-on-failure` verde.
 - [ ] **Step 5:** Se D3 = remover, adicionar o aviso de `--btree` com o seu teste.
@@ -1199,7 +1210,7 @@ def run(c_rows, r_rows, accepted=""):
     return subprocess.run([sys.executable, HERE / "compare.py", d / "c.tsv", d / "r.tsv",
                            "--accepted", d / "a.tsv"], capture_output=True, text=True)
 
-ROW = "t.yml\tvalid-memsafety\tfuzzer\t{rep}\t{v}\t{tag}\t7\tmain\t0\t{wall}\t1000\n"
+ROW = "t.yml\tvalid-memsafety\tafl\t{rep}\t{v}\t{tag}\t7\tmain\t0\t{wall}\t1000\n"
 
 def rows(v="FAILED", tag="FALSE-DEREF", wall=1.0):
     return [ROW.format(rep=i, v=v, tag=tag, wall=wall) for i in range(1, 6)]
@@ -1212,7 +1223,7 @@ def test_verdict_change_blocks():
     assert p.returncode == 1 and "verdict" in p.stdout
 
 def test_accepted_delta_passes():
-    acc = "t.yml\tvalid-memsafety\tfuzzer\ttag\tFALSE-DEREF\tFALSE-FREE\tSD-06\n"
+    acc = "t.yml\tvalid-memsafety\tafl\ttag\tFALSE-DEREF\tFALSE-FREE\tSD-06\n"
     assert run(rows(), rows(tag="FALSE-FREE"), acc).returncode == 0
 
 def test_slowdown_over_10_percent_blocks():
@@ -1388,7 +1399,7 @@ Um PR, um commit por grupo, e **cada commit** mantém o build + `ctest` + `run-c
 - [ ] **Commit 4:** `PropertyGenerator.c`, `WitnessGeneration.c` (canal de resultado; Rust coberto pela Task 2.4).
 - [ ] **Commit 5:** `AnalysisModeAssert.c`, `AnalysisModeOverflow.c`.
 - [ ] **Commit 6:** `AllocationLog.c`, `ListLog.c`, `HeapLog.c`, `AnalysisModeMemtrack.c`, `AnalysisModeMemcleanup.c`.
-- [ ] **Commit 7:** `NonDetGeneratorLibFuzzy.c`, `NonDetGeneratorKlee.c`.
+- [ ] **Commit 7:** `NonDetGeneratorAFL.c`, `NonDetGeneratorKlee.c`.
 - [ ] **Commit 8:** `WasmRuntimeStubs.c`.
 - [ ] **Commit 9:** `Map2CheckFunctions.c` (núcleo; todos dependem dele), `header/*.h`, `lib/CMakeLists.txt`, `lib/NOTE.txt`, `CMakeLists.txt`, `NOTES.txt` e o diretório `modules/backend/library/`.
 - [ ] **Commit 10:** `tests/unit/backend-library/` (as asserções já estão em Rust, Task 5.2) e a sua entrada em `tests/CMakeLists.txt`.
