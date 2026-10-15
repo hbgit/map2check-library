@@ -437,3 +437,166 @@ fn map_store_pointer_records_points_to() {
     );
     assert!(!e.is_dynamic && !e.is_free);
 }
+
+// ── Analysis mode: assert ───────────────────────────────────────────────────
+
+#[test]
+fn is_valid_assert_true_keeps_result_ok() {
+    let _guard = fresh();
+    // SAFETY: C-string literal is valid and null-terminated.
+    unsafe { map2check_is_valid_assert(5, c"main".as_ptr(), 1) };
+    assert_ok();
+}
+
+#[test]
+fn is_valid_assert_false_reports_reachability() {
+    let _guard = fresh();
+    // SAFETY: C-string literal is valid and null-terminated.
+    unsafe { map2check_is_valid_assert(5, c"main".as_ptr(), 0) };
+    assert_violated(ViolatedProperty::Reachability, 5, "main");
+}
+
+// ── Analysis mode: overflow ─────────────────────────────────────────────────
+
+/// Runs `op` once with operands that must be safe and once with operands that
+/// must overflow, starting from a fresh state each time.
+fn check_overflow_pair(safe: impl FnOnce(), overflowing: impl FnOnce()) {
+    state::reset();
+    safe();
+    assert_ok();
+    state::reset();
+    overflowing();
+    assert_violated(ViolatedProperty::Overflow, 4, "f");
+}
+
+#[test]
+fn binop_add_int_detects_overflow() {
+    let _guard = fresh();
+    // SAFETY (all calls below): C-string literal is valid and null-terminated.
+    check_overflow_pair(
+        || unsafe { map2check_binop_add_int(1, 2, 4, 0, c"f".as_ptr()) },
+        || unsafe { map2check_binop_add_int(i32::MAX, 1, 4, 0, c"f".as_ptr()) },
+    );
+}
+
+#[test]
+fn binop_sub_int_detects_overflow() {
+    let _guard = fresh();
+    // SAFETY (all calls below): C-string literal is valid and null-terminated.
+    check_overflow_pair(
+        || unsafe { map2check_binop_sub_int(5, 3, 4, 0, c"f".as_ptr()) },
+        || unsafe { map2check_binop_sub_int(i32::MIN, 1, 4, 0, c"f".as_ptr()) },
+    );
+}
+
+#[test]
+fn binop_mul_int_detects_overflow() {
+    let _guard = fresh();
+    // SAFETY (all calls below): C-string literal is valid and null-terminated.
+    check_overflow_pair(
+        || unsafe { map2check_binop_mul_int(6, 7, 4, 0, c"f".as_ptr()) },
+        || unsafe { map2check_binop_mul_int(i32::MAX, 2, 4, 0, c"f".as_ptr()) },
+    );
+}
+
+#[test]
+fn binop_div_int_detects_min_over_minus_one_and_zero_divisor() {
+    let _guard = fresh();
+    // SAFETY (all calls below): C-string literal is valid and null-terminated.
+    check_overflow_pair(
+        || unsafe { map2check_binop_div_int(7, 2, 4, 0, c"f".as_ptr()) },
+        || unsafe { map2check_binop_div_int(i32::MIN, -1, 4, 0, c"f".as_ptr()) },
+    );
+    check_overflow_pair(
+        || unsafe { map2check_binop_div_int(-7, 2, 4, 0, c"f".as_ptr()) },
+        || unsafe { map2check_binop_div_int(7, 0, 4, 0, c"f".as_ptr()) },
+    );
+}
+
+#[test]
+fn binop_neg_int_detects_min() {
+    let _guard = fresh();
+    // SAFETY (all calls below): C-string literal is valid and null-terminated.
+    check_overflow_pair(
+        || unsafe { map2check_binop_neg_int(5, 0, 4, 0, c"f".as_ptr()) },
+        || unsafe { map2check_binop_neg_int(i32::MIN, 0, 4, 0, c"f".as_ptr()) },
+    );
+}
+
+#[test]
+fn binop_shl_int_detects_overflow_negative_lhs_and_wide_shift() {
+    let _guard = fresh();
+    // SAFETY (all calls below): C-string literal is valid and null-terminated.
+    check_overflow_pair(
+        || unsafe { map2check_binop_shl_int(1, 30, 4, 0, c"f".as_ptr()) },
+        || unsafe { map2check_binop_shl_int(1, 31, 4, 0, c"f".as_ptr()) },
+    );
+    check_overflow_pair(
+        || unsafe { map2check_binop_shl_int(0, 31, 4, 0, c"f".as_ptr()) },
+        || unsafe { map2check_binop_shl_int(-1, 1, 4, 0, c"f".as_ptr()) },
+    );
+    check_overflow_pair(
+        || unsafe { map2check_binop_shl_int(3, 0, 4, 0, c"f".as_ptr()) },
+        || unsafe { map2check_binop_shl_int(1, 32, 4, 0, c"f".as_ptr()) },
+    );
+}
+
+#[test]
+fn binop_shr_int_detects_wide_shift() {
+    let _guard = fresh();
+    // SAFETY (all calls below): C-string literal is valid and null-terminated.
+    check_overflow_pair(
+        || unsafe { map2check_binop_shr_int(-8, 31, 4, 0, c"f".as_ptr()) },
+        || unsafe { map2check_binop_shr_int(8, 32, 4, 0, c"f".as_ptr()) },
+    );
+}
+
+#[test]
+fn binop_add_unsigned_detects_overflow() {
+    let _guard = fresh();
+    // SAFETY (all calls below): C-string literal is valid and null-terminated.
+    check_overflow_pair(
+        || unsafe { map2check_binop_add_unsigned(u32::MAX - 1, 1, 4, 0, c"f".as_ptr()) },
+        || unsafe { map2check_binop_add_unsigned(u32::MAX, 1, 4, 0, c"f".as_ptr()) },
+    );
+}
+
+#[test]
+fn binop_sub_unsigned_detects_wraparound() {
+    let _guard = fresh();
+    // SAFETY (all calls below): C-string literal is valid and null-terminated.
+    check_overflow_pair(
+        || unsafe { map2check_binop_sub_unsigned(1, 1, 4, 0, c"f".as_ptr()) },
+        || unsafe { map2check_binop_sub_unsigned(0, 1, 4, 0, c"f".as_ptr()) },
+    );
+}
+
+#[test]
+fn binop_mul_unsigned_detects_overflow() {
+    let _guard = fresh();
+    // SAFETY (all calls below): C-string literal is valid and null-terminated.
+    check_overflow_pair(
+        || unsafe { map2check_binop_mul_unsigned(65_535, 65_537, 4, 0, c"f".as_ptr()) },
+        || unsafe { map2check_binop_mul_unsigned(u32::MAX, 2, 4, 0, c"f".as_ptr()) },
+    );
+}
+
+#[test]
+fn binop_div_unsigned_detects_zero_divisor() {
+    let _guard = fresh();
+    // SAFETY (all calls below): C-string literal is valid and null-terminated.
+    check_overflow_pair(
+        || unsafe { map2check_binop_div_unsigned(u32::MAX, 2, 4, 0, c"f".as_ptr()) },
+        || unsafe { map2check_binop_div_unsigned(1, 0, 4, 0, c"f".as_ptr()) },
+    );
+}
+
+#[test]
+fn binop_shr_unsigned_detects_wide_shift() {
+    let _guard = fresh();
+    // SAFETY (all calls below): C-string literal is valid and null-terminated.
+    check_overflow_pair(
+        || unsafe { map2check_binop_shr_unsigned(u32::MAX, 31, 4, 0, c"f".as_ptr()) },
+        || unsafe { map2check_binop_shr_unsigned(1, 32, 4, 0, c"f".as_ptr()) },
+    );
+}
