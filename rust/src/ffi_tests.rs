@@ -379,6 +379,23 @@ fn non_static_alloca_is_reported_as_leak_at_end_of_program() {
 }
 
 #[test]
+fn non_static_alloca_size_is_bytes_not_element_count() {
+    // Fixa SD-12: o legado multiplica `size` por `size_primitive`; aqui `size`
+    // já é o tamanho em bytes, então passar a contagem de elementos (4 ints)
+    // registra só 4 bytes e o acesso a vla[2] é acusado.
+    let _guard = fresh();
+    // SAFETY: C-string literals are valid; fake addresses are never dereferenced.
+    unsafe {
+        map2check_map_non_static_alloca(c"vla".as_ptr(), addr(0x2000), 4, 4, 3, 0);
+        map2check_check_load(addr(0x2000), 4, 0, 4, c"main".as_ptr());
+    }
+    assert_ok();
+    // SAFETY: as above.
+    unsafe { map2check_check_load(addr(0x2008), 4, 0, 4, c"main".as_ptr()) };
+    assert_violated(ViolatedProperty::MemsafetyDeref, 4, "main");
+}
+
+#[test]
 fn map_funct_address_records_pointer_sized_slot() {
     let _guard = fresh();
     // SAFETY: C-string literal is valid; fake address is never dereferenced.
@@ -804,4 +821,38 @@ fn check_mem_endprog_accepts_freed_allocation() {
     }
     map2check_check_mem_endprog();
     assert_ok();
+}
+
+// ── Hand-written header declarations ────────────────────────────────────────
+
+#[test]
+fn macro_generated_exports_match_the_hand_written_header_declarations() {
+    // O cbindgen não vê as funções geradas por `nondet_ffi!` e
+    // `overflow_ffi_*!`: o `build.rs` escreve as declarações C delas à mão, e
+    // `tests/compat_docs.rs` só compara o doc com o header. Estas coerções
+    // quebram a compilação se a assinatura Rust mudar; ao corrigir aqui,
+    // atualize também a string correspondente em `build.rs`.
+    use std::os::raw::{c_char, c_long};
+    type NonDet<T> =
+        unsafe extern "C" fn(i32, i32, i32, *mut T, *const c_char) -> *mut non_det_log_t;
+    type BinOp<T> = unsafe extern "C" fn(T, T, u32, u32, *const c_char);
+    type Shift<T> = unsafe extern "C" fn(T, u32, u32, u32, *const c_char);
+
+    let _: NonDet<i32> = map2check_save_nondet_log_int; // int *value
+    let _: NonDet<u32> = map2check_save_nondet_log_uint; // unsigned int *value
+    let _: NonDet<c_long> = map2check_save_nondet_log_long; // long *value
+    let _: NonDet<c_char> = map2check_save_nondet_log_char; // char *value
+    let _: NonDet<f32> = map2check_save_nondet_log_float; // float *value
+    let _: NonDet<f64> = map2check_save_nondet_log_double; // double *value
+    let _: BinOp<i32> = map2check_binop_add_int;
+    let _: BinOp<i32> = map2check_binop_sub_int;
+    let _: BinOp<i32> = map2check_binop_mul_int;
+    let _: BinOp<i32> = map2check_binop_div_int;
+    let _: BinOp<u32> = map2check_binop_add_unsigned;
+    let _: BinOp<u32> = map2check_binop_sub_unsigned;
+    let _: BinOp<u32> = map2check_binop_mul_unsigned;
+    let _: BinOp<u32> = map2check_binop_div_unsigned;
+    let _: Shift<i32> = map2check_binop_shl_int;
+    let _: Shift<i32> = map2check_binop_shr_int;
+    let _: Shift<u32> = map2check_binop_shr_unsigned;
 }
