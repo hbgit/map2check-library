@@ -854,7 +854,7 @@ Pela D5, **não há camada de compatibilidade**: nenhum nome ou assinatura do ru
 - Produces:
   - `extern "C" fn map2check_map_posix_memalign(ptr_address: *const c_void, size: i32)`, com a semântica de `map2check_posix` (`AnalysisModeMemtrack.c:328`).
   - `__VERIFIER_nondet_{loff_t,sector_t,pchar}` e `map2check_save_nondet_log_<t>` para todo tipo listado no mapeamento (#6), com a representação C de cada tipo confirmada no `NonDetGenerator.h` do Map2Check.
-  - A decisão do #13 registrada em `docs/api-deltas.md`: a assinatura de `map2check_save_nondet_log_*` continua a núcleo (valor por parâmetro, retorno `void`), e o passe se adapta.
+  - A decisão do #13 registrada em `docs/api-deltas.md`: a assinatura de `map2check_save_nondet_log_*` continua a núcleo atual de `rust/src/ffi.rs` (`line: i32, scope: i32, type_var: i32, value: *mut T, function_name` → `*mut non_det_log_t`), e o passe se adapta (grava o valor num `alloca` e passa o ponteiro).
   - Ao final, todo `core_symbol` do mapeamento existe no header. A Task 3.2 depende de `scripts/symbol-matrix.sh` sair com 0.
 
 - [ ] **Step 1: Teste que exige cada alvo do mapeamento no artefato**
