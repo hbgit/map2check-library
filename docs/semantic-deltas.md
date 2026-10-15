@@ -82,7 +82,7 @@ print_all_containers_as_json();   /* Container_AllocationLog present */
 
 ### SD-03 — Violations do not stop the analysis, and a later safe memory check clears them
 
-**Classification:** suspected regression (#15)
+**Classification:** suspected regression (#36; differential check in #15)
 **Tests:** `rust/src/ffi_tests.rs::check_load_clears_a_previous_violation_when_safe`
 
 **Rust:** a check that finds a violation records it and returns. The process
@@ -153,7 +153,7 @@ map2check_check_load(NULL, 12, 0, 4, "main");   /* None */
 
 ### SD-06 — Freeing an address with no record
 
-**Classification:** suspected regression (#15)
+**Classification:** suspected regression (#37; differential check in #15)
 **Tests:** `rust/src/ffi_tests.rs::check_free_rejects_double_free_and_untracked_address`, `rust/src/analysismode/memory.rs::free_resolved_checker_outcomes`
 
 **Rust:** `map2check_check_free` reports `MEMSAFETY_FREE` for an address
@@ -273,7 +273,7 @@ for two inputs; the second report has no records from the first.
 
 ### SD-12 — `map2check_map_non_static_alloca`: a VLA counts as a leak, and `size` is in bytes
 
-**Classification:** suspected regression (#15)
+**Classification:** suspected regression (#38; differential check in #15)
 **Tests:** `rust/src/ffi_tests.rs::map_non_static_alloca_records_dynamic_slot`, `rust/src/ffi_tests.rs::non_static_alloca_is_reported_as_leak_at_end_of_program`, `rust/src/ffi_tests.rs::non_static_alloca_size_is_bytes_not_element_count`
 
 **Rust:** `map2check_map_non_static_alloca` differs from the legacy call in
