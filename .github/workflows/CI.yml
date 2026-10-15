@@ -120,6 +120,9 @@ jobs:
           done
           [ "$ok" = 1 ]
 
+      - name: Testar empacotamento de release (header, bibliotecas e docs)
+        run: scripts/test-package-release.sh
+
       - name: Checar segurança de dependências (cargo-deny)
         uses: EmbarkStudios/cargo-deny-action@v2
         with:

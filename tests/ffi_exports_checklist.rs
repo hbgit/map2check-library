@@ -2,9 +2,13 @@
 //! Toda função declarada em `include/map2check.h` precisa ser chamada por ao
 //! menos um teste Rust (issue #29). Um export novo sem teste quebra este teste.
 
+mod common;
+
 use std::collections::BTreeSet;
 use std::fs;
 use std::path::Path;
+
+use common::read;
 
 /// Arquivos de teste e o marcador a partir do qual o conteúdo é código de teste.
 /// `None` = o arquivo inteiro é teste.
@@ -13,34 +17,14 @@ const TEST_SOURCES: &[(&str, Option<&str>)] = &[
     ("rust/src/nondet/libfuzzer.rs", Some("\nmod tests {")),
 ];
 
-fn read(rel: &str) -> String {
-    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join(rel);
-    fs::read_to_string(&path).unwrap_or_else(|e| panic!("falha ao ler {}: {e}", path.display()))
-}
-
 fn is_ident(c: char) -> bool {
     c.is_ascii_alphanumeric() || c == '_'
 }
 
-/// Nomes das funções declaradas no header gerado pelo cbindgen: linhas no
-/// nível zero (sem indentação, fora de comentários e diretivas) com `(`.
+/// Nomes das funções declaradas no header gerado pelo cbindgen
+/// (parser compartilhado em `tests/common/mod.rs`).
 fn header_functions(header: &str) -> BTreeSet<String> {
-    header
-        .lines()
-        .filter(|l| l.starts_with(|c: char| c.is_ascii_alphabetic() || c == '_'))
-        .filter_map(|l| l.split_once('(').map(|(before, _)| before))
-        .filter_map(|before| {
-            let name: String = before
-                .chars()
-                .rev()
-                .take_while(|&c| is_ident(c))
-                .collect::<Vec<_>>()
-                .into_iter()
-                .rev()
-                .collect();
-            (!name.is_empty()).then_some(name)
-        })
-        .collect()
+    common::header_declarations(header).into_keys().collect()
 }
 
 /// Remove comentários (`//`, `/* */`) e literais de string e de char, para

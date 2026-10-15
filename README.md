@@ -156,32 +156,22 @@ Map2Check Tool (LLVM Pass / Instrumentação)
 
 ## Output JSON
 
-Ao final da análise, `print_all_containers_as_json()` emite no stdout:
+Ao final da análise, `print_all_containers_as_json()` emite no stdout um objeto `map2check_log` com o veredito (`result`: `"TRUE"`/`"FALSE"`), a propriedade violada e os containers `Container_TrackBBLog`, `Container_NonDetLog` e, só em violações de memória, `Container_AllocationLog`. O formato exato, com exemplos verificados contra o serializador, está em [`docs/integration-guide.md`](docs/integration-guide.md#json-report).
 
-```json
-{
-  "map2check_log": {
-    "result": "true",
-    "property": "NONE",
-    "step": 42,
-    "line": 0,
-    "function_name": "",
-    "Container_NonDetLog": [
-      {
-        "step": 1,
-        "line": 10,
-        "scope": 0,
-        "function_name": "main",
-        "value": { "type": "INT", "value": 7 }
-      }
-    ],
-    "Container_TrackBBLog": [ ... ],
-    "Container_AllocationLog": [ ... ]
-  }
-}
+## Compatibilidade e releases
+
+- [`docs/api-deltas.md`](docs/api-deltas.md): matriz de símbolos e assinaturas da API C (núcleo e passes do Map2Check) em relação ao C legado.
+- [`docs/semantic-deltas.md`](docs/semantic-deltas.md): diferenças de comportamento, cada uma com caso reproduzível e teste.
+- [`docs/integration-guide.md`](docs/integration-guide.md): como linkar `libmap2check.a`, ordem de chamadas e formato do relatório JSON.
+- [`docs/release.md`](docs/release.md) e [`CHANGELOG.md`](CHANGELOG.md): processo de release e histórico de versões.
+
+`tests/compat_docs.rs` falha em três casos: quando um export do header não está na matriz (ou está com a declaração errada), quando um `SD-NN` aponta para um teste que não existe e quando os exemplos JSON do guia divergem da saída real. Toda mudança na ABI C ou no relatório JSON atualiza esses documentos no mesmo PR.
+
+Para montar o pacote de release localmente:
+
+```sh
+scripts/package-release.sh   # dist/map2check-library-<versão>-<alvo>.tar.gz + SHA256SUMS
 ```
-
-`Container_AllocationLog` só é incluído quando a violação é de segurança de memória (`MemsafetyFree`, `MemsafetyDeref`, `MemsafetyMemcleanup`).
 
 ## Map2Check flow com a biblioteca
 
