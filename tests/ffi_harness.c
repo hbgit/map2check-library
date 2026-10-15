@@ -16,6 +16,11 @@
 
 #include "../include/map2check.h"
 
+/* Issue #28: o header gerado expõe a versão do crate. */
+#ifndef MAP2CHECK_VERSION
+#error "map2check.h não define MAP2CHECK_VERSION"
+#endif
+
 /* Test-only entry point LibFuzzer's LLVMFuzzerTestOneInput calls into
  * (rust/src/nondet/libfuzzer.rs only defines this under cfg(test); the real
  * static lib expects the linking program — here, this harness — to provide
@@ -245,6 +250,10 @@ static int test_result_and_control_flags(void) {
 }
 
 int main(void) {
+    if (MAP2CHECK_VERSION[0] == '\0') {
+        return 1;
+    }
+
     if (test_result_and_control_flags() != 0) {
         return 1;
     }
