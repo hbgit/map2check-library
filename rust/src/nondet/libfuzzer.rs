@@ -262,12 +262,10 @@ pub extern "C" fn __map2check_main__() -> i32 {
 mod tests {
     use super::*;
 
-    // NOTE: only the non-terminating branches are unit-tested here.
-    // `__VERIFIER_assume(0)`, `__VERIFIER_assert(0)` and `__VERIFIER_error()`
-    // call `std::process::exit`/`std::process::abort`, which would kill the
-    // whole `cargo test` binary (and every other test running in it) rather
-    // than fail a single test. Those branches are instead exercised as a
-    // separate process by `tests/ffi_harness.c`.
+    // NOTE: the branches that end the process (`exit(0)` / `abort()`) would
+    // kill the whole `cargo test` binary if called in-process. They are
+    // tested at the end of this module by re-running this test binary as a
+    // child process; `tests/ffi_harness.c` also exercises them.
 
     #[test]
     fn verifier_nondet_pointer_does_not_panic() {
@@ -386,5 +384,118 @@ mod tests {
         let rc = unsafe { LLVMFuzzerTestOneInput(std::ptr::null(), 16) };
         assert_eq!(rc, 0);
         assert!(FUZZER_DATA.load(Ordering::SeqCst).is_null());
+    }
+
+    // ── Process-terminating branches (issue #29) ─────────────────────────────
+    //
+    // Each `*_child` test only does something when `CHILD_ENV` is set: the
+    // parent test re-runs this same test binary filtered to that one child and
+    // inspects how the child process ended.
+
+    const CHILD_ENV: &str = "MAP2CHECK_FFI_CHILD";
+    const STARTED: &str = "map2check-child-started";
+    const SURVIVED: &str = "map2check-child-survived";
+
+    fn is_child() -> bool {
+        std::env::var_os(CHILD_ENV).is_some()
+    }
+
+    /// Runs `nondet::libfuzzer::tests::<name>` in a separate process.
+    fn run_child(name: &str) -> std::process::Output {
+        let exe = std::env::current_exe().unwrap();
+        let output = std::process::Command::new(exe)
+            .args(["--exact", &format!("nondet::libfuzzer::tests::{name}")])
+            .args(["--nocapture", "--test-threads=1"])
+            .env(CHILD_ENV, "1")
+            .output()
+            .unwrap();
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        assert!(
+            stdout.contains(STARTED),
+            "o processo filho não rodou `{name}`:\n{stdout}"
+        );
+        assert!(
+            !stdout.contains(SURVIVED),
+            "`{name}` deveria ter encerrado o processo:\n{stdout}"
+        );
+        output
+    }
+
+    /// Asserts the child ended via `exit(0)` before libtest printed its summary.
+    fn assert_exited_zero(output: &std::process::Output) {
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        assert_eq!(output.status.code(), Some(0), "{stdout}");
+        assert!(!stdout.contains("test result:"), "{stdout}");
+    }
+
+    /// Asserts the child aborted after printing a REACHABILITY report.
+    fn assert_aborted_with_reachability(output: &std::process::Output) {
+        use std::os::unix::process::ExitStatusExt;
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        assert_eq!(
+            output.status.signal(),
+            Some(6),
+            "esperava SIGABRT:\n{stdout}"
+        );
+        assert!(stdout.contains("REACHABILITY"), "{stdout}");
+    }
+
+    #[test]
+    fn verifier_assume_false_child() {
+        if is_child() {
+            println!("{STARTED}");
+            __VERIFIER_assume(0);
+            println!("{SURVIVED}");
+        }
+    }
+
+    #[test]
+    fn verifier_assume_false_exits_with_zero() {
+        assert_exited_zero(&run_child("verifier_assume_false_child"));
+    }
+
+    #[test]
+    fn map2check_fuzzer_assume_false_child() {
+        if is_child() {
+            println!("{STARTED}");
+            map2check_fuzzer_assume(0);
+            println!("{SURVIVED}");
+        }
+    }
+
+    #[test]
+    fn map2check_fuzzer_assume_false_exits_with_zero() {
+        assert_exited_zero(&run_child("map2check_fuzzer_assume_false_child"));
+    }
+
+    #[test]
+    fn verifier_error_child() {
+        if is_child() {
+            println!("{STARTED}");
+            __VERIFIER_error();
+            #[allow(unreachable_code)]
+            {
+                println!("{SURVIVED}");
+            }
+        }
+    }
+
+    #[test]
+    fn verifier_error_aborts_and_reports_reachability() {
+        assert_aborted_with_reachability(&run_child("verifier_error_child"));
+    }
+
+    #[test]
+    fn verifier_assert_false_child() {
+        if is_child() {
+            println!("{STARTED}");
+            __VERIFIER_assert(0);
+            println!("{SURVIVED}");
+        }
+    }
+
+    #[test]
+    fn verifier_assert_false_aborts_and_reports_reachability() {
+        assert_aborted_with_reachability(&run_child("verifier_assert_false_child"));
     }
 }

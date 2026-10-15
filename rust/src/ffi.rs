@@ -1041,3 +1041,7 @@ pub extern "C" fn map2check_check_mem_endprog() {
         (),
     );
 }
+
+#[cfg(test)]
+#[path = "ffi_tests.rs"]
+mod tests;
