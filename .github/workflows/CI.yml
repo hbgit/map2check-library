@@ -2,9 +2,9 @@ name: CI Map2Check Rust
 
 on:
   push:
-    branches: [ "master", "feature/rust", "feat/update_rust" ]
+    branches: [ "master", "develop", "release/**" ]
   pull_request:
-    branches: [ "master", "feature/rust", "feat/update_rust" ]
+    branches: [ "master", "develop", "release/**" ]
 
 jobs:
   build_and_test:

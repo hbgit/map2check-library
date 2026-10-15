@@ -26,7 +26,7 @@ that symbol in the program, linking the `libfuzzer` library fails with
 
 ## Steps
 
-1. **Version.** On a branch off `feature/rust`, set `version` in
+1. **Version.** On a branch off `develop`, set `version` in
    `Cargo.toml` and the `org.opencontainers.image.version` label in
    `Dockerfile`. `tests/header_version.rs` fails if they disagree.
 2. **Changelog.** Move the `[Unreleased]` entries into a new
@@ -36,8 +36,9 @@ that symbol in the program, linking the `libfuzzer` library fails with
    `docs/semantic-deltas.md` reflect every ABI or behaviour change since
    the last release. `cargo test --all-features --test compat_docs` must
    pass.
-4. **Pull request.** Open a PR to `feature/rust` (or `master` after the
-   promotion) and merge it once `build_and_test` is green.
+4. **Pull request.** Open a PR to `develop` and merge it once
+   `build_and_test` is green, then open a PR from `develop` to `master`
+   (1 review required).
 5. **Package.** On the merged commit, run:
 
    ```sh
