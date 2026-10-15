@@ -36,6 +36,12 @@ jobs:
       - name: Testar script de proteção de branches
         run: scripts/test-branch-protection.sh
 
+      - name: Testar guard de artefatos da era C
+        run: scripts/test-check-no-c-era-artifacts.sh
+
+      - name: Verificar ausência de artefatos da era C
+        run: scripts/check-no-c-era-artifacts.sh
+
       - name: Instalar cargo-tarpaulin
         uses: taiki-e/install-action@v2
         with:
