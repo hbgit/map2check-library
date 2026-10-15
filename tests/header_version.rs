@@ -36,3 +36,13 @@ fn header_define_versao_do_crate_uma_vez_dentro_do_include_guard() {
         "MAP2CHECK_VERSION está fora do include guard"
     );
 }
+
+#[test]
+fn label_do_dockerfile_bate_com_versao_do_crate() {
+    let dockerfile = read("Dockerfile");
+    let label = format!("LABEL org.opencontainers.image.version=\"{VERSION}\"");
+    assert!(
+        dockerfile.lines().any(|l| l.trim() == label),
+        "Dockerfile não contém `{label}`"
+    );
+}
