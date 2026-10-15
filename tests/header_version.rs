@@ -38,6 +38,16 @@ fn header_define_versao_do_crate_uma_vez_dentro_do_include_guard() {
 }
 
 #[test]
+fn changelog_tem_secao_da_versao_do_crate() {
+    let changelog = read("CHANGELOG.md");
+    let heading = format!("## [{VERSION}]");
+    assert!(
+        changelog.lines().any(|l| l.starts_with(&heading)),
+        "CHANGELOG.md não tem a seção `{heading}` (issue #5)"
+    );
+}
+
+#[test]
 fn label_do_dockerfile_bate_com_versao_do_crate() {
     let dockerfile = read("Dockerfile");
     let label = format!("LABEL org.opencontainers.image.version=\"{VERSION}\"");
