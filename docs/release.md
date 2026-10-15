@@ -37,7 +37,7 @@ that symbol in the program, linking the `libfuzzer` library fails with
    the last release. `cargo test --all-features --test compat_docs` must
    pass.
 4. **Pull request.** Open a PR to `develop` and merge it once
-   `build_and_test` is green, then open a PR from `develop` to `master`
+   `build_and_test` is green, then open a PR from `develop` to `main`
    (1 review required).
 5. **Package.** On the merged commit, run:
 

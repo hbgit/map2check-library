@@ -27,9 +27,11 @@ the C ABI or the JSON report must update them.
 ### Changed
 
 - `develop` replaces `feature/rust` as the integration branch: CI runs on
-  pushes and pull requests to `master`, `develop` and `release/**`, and
+  pushes and pull requests to `main`, `develop` and `release/**`, and
   `scripts/branch-protection.sh` protects `develop` instead of
   `feature/rust`.
+- The release branch `master` is renamed to `main`; CI, the
+  branch-protection script and the docs follow the new name.
 
 ## [1.0.0-rc1] - Unreleased
 

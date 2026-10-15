@@ -11,7 +11,7 @@ REPO="${REPO:-hbgit/map2check-library}"
 CI_CHECK="${CI_CHECK:-build_and_test}"
 CI_APP_ID="${CI_APP_ID:-15368}"
 
-usage() { echo "uso: $0 {payload|check|apply|encode} {develop|master}" >&2; exit 2; }
+usage() { echo "uso: $0 {payload|check|apply|encode} {develop|main}" >&2; exit 2; }
 need()  { command -v "$1" >/dev/null || { echo "erro: '$1' não encontrado" >&2; exit 2; }; }
 
 encode() { jq -rn --arg b "$1" '$b|@uri'; }
@@ -20,7 +20,7 @@ payload() {
   local reviews
   case "$1" in
     develop) reviews='null' ;;
-    master)       reviews='{"dismiss_stale_reviews":false,"require_code_owner_reviews":false,"required_approving_review_count":1}' ;;
+    main)         reviews='{"dismiss_stale_reviews":false,"require_code_owner_reviews":false,"required_approving_review_count":1}' ;;
     *) echo "erro: branch sem proteção definida: $1" >&2; exit 2 ;;
   esac
   jq -n --arg ctx "$CI_CHECK" --argjson app "$CI_APP_ID" --argjson reviews "$reviews" '{
