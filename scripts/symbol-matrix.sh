@@ -19,7 +19,12 @@ nondet="$(grep -ohE 'NON_DET_FUNCTIONS_HELPER(_DOUBLE)?\([A-Z][A-Za-z_]*, *[a-z_
   "${PASSES[@]}" 2>/dev/null | sed -E 's/.*, *([a-z_]+)\)/map2check_nondet_\1/' || true)"
 non_det="$(grep -ohE 'CALL_IF_HELPER\([A-Z][A-Za-z_]*, *[A-Z_]+, *[a-z_]+\)' \
   "${PASSES[@]}" 2>/dev/null | sed -E 's/.*, *([a-z_]+)\)/map2check_non_det_\1/' || true)"
-pass="$(printf '%s\n%s\n%s\n' "$literais" "$nondet" "$non_det" | grep -v '^$' | sort -u || true)"
+# Primeiro argumento literal de getOrInsertFunction, qualquer prefixo (a chamada
+# pode quebrar linha); mantém os padrões por prefixo acima.
+callees="$(cat "${PASSES[@]}" 2>/dev/null | tr '\n' ' ' \
+  | grep -oE 'getOrInsertFunction\( *"[A-Za-z0-9_.]+"' | sed -E 's/.*"([^"]+)"/\1/' \
+  | grep -vE "$IR_VALUE_NAMES" || true)"
+pass="$(printf '%s\n%s\n%s\n%s\n' "$literais" "$nondet" "$non_det" "$callees" | grep -v '^$' | sort -u || true)"
 hdr="$(grep -oE '\b(map2check_[a-z0-9_]+|__VERIFIER_[a-z0-9_]+)\s*\(' \
   "$ROOT/include/map2check.h" | tr -d '( ' | sort -u)"
 missing=0

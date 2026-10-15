@@ -28,4 +28,14 @@ grep -qP '^map2check_nondet_int\t-\t0$' <<<"$out"
 grep -qP '^map2check_nondet_double\t-\t0$' <<<"$out"
 grep -qP '^map2check_non_det_unsigned\t-\t0$' <<<"$out"
 ! grep -qP '^map2check_nondet_c_type|^map2check_non_det_c_type' <<<"$out"
+
+# Callees sem prefixo conhecido, declarados por getOrInsertFunction (inclusive em várias linhas)
+cat > "$T/modules/backend/pass/G.hpp" <<'CPP'
+x = M->getOrInsertFunction("overflowError", VoidTy, I32, PtrTy);
+y = M->getOrInsertFunction(
+    "otherCallee", VoidTy);
+CPP
+out="$("$HERE/symbol-matrix.sh" "$T" "$T/map.tsv" || true)"
+grep -qP '^overflowError\t-\t0$' <<<"$out"
+grep -qP '^otherCallee\t-\t0$' <<<"$out"
 echo ok
