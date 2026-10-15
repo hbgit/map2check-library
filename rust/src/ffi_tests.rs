@@ -183,3 +183,119 @@ fn set_null_is_valid_sets_the_flag() {
     map2check_set_null_is_valid();
     assert!(snapshot(|s| s.null_is_valid));
 }
+
+// ── NonDet tracking ─────────────────────────────────────────────────────────
+
+/// Checks the single nondet record and the legacy C record returned for it.
+fn assert_nondet(record: *mut non_det_log_t, expected: NonDetValue) {
+    assert!(!record.is_null());
+    // SAFETY: the record is owned by the global state, which no one resets
+    // while the test lock is held.
+    let legacy = unsafe { &*record };
+    assert_eq!(legacy.step, 1);
+    assert_eq!(legacy.line, 10);
+    assert_eq!(legacy.scope, 2);
+    snapshot(|s| {
+        assert_eq!(s.nondets.len(), 1);
+        let entry = &s.nondets[0];
+        assert_eq!(entry.step, 1);
+        assert_eq!(entry.line, 10);
+        assert_eq!(entry.scope, 2);
+        assert_eq!(entry.function_name, "f");
+        assert_eq!(entry.value, expected);
+        assert_eq!(s.legacy_nondet_logs.len(), 1);
+    });
+}
+
+#[test]
+fn save_nondet_log_int_records_value() {
+    let _guard = fresh();
+    let mut value: i32 = -7;
+    // SAFETY: value and the C-string literal outlive the call.
+    let record = unsafe { map2check_save_nondet_log_int(10, 2, 0, &mut value, c"f".as_ptr()) };
+    assert_nondet(record, NonDetValue::Int(-7));
+}
+
+#[test]
+fn save_nondet_log_int_with_null_value_records_zero() {
+    let _guard = fresh();
+    // SAFETY: null value is accepted; the C-string literal outlives the call.
+    let record =
+        unsafe { map2check_save_nondet_log_int(10, 2, 0, std::ptr::null_mut(), c"f".as_ptr()) };
+    assert_nondet(record, NonDetValue::Int(0));
+}
+
+#[test]
+fn save_nondet_log_uint_records_value() {
+    let _guard = fresh();
+    let mut value: u32 = u32::MAX;
+    // SAFETY: value and the C-string literal outlive the call.
+    let record = unsafe { map2check_save_nondet_log_uint(10, 2, 1, &mut value, c"f".as_ptr()) };
+    assert_nondet(record, NonDetValue::UInt(u32::MAX));
+}
+
+#[test]
+fn save_nondet_log_long_records_value() {
+    let _guard = fresh();
+    let mut value: std::os::raw::c_long = -5;
+    // SAFETY: value and the C-string literal outlive the call.
+    let record = unsafe { map2check_save_nondet_log_long(10, 2, 2, &mut value, c"f".as_ptr()) };
+    assert_nondet(record, NonDetValue::Long(-5));
+}
+
+#[test]
+fn save_nondet_log_char_records_value() {
+    let _guard = fresh();
+    // 65 ('A') fits both signed and unsigned `c_char` (aarch64 uses u8).
+    let mut value: std::os::raw::c_char = 65;
+    // SAFETY: value and the C-string literal outlive the call.
+    let record = unsafe { map2check_save_nondet_log_char(10, 2, 3, &mut value, c"f".as_ptr()) };
+    assert_nondet(record, NonDetValue::Char(65));
+}
+
+#[test]
+fn save_nondet_log_float_records_value() {
+    let _guard = fresh();
+    let mut value: f32 = 1.5;
+    // SAFETY: value and the C-string literal outlive the call.
+    let record = unsafe { map2check_save_nondet_log_float(10, 2, 4, &mut value, c"f".as_ptr()) };
+    assert_nondet(record, NonDetValue::Float(1.5));
+}
+
+#[test]
+fn save_nondet_log_double_records_value() {
+    let _guard = fresh();
+    let mut value: f64 = -2.25;
+    // SAFETY: value and the C-string literal outlive the call.
+    let record = unsafe { map2check_save_nondet_log_double(10, 2, 5, &mut value, c"f".as_ptr()) };
+    assert_nondet(record, NonDetValue::Double(-2.25));
+}
+
+// ── Basic-block tracking ────────────────────────────────────────────────────
+
+#[test]
+fn save_basic_block_log_records_block() {
+    let _guard = fresh();
+    // SAFETY: C-string literal is valid and null-terminated.
+    let record = unsafe { map2check_save_basic_block_log(7, c"main".as_ptr()) };
+    assert!(!record.is_null());
+    // SAFETY: the record is owned by the global state, kept alive under the lock.
+    let legacy = unsafe { &*record };
+    assert_eq!((legacy.step, legacy.line), (1, 7));
+    snapshot(|s| {
+        assert_eq!(s.bbtrack.len(), 1);
+        assert_eq!(s.bbtrack[0].step, 1);
+        assert_eq!(s.bbtrack[0].line, 7);
+        assert_eq!(s.bbtrack[0].function_name, "main");
+    });
+}
+
+#[test]
+fn is_in_trackbb_container_reports_recorded_lines() {
+    let _guard = fresh();
+    assert_eq!(map2check_is_in_trackbb_container(7), 0);
+    // SAFETY: C-string literal is valid and null-terminated.
+    unsafe { map2check_save_basic_block_log(7, c"main".as_ptr()) };
+    assert_eq!(map2check_is_in_trackbb_container(7), 1);
+    assert_eq!(map2check_is_in_trackbb_container(8), 0);
+}
