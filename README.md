@@ -84,6 +84,19 @@ cargo audit
 cargo deny check
 ```
 
+### Proteção de branches
+
+`feature/rust` e `master` exigem o check `build_and_test` (workflow "CI Map2Check Rust") e commits assinados; `master` exige também 1 review. A configuração está em `scripts/branch-protection.sh`:
+
+```sh
+scripts/branch-protection.sh check feature/rust   # compara com o GitHub (exit 0/1)
+scripts/branch-protection.sh apply master         # requer permissão de admin
+```
+
+Se o job `build_and_test` for renomeado, atualize `CI_CHECK` no script na mesma mudança; caso contrário, todo PR fica bloqueado esperando um check que nunca chega.
+
+Como o check também é exigido em `master`, um PR para `master` cujo head não passe no CI fica bloqueado. Hoje o CI de `master` está vermelho, então PRs só de documentação vindos de `develop` podem ficar presos; o admin pode fazer bypass (`enforce_admins=false`). `apply` trata o script como fonte da verdade: regras adicionadas pela interface do GitHub e ausentes do payload são removidas.
+
 ## Arquitetura
 
 ### Estrutura de Módulos

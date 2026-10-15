@@ -33,6 +33,9 @@ jobs:
       - name: Rodar todos os testes
         run: cargo test --all-features
 
+      - name: Testar script de proteção de branches
+        run: scripts/test-branch-protection.sh
+
       - name: Instalar cargo-tarpaulin
         uses: taiki-e/install-action@v2
         with:
