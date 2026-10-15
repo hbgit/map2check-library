@@ -23,6 +23,7 @@ accepts() {
 
 # Artefatos citados na issue
 rejects ".clangd" ".clangd"
+rejects ".clangd index" ".clangd/index/foo.idx"
 rejects "compile_commands.json" "compile_commands.json"
 rejects ".travis.yml" ".travis.yml"
 rejects ".vscode" ".vscode/settings.json"
@@ -35,6 +36,7 @@ rejects "CMakeLists" "CMakeLists.txt"
 rejects "módulo cmake" "cmake/FindGTest.cmake"
 rejects "build.sh" "build.sh"
 rejects "run_klee_test.sh" "run_klee_test.sh"
+rejects "run_libfuzzer_test.sh" "run_libfuzzer_test.sh"
 # Aninhados (Review Focus 3)
 rejects ".vscode aninhado" "rust/.vscode/launch.json"
 rejects "CMakeLists aninhado" "test/CMakeLists.txt"
@@ -44,7 +46,7 @@ accepts "build.rs" "build.rs"
 accepts ".cargo/config.toml" ".cargo/config.toml"
 accepts "flowchart do README" "docs/imgs/map2check-flowchart.png"
 accepts "coverage.sh" "scripts/coverage.sh"
-accepts "run_libfuzzer_test.sh" "run_libfuzzer_test.sh"
+accepts "branch-protection.sh" "scripts/branch-protection.sh"
 accepts "api-deltas" "docs/api-deltas.md"
 
 # Lista mista: lista todos os ofensores, um por linha (Review Focus 4)

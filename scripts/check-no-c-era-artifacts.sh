@@ -7,7 +7,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 
 # Um padrão ERE por linha, aplicado ao caminho relativo à raiz.
-PATTERNS='(^|/)\.clangd$
+PATTERNS='(^|/)\.clangd(/|$)
 (^|/)compile_commands\.json$
 (^|/)\.travis\.yml$
 (^|/)\.vscode/
@@ -17,15 +17,22 @@ PATTERNS='(^|/)\.clangd$
 (^|/)CMakeLists\.txt$
 \.cmake$
 (^|/)build\.sh$
-(^|/)run_klee_test\.sh$'
+(^|/)run_klee_test\.sh$
+(^|/)run_libfuzzer_test\.sh$'
 
 case "${1:-}" in
-  "") list="$(git -C "$ROOT" -c core.quotePath=false ls-files)" ;;
+  "") list="$(git -C "$ROOT" ls-files -z | tr '\0' '\n')" ;;
   --stdin) list="$(cat)" ;;
   *) echo "uso: $0 [--stdin]" >&2; exit 2 ;;
 esac
 
-hits="$(grep -E -f <(printf '%s\n' "$PATTERNS") <<<"$list" || true)"
+# grep: 0 = achou ofensores, 1 = limpo, >1 = erro interno
+rc=0
+hits="$(grep -E -f <(printf '%s\n' "$PATTERNS") <<<"$list")" || rc=$?
+if [ "$rc" -gt 1 ]; then
+  echo "erro: grep falhou (status $rc)" >&2
+  exit 2
+fi
 if [ -n "$hits" ]; then
   while IFS= read -r p; do echo "C-era artifact: $p" >&2; done <<<"$hits"
   exit 1
