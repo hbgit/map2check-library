@@ -24,6 +24,13 @@ the C ABI or the JSON report must update them.
   `scripts/package-release.sh` builds the release archive with the C
   header, both static libraries and the docs (#5).
 
+### Changed
+
+- `develop` replaces `feature/rust` as the integration branch: CI runs on
+  pushes and pull requests to `master`, `develop` and `release/**`, and
+  `scripts/branch-protection.sh` protects `develop` instead of
+  `feature/rust`.
+
 ## [1.0.0-rc1] - Unreleased
 
 First release candidate of the Rust rewrite (milestones M1–M3).

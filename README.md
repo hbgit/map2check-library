@@ -86,11 +86,11 @@ cargo deny check
 
 ### Proteção de branches
 
-`feature/rust` e `master` exigem o check `build_and_test` (workflow "CI Map2Check Rust") e commits assinados; `master` exige também 1 review. A configuração está em `scripts/branch-protection.sh`:
+Fluxo: `develop` é a branch padrão do repositório. Branches de trabalho `<tipo>/issue-<N>-<slug>` (`tipo` ∈ feat, fix, docs, test, build, ci, chore) abrem PR para `develop`; releases sobem de `develop` para `master` por PR. `develop` e `master` exigem o check `build_and_test` (workflow "CI Map2Check Rust") e commits assinados; `master` exige também 1 review. A configuração está em `scripts/branch-protection.sh`:
 
 ```sh
-scripts/branch-protection.sh check feature/rust   # compara com o GitHub (exit 0/1)
-scripts/branch-protection.sh apply master         # requer permissão de admin
+scripts/branch-protection.sh check develop   # compara com o GitHub (exit 0/1)
+scripts/branch-protection.sh apply master    # requer permissão de admin
 ```
 
 Se o job `build_and_test` for renomeado, atualize `CI_CHECK` no script na mesma mudança; caso contrário, todo PR fica bloqueado esperando um check que nunca chega.
