@@ -7,8 +7,12 @@
 mod common;
 
 use std::collections::{BTreeMap, BTreeSet};
+use std::sync::Mutex;
 
 use common::{header_declarations, normalize, read};
+
+/// Serializa os testes deste binário que tocam o estado global da biblioteca.
+static STATE_LOCK: Mutex<()> = Mutex::new(());
 
 const CORE_HEADING: &str = "## Core C API matrix";
 const PASS_HEADING: &str = "## Map2Check pass matrix";
@@ -218,4 +222,62 @@ fn matriz_dos_passes_acusa_pendente_exportado_e_wildcard_sem_export() {
     assert_eq!(problems.len(), 2, "{problems:?}");
     assert!(problems[0].contains("`map2check_alloca` está como `pending` mas está no header"));
     assert!(problems[1].contains("`map2check_wasm_*` está como `same` mas não está no header"));
+}
+
+/// Bloco ```json logo após `<!-- example: NAME -->` no guia.
+fn guide_example(guide: &str, name: &str) -> serde_json::Value {
+    let marker = format!("<!-- example: {name} -->\n```json\n");
+    let start = guide
+        .find(&marker)
+        .unwrap_or_else(|| panic!("exemplo `{name}` ausente do guia"))
+        + marker.len();
+    let len = guide[start..].find("\n```").expect("bloco json sem fim");
+    serde_json::from_str(&guide[start..start + len])
+        .unwrap_or_else(|e| panic!("exemplo `{name}` não é JSON válido: {e}"))
+}
+
+fn report() -> serde_json::Value {
+    let json = map2check::state::with_state(|s| map2check::output::to_json(s)).unwrap();
+    serde_json::from_str(&json).unwrap()
+}
+
+#[test]
+fn integration_guide_json_examples_match_the_serializer() {
+    use map2check::ffi::*;
+    let _guard = STATE_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let guide = read("docs/integration-guide.md");
+
+    map2check_reset();
+    let mut seven: i32 = 7;
+    // SAFETY: C-string literals are valid; `seven` outlives the call.
+    unsafe {
+        map2check_save_basic_block_log(10, c"main".as_ptr());
+        map2check_save_nondet_log_int(11, 0, 0, &mut seven, c"main".as_ptr());
+    }
+    assert_eq!(
+        report(),
+        guide_example(&guide, "success"),
+        "exemplo `success`"
+    );
+
+    // SAFETY: C-string literal is valid.
+    unsafe { set_false_result(5, 12, c"main".as_ptr()) };
+    assert_eq!(
+        report(),
+        guide_example(&guide, "violation"),
+        "exemplo `violation`"
+    );
+
+    map2check_reset();
+    // SAFETY: C-string literals are valid; fake addresses are never dereferenced.
+    unsafe {
+        map2check_map_malloc(0x1000 as *const _, 16);
+        map2check_check_free(c"p".as_ptr(), 0x2000 as *const _, 0, 20, c"main".as_ptr());
+    }
+    assert_eq!(
+        report(),
+        guide_example(&guide, "memory"),
+        "exemplo `memory`"
+    );
+    map2check_reset();
 }
