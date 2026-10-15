@@ -15,6 +15,17 @@ use common::{header_declarations, normalize, read};
 /// Serializa os testes deste binário que tocam o estado global da biblioteca.
 static STATE_LOCK: Mutex<()> = Mutex::new(());
 
+/// Com `--features libfuzzer`, a biblioteca referencia `__map2check_main__`
+/// em `LLVMFuzzerTestOneInput`. O stub de `rust/src/nondet/libfuzzer.rs` só
+/// existe em `#[cfg(test)]` da própria crate, não quando ela é dependência
+/// deste teste; sem este stub o link falha quando o código morto é mantido
+/// (`cargo tarpaulin`, que usa `-C link-dead-code`).
+#[cfg(feature = "libfuzzer")]
+#[no_mangle]
+pub extern "C" fn __map2check_main__() -> i32 {
+    0
+}
+
 const CORE_HEADING: &str = "## Core C API matrix";
 const PASS_HEADING: &str = "## Map2Check pass matrix";
 const EXPORTED: &[&str] = &["same", "changed", "new"];
