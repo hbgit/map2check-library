@@ -1,6 +1,6 @@
-[![License](https://img.shields.io/badge/license-GPL--3-lighgreen)](../master/LICENSE)
-[![Build Status](https://travis-ci.org/hbgit/map2check-library.svg?branch=master)](https://travis-ci.org/hbgit/map2check-library)
-[![codecov](https://codecov.io/gh/hbgit/map2check-library/branch/master/graph/badge.svg)](https://codecov.io/gh/hbgit/map2check-library)
+[![License](https://img.shields.io/badge/license-GPL--3-lighgreen)](../main/LICENSE)
+[![Build Status](https://travis-ci.org/hbgit/map2check-library.svg?branch=main)](https://travis-ci.org/hbgit/map2check-library)
+[![codecov](https://codecov.io/gh/hbgit/map2check-library/branch/main/graph/badge.svg)](https://codecov.io/gh/hbgit/map2check-library)
 
 # Map2Check-Library
 
@@ -86,16 +86,16 @@ cargo deny check
 
 ### Proteção de branches
 
-Fluxo: `develop` é a branch padrão do repositório. Branches de trabalho `<tipo>/issue-<N>-<slug>` (`tipo` ∈ feat, fix, docs, test, build, ci, chore) abrem PR para `develop`; releases sobem de `develop` para `master` por PR. `develop` e `master` exigem o check `build_and_test` (workflow "CI Map2Check Rust") e commits assinados; `master` exige também 1 review. A configuração está em `scripts/branch-protection.sh`:
+Fluxo: `develop` é a branch padrão do repositório. Branches de trabalho `<tipo>/issue-<N>-<slug>` (`tipo` ∈ feat, fix, docs, test, build, ci, chore) abrem PR para `develop`; releases sobem de `develop` para `main` por PR. `develop` e `main` exigem o check `build_and_test` (workflow "CI Map2Check Rust") e commits assinados; `main` exige também 1 review. A configuração está em `scripts/branch-protection.sh`:
 
 ```sh
 scripts/branch-protection.sh check develop   # compara com o GitHub (exit 0/1)
-scripts/branch-protection.sh apply master    # requer permissão de admin
+scripts/branch-protection.sh apply main      # requer permissão de admin
 ```
 
 Se o job `build_and_test` for renomeado, atualize `CI_CHECK` no script na mesma mudança; caso contrário, todo PR fica bloqueado esperando um check que nunca chega.
 
-Como o check também é exigido em `master`, um PR para `master` cujo head não passe no CI fica bloqueado. Hoje o CI de `master` está vermelho, então PRs só de documentação vindos de `develop` podem ficar presos; o admin pode fazer bypass (`enforce_admins=false`). `apply` trata o script como fonte da verdade: regras adicionadas pela interface do GitHub e ausentes do payload são removidas.
+Como o check também é exigido em `main`, um PR para `main` cujo head não passe no CI fica bloqueado. Hoje o CI de `main` está vermelho, então PRs só de documentação vindos de `develop` podem ficar presos; o admin pode fazer bypass (`enforce_admins=false`). `apply` trata o script como fonte da verdade: regras adicionadas pela interface do GitHub e ausentes do payload são removidas.
 
 ## Arquitetura
 
