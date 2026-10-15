@@ -56,9 +56,16 @@ that symbol in the program, linking the `libfuzzer` library fails with
    `--prerelease` for `-rcN` versions:
 
    ```sh
-   gh release create v<version> dist/*.tar.gz dist/SHA256SUMS \
-     --title "v<version>" --notes-file <(sed -n '/^## \[<version>\]/,/^## \[/p' CHANGELOG.md | sed '$d') \
-     --prerelease
+   V=<version>
+   awk -v h="## [$V]" 'index($0,"## [")==1{p=index($0,h)==1;next} p' CHANGELOG.md > dist/notes.md
+   gh release create "v$V" dist/map2check-library-"$V"-*.tar.gz dist/SHA256SUMS \
+     --title "v$V" --notes-file dist/notes.md \
+     --prerelease   # omit for a final (non -rcN) version
    ```
+
+   `dist/notes.md` holds the body of the `## [<version>]` section, up to
+   the next `## [` heading or the end of the file. Name the archive by
+   version so older archives left in `dist/` are not uploaded;
+   `SHA256SUMS` only covers the newest one.
 
 Steps 6 and 7 publish outside the repository; the maintainer runs them.

@@ -212,8 +212,9 @@ semantics were reconstructed from the paridade table and from the existing
 The embedded C library of Map2Check (`lib_old/AnalysisModeMemtrack.c:366-377`
 on `origin/refactory_memory_log`) does the opposite for
 `map2check_non_static_alloca`: it registers a static slot of
-`size * size_of_primitive` bytes. The Rust choice makes an unfreed VLA show
-up as a leak at end of program; see SD-12.
+`size * size_of_primitive` bytes, so its `size` is an element count. The
+Rust export takes `size` in bytes, like `map2check_map_alloca`, and its
+choice makes an unfreed VLA show up as a leak at end of program; see SD-12.
 
 **Risk:** if the M5 compatibility layer (`ffi_compat.rs`, consuming the exact
 signatures the Map2Check LLVM passes insert) reveals a different expected
