@@ -10,7 +10,11 @@ fn main() {
     std::fs::create_dir_all(&include_dir).expect("Falha ao criar o diretório include/");
 
     // Tenta ler as configurações do cbindgen.toml, se existir
-    let config = cbindgen::Config::from_file("cbindgen.toml").unwrap_or_default();
+    let mut config = cbindgen::Config::from_file("cbindgen.toml").unwrap_or_default();
+
+    // Expõe a versão do crate no header (issue #28); a fonte única é o Cargo.toml
+    let version = env::var("CARGO_PKG_VERSION").unwrap();
+    config.after_includes = Some(format!("\n#define MAP2CHECK_VERSION \"{version}\""));
 
     // Gera o header e salva na pasta include/
     let header_path = include_dir.join("map2check.h");
@@ -93,8 +97,9 @@ void map2check_binop_shr_unsigned(uint32_t param1, uint32_t param2, uint32_t lin
     header.insert_str(guard_index, compatibility_declarations);
     std::fs::write(header_path, header).expect("Falha ao adicionar declarações ABI ao header C");
 
-    // Avisa ao compilador para rodar este script novamente APENAS se
-    // os arquivos Rust mudarem
+    // Roda este script novamente só se o código Rust, o cbindgen.toml ou o
+    // Cargo.toml (versão) mudarem
     println!("cargo:rerun-if-changed=rust/src/");
     println!("cargo:rerun-if-changed=cbindgen.toml");
+    println!("cargo:rerun-if-changed=Cargo.toml");
 }
