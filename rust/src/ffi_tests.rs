@@ -291,6 +291,30 @@ fn save_basic_block_log_records_block() {
 }
 
 #[test]
+fn legacy_records_are_returned_unlinked() {
+    let _guard = fresh();
+    let mut value: i32 = 1;
+    // SAFETY: C-string literals are valid; `value` outlives the calls.
+    let (bb1, bb2, nd) = unsafe {
+        (
+            map2check_save_basic_block_log(1, c"main".as_ptr()),
+            map2check_save_basic_block_log(2, c"main".as_ptr()),
+            map2check_save_nondet_log_int(3, 0, 0, &mut value, c"main".as_ptr()),
+        )
+    };
+    // SAFETY: the records are owned by the global state, kept alive under the lock.
+    let (bb1, bb2, nd) = unsafe { (&*bb1, &*bb2, &*nd) };
+    for (next, prev) in [
+        (bb1.tqe_next.is_null(), bb1.tqe_prev.is_null()),
+        (bb2.tqe_next.is_null(), bb2.tqe_prev.is_null()),
+        (nd.tqe_next.is_null(), nd.tqe_prev.is_null()),
+    ] {
+        assert!(next && prev, "registro legado ligado a uma lista");
+    }
+    assert_eq!((bb1.step, bb2.step, nd.step), (1, 2, 3));
+}
+
+#[test]
 fn is_in_trackbb_container_reports_recorded_lines() {
     let _guard = fresh();
     assert_eq!(map2check_is_in_trackbb_container(7), 0);
@@ -340,6 +364,18 @@ fn map_non_static_alloca_records_dynamic_slot() {
     assert_eq!((e.line, e.scope, e.size_destiny), (5, 2, 40));
     assert_eq!(e.ptr_name, "vla");
     assert!(e.is_dynamic && !e.is_free);
+}
+
+#[test]
+fn non_static_alloca_is_reported_as_leak_at_end_of_program() {
+    // Fixa o comportamento atual descrito em SD-12 (docs/semantic-deltas.md);
+    // o legado registra o VLA como slot estático e não acusa vazamento.
+    let _guard = fresh();
+    // SAFETY: C-string literal is valid; fake address is never dereferenced.
+    unsafe { map2check_map_non_static_alloca(c"vla".as_ptr(), addr(0x2000), 16, 4, 3, 0) };
+    map2check_set_memcleanup();
+    map2check_check_mem_endprog();
+    assert_violated(ViolatedProperty::MemsafetyMemcleanup, 0, "end_of_program");
 }
 
 #[test]

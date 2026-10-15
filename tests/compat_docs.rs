@@ -7,6 +7,7 @@
 mod common;
 
 use std::collections::{BTreeMap, BTreeSet};
+use std::path::Path;
 use std::sync::Mutex;
 
 use common::{header_declarations, normalize, read};
@@ -280,4 +281,129 @@ fn integration_guide_json_examples_match_the_serializer() {
         "exemplo `memory`"
     );
     map2check_reset();
+}
+
+/// IDs `SD-NN` citados em `text`.
+fn sd_ids(text: &str) -> BTreeSet<String> {
+    text.match_indices("SD-")
+        .filter_map(|(at, _)| {
+            let digits = text.get(at + 3..at + 5)?;
+            digits
+                .chars()
+                .all(|c| c.is_ascii_digit())
+                .then(|| format!("SD-{digits}"))
+        })
+        .collect()
+}
+
+/// Entradas `### SD-NN — ...` de semantic-deltas.md: (id, corpo).
+fn sd_entries(doc: &str) -> Vec<(String, String)> {
+    doc.split("\n### ")
+        .skip(1)
+        .filter(|chunk| chunk.starts_with("SD-"))
+        .map(|chunk| (chunk[..5].to_string(), chunk.to_string()))
+        .collect()
+}
+
+const CLASSIFICATIONS: &[&str] = &[
+    "intentional",
+    "accepted limitation",
+    "suspected regression",
+    "pending decision",
+];
+
+/// Problemas de uma entrada: classificação conhecida (com issue quando
+/// exigido) e testes `arquivo::função` que existem.
+fn sd_entry_problems(id: &str, body: &str, root: &Path) -> Vec<String> {
+    let mut problems = Vec::new();
+    let field = |name: &str| {
+        body.lines()
+            .find_map(|l| l.strip_prefix(&format!("**{name}:**")))
+            .map(str::trim)
+    };
+    match field("Classification") {
+        None => problems.push(format!("{id}: sem **Classification:**")),
+        Some(c) => match CLASSIFICATIONS.iter().find(|k| c.starts_with(*k)) {
+            None => problems.push(format!("{id}: classificação desconhecida `{c}`")),
+            Some(k)
+                if matches!(*k, "suspected regression" | "pending decision")
+                    && !c.contains('#') =>
+            {
+                problems.push(format!("{id}: `{k}` precisa citar uma issue (#N)"))
+            }
+            Some(_) => {}
+        },
+    }
+    let Some(tests) = field("Tests") else {
+        problems.push(format!("{id}: sem **Tests:**"));
+        return problems;
+    };
+    let refs: Vec<&str> = tests.split('`').skip(1).step_by(2).collect();
+    if refs.is_empty() {
+        problems.push(format!("{id}: **Tests:** sem `arquivo::função`"));
+    }
+    for r in refs {
+        let Some((file, func)) = r.rsplit_once("::") else {
+            problems.push(format!("{id}: referência `{r}` não é `arquivo::função`"));
+            continue;
+        };
+        match std::fs::read_to_string(root.join(file)) {
+            Err(_) => problems.push(format!("{id}: arquivo `{file}` não existe")),
+            Ok(src) if !src.contains(&format!("fn {func}(")) => {
+                problems.push(format!("{id}: `{file}` não tem `fn {func}(`"))
+            }
+            Ok(_) => {}
+        }
+    }
+    problems
+}
+
+#[test]
+fn semantic_deltas_tem_ids_em_ordem_classificacao_e_testes_existentes() {
+    let doc = read("docs/semantic-deltas.md");
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let entries = sd_entries(&doc);
+    assert!(!entries.is_empty(), "nenhuma entrada `### SD-NN`");
+    let mut problems = Vec::new();
+    for (i, (id, body)) in entries.iter().enumerate() {
+        let expected = format!("SD-{:02}", i + 1);
+        if *id != expected {
+            problems.push(format!("esperava {expected}, veio {id}"));
+        }
+        problems.extend(sd_entry_problems(id, body, root));
+    }
+    assert!(problems.is_empty(), "{}", problems.join("\n"));
+}
+
+#[test]
+fn semantic_deltas_acusa_teste_inexistente_e_classificacao_sem_issue() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let body = "SD-01 — x\n\n**Classification:** suspected regression\n\
+                **Tests:** `rust/src/ffi_tests.rs::nao_existe`, `nao/existe.rs::f`\n";
+    let problems = sd_entry_problems("SD-01", body, root);
+    assert_eq!(problems.len(), 3, "{problems:?}");
+    assert!(problems[0].contains("precisa citar uma issue"));
+    assert!(problems[1].contains("não tem `fn nao_existe(`"));
+    assert!(problems[2].contains("arquivo `nao/existe.rs` não existe"));
+}
+
+#[test]
+fn todo_sd_citado_existe_em_semantic_deltas() {
+    let defined: BTreeSet<String> = sd_entries(&read("docs/semantic-deltas.md"))
+        .into_iter()
+        .map(|(id, _)| id)
+        .collect();
+    let mut missing = Vec::new();
+    for doc in [
+        "docs/api-deltas.md",
+        "docs/integration-guide.md",
+        "CHANGELOG.md",
+    ] {
+        for id in sd_ids(&read(doc)) {
+            if !defined.contains(&id) {
+                missing.push(format!("{doc}: {id}"));
+            }
+        }
+    }
+    assert!(missing.is_empty(), "SD inexistente citado: {missing:?}");
 }
