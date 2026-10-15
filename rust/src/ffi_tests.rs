@@ -299,3 +299,141 @@ fn is_in_trackbb_container_reports_recorded_lines() {
     assert_eq!(map2check_is_in_trackbb_container(7), 1);
     assert_eq!(map2check_is_in_trackbb_container(8), 0);
 }
+
+// ── Memory tracking ─────────────────────────────────────────────────────────
+
+/// Returns the only memtrack record, failing if there is not exactly one.
+fn only_memtrack() -> crate::memtrack::MemTrackEntry {
+    snapshot(|s| {
+        assert_eq!(s.memtrack.len(), 1, "esperava exatamente um registro");
+        s.memtrack[0].clone()
+    })
+}
+
+#[test]
+fn map_alloca_records_static_stack_slot() {
+    let _guard = fresh();
+    // SAFETY: C-string literal is valid; fake address is never dereferenced.
+    unsafe { map2check_map_alloca(c"x".as_ptr(), addr(0x2000), 8, 4, 3, 1) };
+    let e = only_memtrack();
+    assert_eq!((e.step, e.line, e.scope), (1, 3, 1));
+    assert_eq!((e.var_addr, e.points_to), (0x2000, 0x2000));
+    assert_eq!((e.size_destiny, e.size_primitive), (8, 4));
+    assert_eq!(e.ptr_name, "x");
+    assert!(!e.is_dynamic && !e.is_free);
+}
+
+#[test]
+fn map_alloca_ignores_negative_size() {
+    let _guard = fresh();
+    // SAFETY: C-string literal is valid; fake address is never dereferenced.
+    unsafe { map2check_map_alloca(c"x".as_ptr(), addr(0x2000), -1, 4, 3, 1) };
+    assert!(snapshot(|s| s.memtrack.is_empty()));
+}
+
+#[test]
+fn map_non_static_alloca_records_dynamic_slot() {
+    let _guard = fresh();
+    // SAFETY: C-string literal is valid; fake address is never dereferenced.
+    unsafe { map2check_map_non_static_alloca(c"vla".as_ptr(), addr(0x2000), 40, 4, 5, 2) };
+    let e = only_memtrack();
+    assert_eq!((e.line, e.scope, e.size_destiny), (5, 2, 40));
+    assert_eq!(e.ptr_name, "vla");
+    assert!(e.is_dynamic && !e.is_free);
+}
+
+#[test]
+fn map_funct_address_records_pointer_sized_slot() {
+    let _guard = fresh();
+    // SAFETY: C-string literal is valid; fake address is never dereferenced.
+    unsafe { map2check_map_funct_address(c"foo".as_ptr(), addr(0x4000)) };
+    let e = only_memtrack();
+    let width = std::mem::size_of::<*const c_void>();
+    assert_eq!((e.var_addr, e.points_to), (0x4000, 0x4000));
+    assert_eq!((e.size_destiny, e.size_primitive), (width, width));
+    assert_eq!(e.ptr_name, "foo");
+    assert!(!e.is_dynamic && !e.is_free);
+}
+
+#[test]
+fn map_malloc_records_heap_allocation() {
+    let _guard = fresh();
+    // SAFETY: fake address is never dereferenced.
+    unsafe { map2check_map_malloc(addr(0x1000), 16) };
+    let e = only_memtrack();
+    assert_eq!(
+        (e.points_to, e.size_destiny, e.size_primitive),
+        (0x1000, 16, 1)
+    );
+    assert!(e.is_dynamic && !e.is_free);
+}
+
+#[test]
+fn map_malloc_ignores_negative_size() {
+    let _guard = fresh();
+    // SAFETY: fake address is never dereferenced.
+    unsafe { map2check_map_malloc(addr(0x1000), -16) };
+    assert!(snapshot(|s| s.memtrack.is_empty()));
+}
+
+#[test]
+fn map_calloc_records_quantity_times_size() {
+    let _guard = fresh();
+    // SAFETY: fake address is never dereferenced.
+    unsafe { map2check_map_calloc(addr(0x1000), 4, 8) };
+    let e = only_memtrack();
+    assert_eq!((e.points_to, e.size_destiny), (0x1000, 32));
+    assert!(e.is_dynamic && !e.is_free);
+}
+
+#[test]
+fn map_calloc_ignores_negative_arguments() {
+    let _guard = fresh();
+    // SAFETY: fake address is never dereferenced.
+    unsafe {
+        map2check_map_calloc(addr(0x1000), -1, 8);
+        map2check_map_calloc(addr(0x1000), 4, -8);
+    }
+    assert!(snapshot(|s| s.memtrack.is_empty()));
+}
+
+#[test]
+fn map_free_records_released_slot() {
+    let _guard = fresh();
+    // SAFETY: C-string literals are valid; fake address is never dereferenced.
+    unsafe { map2check_map_free(c"p".as_ptr(), addr(0x1000), 1, 9, c"main".as_ptr()) };
+    let e = only_memtrack();
+    assert_eq!(
+        (e.line, e.scope, e.var_addr, e.size_destiny),
+        (9, 1, 0x1000, 0)
+    );
+    assert_eq!(
+        (e.ptr_name.as_str(), e.function_name.as_str()),
+        ("p", "main")
+    );
+    assert!(e.is_free && !e.is_dynamic);
+}
+
+#[test]
+fn map_store_pointer_records_points_to() {
+    let _guard = fresh();
+    // SAFETY: C-string literals are valid; fake addresses are never dereferenced.
+    unsafe {
+        map2check_map_store_pointer(
+            addr(0x3000),
+            addr(0x1000),
+            2,
+            c"p".as_ptr(),
+            11,
+            c"main".as_ptr(),
+        )
+    };
+    let e = only_memtrack();
+    assert_eq!((e.var_addr, e.points_to), (0x3000, 0x1000));
+    assert_eq!((e.line, e.scope, e.size_destiny), (11, 2, 0));
+    assert_eq!(
+        (e.ptr_name.as_str(), e.function_name.as_str()),
+        ("p", "main")
+    );
+    assert!(!e.is_dynamic && !e.is_free);
+}
