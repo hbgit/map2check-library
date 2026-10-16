@@ -125,7 +125,7 @@ fn violated_property_from_raw(raw: i32) -> Option<ViolatedProperty> {
 /// - Unwinding profiles (`dev`, `release`, `runtime`; `panic = "unwind"`):
 ///   a panic is caught here with `catch_unwind`, a diagnostic is written to
 ///   stderr and `default` is returned, so no unwind ever reaches C.
-/// - `panic = "abort"` builds (the future KLEE build): `catch_unwind` cannot
+/// - `panic = "abort"` builds (the KLEE runtime, `klee/Cargo.toml`): `catch_unwind` cannot
 ///   intercept anything; a panic aborts the process immediately and there is
 ///   no recovery. Exports therefore must not rely on panics for control flow.
 ///

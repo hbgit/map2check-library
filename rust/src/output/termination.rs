@@ -97,6 +97,7 @@ fn write_aux_files(dir: &Path, config: Config, s: &AnalysisState, end_of_program
 fn exit(dir: &Path, config: Config, end_of_program: bool) {
     let failed = match state::with_state(|s| {
         if config.witness {
+            super::prepare_for_output(s);
             write_aux_files(dir, config, s, end_of_program);
         }
         mode::analysis_destroy(config.mode, s);

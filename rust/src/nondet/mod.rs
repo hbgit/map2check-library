@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-#![cfg_attr(not(feature = "libfuzzer"), deny(unsafe_code))]
+#![cfg_attr(not(any(feature = "libfuzzer", feature = "klee")), deny(unsafe_code))]
 
 use serde::Serialize;
 
@@ -99,6 +99,34 @@ impl NonDetEntry {
 /// LibFuzzer nondeterministic value generator — feature-gated.
 #[cfg(feature = "libfuzzer")]
 pub mod libfuzzer;
+
+/// KLEE nondeterministic value generator (`symex`) — feature-gated, built
+/// only from `klee/Cargo.toml` with rustc 1.72.1 (D1, route A'). Not in the
+/// C header: the KLEE runtime is linked as bitcode, and its `main` and the
+/// KLEE intrinsics it imports are not library API.
+///
+/// cbindgen:ignore
+#[cfg(feature = "klee")]
+pub mod klee;
+
+/// Body of `__VERIFIER_error`, the same for every generator: records a
+/// `Reachability` violation and, without a mode, prints the JSON report.
+/// The export aborts afterwards.
+#[cfg(any(feature = "libfuzzer", feature = "klee"))]
+fn record_verifier_error() {
+    if let Err(e) = crate::state::with_state(|s| {
+        s.set_false(
+            crate::caller::ViolatedProperty::Reachability,
+            0,
+            "__VERIFIER_error",
+        );
+        Ok(())
+    }) {
+        eprintln!("[map2check] error: {e}");
+    }
+    // Out of the lock, and only without a mode (#19 ruling).
+    crate::output::print_report_unless_mode_set();
+}
 
 #[cfg(test)]
 mod tests {

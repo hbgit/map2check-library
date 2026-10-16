@@ -302,10 +302,16 @@ plain!(not_an_export);
     );
 }
 
+/// O runtime KLEE (`rust/src/nondet/klee.rs`, feature `klee` do
+/// `klee/Cargo.toml`) fica fora do header (`cbindgen:ignore`): é ligado como
+/// bitcode, não pelo header.
+const KLEE_RUNTIME: &str = "rust/src/nondet/klee.rs";
+
 #[test]
 fn todo_export_do_codigo_esta_no_header() {
     let rust_src: String = rust_sources()
         .iter()
+        .filter(|p| p.as_str() != KLEE_RUNTIME)
         .map(|p| read(p))
         .collect::<Vec<_>>()
         .join("\n");
@@ -317,6 +323,28 @@ fn todo_export_do_codigo_esta_no_header() {
         not_in_header.is_empty() && not_in_source.is_empty(),
         "exports fora do header: {not_in_header:?}; no header sem export no código: {not_in_source:?}"
     );
+}
+
+/// O runtime KLEE exporta os mesmos símbolos, com as mesmas assinaturas, que
+/// o gerador libFuzzer declara no header, mais o `main` que o KLEE executa
+/// (como `NonDetGeneratorKlee.c` de `develop`).
+#[test]
+fn exports_do_runtime_klee_sao_os_do_header_mais_main() {
+    let klee = source_exports(&read(KLEE_RUNTIME));
+    let header = common::header_declarations(&read("include/map2check.h"));
+    let fora: Vec<_> = klee
+        .iter()
+        .filter(|name| name.as_str() != "main" && !header.contains_key(name.as_str()))
+        .collect();
+    assert!(fora.is_empty(), "exports KLEE fora do header: {fora:?}");
+    for name in [
+        "main",
+        "__VERIFIER_nondet_int",
+        "__VERIFIER_assume",
+        "__VERIFIER_error",
+    ] {
+        assert!(klee.contains(name), "o runtime KLEE não exporta {name}");
+    }
 }
 
 /// Arquivos `.rs` de `rust/src/`, relativos à raiz do crate.

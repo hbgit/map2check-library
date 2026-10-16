@@ -319,23 +319,7 @@ pub extern "C-unwind" fn map2check_fuzzer_assume(condition: i32) {
 /// being checked was violated; it never returns.
 #[no_mangle]
 pub extern "C" fn __VERIFIER_error() {
-    crate::ffi::ffi_guard(
-        || {
-            if let Err(e) = crate::state::with_state(|s| {
-                s.set_false(
-                    crate::caller::ViolatedProperty::Reachability,
-                    0,
-                    "__VERIFIER_error",
-                );
-                Ok(())
-            }) {
-                eprintln!("[map2check] error: {e}");
-            }
-            // Out of the lock, and only without a mode (#19 ruling).
-            crate::output::print_report_unless_mode_set();
-        },
-        (),
-    );
+    crate::ffi::ffi_guard(super::record_verifier_error, ());
     std::process::abort();
 }
 
