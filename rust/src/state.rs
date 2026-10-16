@@ -33,7 +33,16 @@ impl AnalysisState {
         *self = Self::default();
     }
 
+    /// Records a violation unless one is already recorded (#36, SD-03).
+    ///
+    /// The first violation is final: in the C runtime of Map2Check every
+    /// violation ends the process through `map2check_error()`, so nothing can
+    /// replace it. This library keeps running instead, so a later violation is
+    /// ignored rather than overwriting the first.
     pub fn set_false(&mut self, property: ViolatedProperty, line: u32, function_name: &str) {
+        if !self.result.ok {
+            return;
+        }
         self.result.ok = false;
         self.result.property = property;
         self.result.line = line;

@@ -728,6 +728,8 @@ fn check_load_null_depends_on_null_is_valid() {
     unsafe { map2check_check_load(std::ptr::null(), 12, 0, 4, c"main".as_ptr()) };
     assert_violated(ViolatedProperty::MemsafetyDeref, 12, "main");
 
+    // The first violation is final (SD-03), so start a new analysis.
+    state::reset();
     map2check_set_null_is_valid();
     // SAFETY: as above.
     unsafe { map2check_check_load(std::ptr::null(), 12, 0, 4, c"main".as_ptr()) };
@@ -735,15 +737,46 @@ fn check_load_null_depends_on_null_is_valid() {
 }
 
 #[test]
-fn check_load_clears_a_previous_violation_when_safe() {
+fn sd03_safe_check_keeps_earlier_violation() {
+    // SD-03 / #36: the first violation is final. A later memory check that
+    // finds the access safe must not reset the result to OK.
     let _guard = fresh();
     // SAFETY: C-string literals are valid; fake addresses are never dereferenced.
     unsafe {
         map2check_map_malloc(addr(0x1000), 16);
-        set_false_result(0, 1, c"earlier".as_ptr());
-        map2check_check_load(addr(0x1000), 12, 0, 4, c"main".as_ptr());
+        set_false_result(5, 1, c"main".as_ptr());
+        map2check_check_load(addr(0x1000), 2, 0, 4, c"main".as_ptr());
     }
-    assert_ok();
+    assert_violated(ViolatedProperty::Reachability, 1, "main");
+    assert_eq!(get_current_property(), ViolatedProperty::Reachability);
+
+    // SAFETY: as above.
+    unsafe {
+        map2check_check_deref(addr(0x1000), 0, 3, c"main".as_ptr());
+        map2check_check_free(c"p".as_ptr(), addr(0x1000), 0, 4, c"main".as_ptr());
+        map2check_check_free_resolved_address(addr(0x1000), 5, c"main".as_ptr(), 0);
+        map2check_map_free(c"p".as_ptr(), addr(0x1000), 0, 5, c"main".as_ptr());
+    }
+    map2check_check_mem_endprog();
+    map2check_set_memcleanup();
+    map2check_check_mem_endprog();
+    assert_violated(ViolatedProperty::Reachability, 1, "main");
+}
+
+#[test]
+fn sd03_later_violation_does_not_overwrite_first() {
+    // SD-03 / #36: neither a later memory violation nor a later
+    // `set_false_result` replaces the recorded one.
+    let _guard = fresh();
+    // SAFETY: C-string literals are valid; fake addresses are never dereferenced.
+    unsafe {
+        map2check_check_load(addr(0x9000), 7, 0, 4, c"first".as_ptr());
+        map2check_check_free(c"p".as_ptr(), addr(0x9000), 0, 8, c"main".as_ptr());
+        map2check_check_deref(std::ptr::null(), 0, 9, c"main".as_ptr());
+        set_false_result(5, 10, c"main".as_ptr());
+        map2check_binop_add_int(i32::MAX, 1, 11, 0, c"main".as_ptr());
+    }
+    assert_violated(ViolatedProperty::MemsafetyDeref, 7, "first");
 }
 
 #[test]
@@ -820,10 +853,13 @@ fn check_deref_accepts_live_and_rejects_freed_null_or_untracked() {
     }
     assert_violated(ViolatedProperty::MemsafetyDeref, 42, "main");
 
+    // The first violation is final (SD-03), so each case starts a new analysis.
+    state::reset();
     // SAFETY: as above.
     unsafe { map2check_check_deref(std::ptr::null(), 0, 43, c"main".as_ptr()) };
     assert_violated(ViolatedProperty::MemsafetyDeref, 43, "main");
 
+    state::reset();
     // SAFETY: as above.
     unsafe { map2check_check_deref(addr(0x9000), 0, 44, c"main".as_ptr()) };
     assert_violated(ViolatedProperty::MemsafetyDeref, 44, "main");

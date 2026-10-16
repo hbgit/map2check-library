@@ -71,18 +71,6 @@ fn run_vcc_check(checker: impl VccChecker, ctx: &VccContext, line: u32, fname: &
     }
 }
 
-fn reset_result_metadata() {
-    if let Err(e) = state::with_state(|s| {
-        s.result.ok = true;
-        s.result.property = ViolatedProperty::None;
-        s.result.line = 0;
-        s.result.function_name.clear();
-        Ok(())
-    }) {
-        log_error(&e);
-    }
-}
-
 fn violated_property_from_raw(raw: i32) -> Option<ViolatedProperty> {
     match raw {
         0 => Some(ViolatedProperty::Overflow),
@@ -914,7 +902,6 @@ pub unsafe extern "C" fn map2check_check_load(
 ) {
     ffi_guard(
         || {
-            reset_result_metadata();
             // SAFETY: caller guarantees function_name is valid or null.
             let fname = unsafe { c_str(function_name) };
             if size < 0 {
@@ -957,7 +944,6 @@ pub unsafe extern "C" fn map2check_check_free(
 ) {
     ffi_guard(
         || {
-            reset_result_metadata();
             // SAFETY: caller guarantees function_name is valid or null.
             let fname = unsafe { c_str(function_name) };
             let ctx = VccContext::new(line, 0, fname);
@@ -989,7 +975,6 @@ pub unsafe extern "C" fn map2check_check_free_resolved_address(
 ) {
     ffi_guard(
         || {
-            reset_result_metadata();
             // SAFETY: caller guarantees function_name is valid or null.
             let fname = unsafe { c_str(function_name) };
             if ptr.is_null() && is_null_valid != 0 {
@@ -1022,7 +1007,6 @@ pub unsafe extern "C" fn map2check_check_deref(
 ) {
     ffi_guard(
         || {
-            reset_result_metadata();
             // SAFETY: caller guarantees function_name is valid or null.
             let fname = unsafe { c_str(function_name) };
             let ctx = VccContext::new(line, scope, fname);
@@ -1045,7 +1029,6 @@ pub unsafe extern "C" fn map2check_check_deref(
 pub extern "C" fn map2check_check_mem_endprog() {
     ffi_guard(
         || {
-            reset_result_metadata();
             if !state::with_state(|s| Ok(s.memcleanup_enabled)).unwrap_or(false) {
                 return;
             }

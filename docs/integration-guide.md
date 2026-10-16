@@ -80,9 +80,10 @@ cc -I include my_program.c lib/libmap2check.a -ldl -lpthread -lm -o my_program
 6. `map2check_reset()` to analyse another input in the same process.
    LibFuzzer builds do this on every iteration.
 
-A violation does not stop the program, and a later safe memory check
-resets the verdict (SD-03). Read the verdict right after the check you care
-about.
+A violation does not stop the program, but the first violation is final:
+later checks, safe or not, and later `set_false_result` calls leave it in
+place (SD-03). Only `map2check_init()`, `map2check_reset()` and
+`vcc_reset_meta_data()` clear it.
 
 ## JSON report
 

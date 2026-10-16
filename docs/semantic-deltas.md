@@ -17,7 +17,7 @@ differential harness in #15 will settle those cases.
 
 `tests/compat_docs.rs` checks that IDs run in order with no gaps, that every
 classification is from the list below, that `pending decision` and
-`suspected regression` cite an issue, and that every test named under
+`suspected regression` and `fixed` cite an issue, and that every test named under
 **Tests** exists. When a fix changes one of these behaviours, update the
 entry and its tests in the same change.
 
@@ -29,6 +29,7 @@ entry and its tests in the same change.
 | `accepted limitation` | Known downside, accepted for now; the entry says why. |
 | `suspected regression` | Probably wrong; an issue tracks adjudication. |
 | `pending decision` | Waits on the cited issue. |
+| `fixed` | Was a regression; the Rust library now matches the C runtime of Map2Check `develop`. The entry cites the fixing issue and the `develop` source. |
 
 ### SD-01 — JSON report shape
 
@@ -76,25 +77,39 @@ map2check_init();
 map2check_map_malloc((void *)0x1000, 16);
 set_false_result(0 /* Overflow */, 3, "main");
 print_all_containers_as_json();   /* no Container_AllocationLog */
+map2check_reset();                /* the first violation is final (SD-03) */
+map2check_map_malloc((void *)0x1000, 16);
 set_false_result(1 /* MemsafetyFree */, 4, "main");
 print_all_containers_as_json();   /* Container_AllocationLog present */
 ```
 
-### SD-03 — Violations do not stop the analysis, and a later safe memory check clears them
+### SD-03 — Violations do not stop the analysis; the first one is final
 
-**Classification:** suspected regression (#36; differential check in #15)
-**Tests:** `rust/src/ffi_tests.rs::check_load_clears_a_previous_violation_when_safe`
+**Classification:** fixed (#36)
+**Tests:** `rust/src/ffi_tests.rs::sd03_safe_check_keeps_earlier_violation`, `rust/src/ffi_tests.rs::sd03_later_violation_does_not_overwrite_first`
 
 **Rust:** a check that finds a violation records it and returns. The process
-keeps running. The memory checks (`map2check_check_load`,
-`map2check_check_free`, `map2check_check_free_resolved_address`,
-`map2check_check_deref`, `map2check_check_mem_endprog`) reset the result to
-OK before they check. So a later safe access erases any earlier violation,
-including one that `set_false_result` recorded.
+keeps running (ending it, with the result files, is Task 2.4 of the cutover
+plan). The first recorded violation is final: `AnalysisState::set_false`
+ignores every later violation, whether it comes from a memory check, an
+overflow check, an assert or `set_false_result`, and the memory checks
+(`map2check_check_load`, `map2check_check_free`,
+`map2check_check_free_resolved_address`, `map2check_check_deref`,
+`map2check_check_mem_endprog`) no longer reset the result to OK before they
+check. Only `map2check_init()`, `map2check_reset()` and the explicit
+`vcc_reset_meta_data()` clear it.
 
-**Legacy (embedded C library):** every violation calls `map2check_error()`,
-which writes the result files and calls `abort()`
-(`lib_old/Map2CheckFunctions.c:72-102`). The first violation is final.
+Before #36 those memory checks reset the result first, so a later safe
+access erased any earlier violation, including one that `set_false_result`
+recorded.
+
+**C runtime of Map2Check `develop`:** every violation calls
+`map2check_error()` (`modules/backend/library/lib/Map2CheckFunctions.c:72-75`),
+which calls `map2check_exit()` (`:89-102`): it writes the result files and
+calls `abort()`. For example `map2check_free_resolved_address` and
+`map2check_free` (`AnalysisModeMemtrack.c:173-177`, `:355-358`) and
+`map2check_check_deref` (`AnalysisModeMemtrack.c:297-303`). The first
+violation is therefore final. `develop` matches `lib_old` here.
 
 **Reproduce:**
 
@@ -103,7 +118,7 @@ map2check_init();
 map2check_map_malloc((void *)0x1000, 16);
 set_false_result(5 /* Reachability */, 1, "main");
 map2check_check_load((void *)0x1000, 2, 0, 4, "main");
-/* get_current_property() == None: the REACHABILITY violation is gone */
+/* get_current_property() == Reachability (before #36: None) */
 ```
 
 ### SD-04 — End-of-program leak check is opt-in

@@ -332,10 +332,13 @@ static int test_result_and_control_flags(void) {
         return 4;
     }
 
+    /* SD-03 (#36): the first violation is final; a later safe check and a
+     * later violation leave it in place. */
     map2check_reset();
     set_false_result(Overflow, 10, "main");
     map2check_check_free(NULL, NULL, 0, 11, NULL);
-    if (get_current_property() != None) {
+    set_false_result(Reachability, 12, "main");
+    if (get_current_property() != Overflow) {
         return 5;
     }
     return 0;

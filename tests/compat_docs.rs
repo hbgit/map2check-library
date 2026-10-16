@@ -321,6 +321,7 @@ const CLASSIFICATIONS: &[&str] = &[
     "accepted limitation",
     "suspected regression",
     "pending decision",
+    "fixed",
 ];
 
 /// Problemas de uma entrada: classificação conhecida (com issue quando
@@ -337,7 +338,7 @@ fn sd_entry_problems(id: &str, body: &str, root: &Path) -> Vec<String> {
         Some(c) => match CLASSIFICATIONS.iter().find(|k| c.starts_with(*k)) {
             None => problems.push(format!("{id}: classificação desconhecida `{c}`")),
             Some(k)
-                if matches!(*k, "suspected regression" | "pending decision")
+                if matches!(*k, "suspected regression" | "pending decision" | "fixed")
                     && !c.contains('#') =>
             {
                 problems.push(format!("{id}: `{k}` precisa citar uma issue (#N)"))
