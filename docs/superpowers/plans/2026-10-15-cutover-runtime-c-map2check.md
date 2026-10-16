@@ -1163,6 +1163,7 @@ TEST(CallerLink, EveryModeAndGeneratorLinksRuntime) {
 Os enumeradores seguem `modules/frontend/caller.hpp:21-45` de `develop`; incluir também `COVER_BRANCHES_MODE` no laço.
 
 - [ ] **Step 2–4:** Ver falhar, extrair as funções e implementar, `ctest --output-on-failure` verde.
+- [ ] **Step 4b:** Os binários de witness (`-witness-fuzzed.out` e o `-witness-result.bc` que vai ao KLEE) ligam também um objeto gerado pelo frontend com `__attribute__((constructor)) static void m2c_witness(void) { map2check_enable_witness(); }`, compilado com `clang-16 -c` (nativo) ou `-emit-llvm` (KLEE). Os binários de verificação não o ligam. Isso reproduz a escolha `WitnessGeneration.bc` × `WitnessGenerationNone.bc` de `caller.cpp:635-640` (ruling da Task 2.4). Teste em `CallerLink`: o comando de witness contém o objeto e o de verificação não.
 - [ ] **Step 5:** Se D3 = remover, adicionar o aviso de `--btree` com o seu teste.
 - [ ] **Step 6: Commit (na branch)** `feat: link map2check-library instead of the C bitcode runtime`
 
