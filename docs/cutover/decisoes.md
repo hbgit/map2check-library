@@ -6,7 +6,7 @@ Registro das decisões D1–D5 do plano `docs/superpowers/plans/2026-10-15-cutov
 
 **Pergunta:** como o runtime Rust entra no pipeline LLVM 16 do Map2Check (`develop`: clang/LLVM 16.0.6, AFL++ 4.40c, KLEE 3.1), e como o AFL++ dirige as entradas.
 
-**Status: PROPOSTA — aguardando aprovação do mantenedor**
+**Status: APROVADA pelo mantenedor em 2026-10-15** (aprovação dada na sessão de execução do plano; as condições abaixo continuam obrigatórias para as tasks que as possuem)
 
 Evidência: `docs/cutover/spike-llvm16.md` (Task 1.1). Código na branch local `spike/llvm16` (commit `d13045b`).
 
