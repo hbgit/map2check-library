@@ -14,6 +14,7 @@ use std::sync::MutexGuard;
 fn fresh() -> MutexGuard<'static, ()> {
     let guard = state::test_lock();
     state::reset();
+    state::reset_config();
     guard
 }
 
@@ -80,8 +81,6 @@ fn second_init_starts_from_clean_state() {
         assert!(s.nondets.is_empty());
         assert!(s.bbtrack.is_empty());
         assert!(s.legacy_nondet_logs.is_empty());
-        assert!(!s.memcleanup_enabled);
-        assert!(!s.null_is_valid);
         assert_eq!(s.result.line, 0);
         assert!(s.result.function_name.is_empty());
     });
@@ -103,8 +102,6 @@ fn reset_clears_records_result_step_and_flags() {
     snapshot(|s| {
         assert_eq!(s.current_step(), 0);
         assert!(s.memtrack.is_empty());
-        assert!(!s.memcleanup_enabled);
-        assert!(!s.null_is_valid);
     });
 }
 
@@ -203,17 +200,17 @@ fn vcc_reset_meta_data_clears_result_but_keeps_records() {
 #[test]
 fn set_memcleanup_enables_end_of_program_check() {
     let _guard = fresh();
-    assert!(!snapshot(|s| s.memcleanup_enabled));
+    assert!(!state::config().memcleanup);
     map2check_set_memcleanup();
-    assert!(snapshot(|s| s.memcleanup_enabled));
+    assert!(state::config().memcleanup);
 }
 
 #[test]
 fn set_null_is_valid_sets_the_flag() {
     let _guard = fresh();
-    assert!(!snapshot(|s| s.null_is_valid));
+    assert!(!state::config().null_is_valid);
     map2check_set_null_is_valid();
-    assert!(snapshot(|s| s.null_is_valid));
+    assert!(state::config().null_is_valid);
 }
 
 // ── NonDet tracking ─────────────────────────────────────────────────────────
@@ -1084,13 +1081,16 @@ fn check_deref_accepts_live_and_rejects_freed_null_or_untracked() {
 }
 
 #[test]
-fn check_mem_endprog_is_a_no_op_until_memcleanup_is_enabled() {
+fn check_mem_endprog_reports_memtrack_until_memcleanup_is_enabled() {
     let _guard = fresh();
     // SAFETY: fake address is never dereferenced.
     unsafe { map2check_map_malloc(addr(0x1000), 16) };
     map2check_check_mem_endprog();
-    assert_ok();
+    assert_violated(ViolatedProperty::MemsafetyMemtrack, 0, "end_of_program");
 
+    state::reset();
+    // SAFETY: fake address is never dereferenced.
+    unsafe { map2check_map_malloc(addr(0x1000), 16) };
     map2check_set_memcleanup();
     map2check_check_mem_endprog();
     assert_violated(ViolatedProperty::MemsafetyMemcleanup, 0, "end_of_program");
@@ -1141,4 +1141,105 @@ fn macro_generated_exports_match_the_hand_written_header_declarations() {
     let _: Shift<i32> = map2check_binop_shl_int;
     let _: Shift<i32> = map2check_binop_shr_int;
     let _: Shift<u32> = map2check_binop_shr_unsigned;
+}
+
+// ── Memory-safety options (#10, SD-04, SD-05) ───────────────────────────────
+
+#[test]
+fn memcleanup_reports_leak_as_memcleanup_at_exit() {
+    let _guard = fresh();
+    map2check_init();
+    map2check_set_memcleanup();
+    // SAFETY: fake address is never dereferenced.
+    unsafe { map2check_map_malloc(addr(0x3000), 32) };
+    map2check_check_mem_endprog();
+    assert_violated(ViolatedProperty::MemsafetyMemcleanup, 0, "end_of_program");
+}
+
+#[test]
+fn without_memcleanup_leak_is_reported_as_memtrack_at_exit() {
+    // develop: analysis_is_program_correct() of AnalysisModeMemtrack.c writes
+    // FALSE_MEMTRACK; the leak check runs at exit in both modes.
+    let _guard = fresh();
+    map2check_init();
+    // SAFETY: fake address is never dereferenced.
+    unsafe { map2check_map_malloc(addr(0x3000), 32) };
+    map2check_check_mem_endprog();
+    assert_violated(ViolatedProperty::MemsafetyMemtrack, 0, "end_of_program");
+}
+
+#[test]
+fn endprog_without_leak_is_ok_in_both_modes() {
+    let _guard = fresh();
+    map2check_check_mem_endprog();
+    assert_ok();
+    map2check_set_memcleanup();
+    map2check_check_mem_endprog();
+    assert_ok();
+}
+
+#[test]
+fn endprog_keeps_an_earlier_violation() {
+    // #36: the end-of-program check must not overwrite the first violation.
+    let _guard = fresh();
+    // SAFETY: fake address and C-string literals are valid.
+    unsafe {
+        map2check_map_malloc(addr(0x3000), 32);
+        map2check_check_load(std::ptr::null(), 9, 0, 4, c"first".as_ptr());
+    }
+    map2check_check_mem_endprog();
+    assert_violated(ViolatedProperty::MemsafetyDeref, 9, "first");
+    map2check_set_memcleanup();
+    map2check_check_mem_endprog();
+    assert_violated(ViolatedProperty::MemsafetyDeref, 9, "first");
+}
+
+#[test]
+fn null_is_valid_accepts_null_load() {
+    let _guard = fresh();
+    map2check_init();
+    map2check_set_null_is_valid();
+    // SAFETY: null is never dereferenced.
+    unsafe { map2check_check_load(std::ptr::null(), 3, 0, 4, c"main".as_ptr()) };
+    assert_ok();
+}
+
+/// Runs a leak check and a NULL load on a fresh analysis, reports the
+/// (end-of-program property, null-load accepted) pair.
+fn observed_options() -> (ViolatedProperty, bool) {
+    state::reset();
+    // SAFETY: fake address is never dereferenced.
+    unsafe { map2check_map_malloc(addr(0x3000), 32) };
+    map2check_check_mem_endprog();
+    let leak = snapshot(|s| s.result.property);
+    state::reset();
+    // SAFETY: null is never dereferenced.
+    unsafe { map2check_check_load(std::ptr::null(), 3, 0, 4, c"main".as_ptr()) };
+    let null_ok = snapshot(|s| s.result.ok);
+    state::reset();
+    (leak, null_ok)
+}
+
+#[test]
+fn options_survive_init_and_reset() {
+    let _guard = fresh();
+    map2check_set_memcleanup();
+    map2check_set_null_is_valid();
+    let expected = (ViolatedProperty::MemsafetyMemcleanup, true);
+    assert_eq!(observed_options(), expected);
+
+    map2check_init();
+    assert_eq!(observed_options(), expected);
+
+    map2check_reset();
+    assert_eq!(observed_options(), expected);
+}
+
+#[test]
+fn options_default_off() {
+    let _guard = fresh();
+    assert_eq!(
+        observed_options(),
+        (ViolatedProperty::MemsafetyMemtrack, false)
+    );
 }

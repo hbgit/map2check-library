@@ -233,37 +233,29 @@ pub extern "C" fn vcc_reset_meta_data() {
     );
 }
 
-/// Enables memcleanup checking at end of program.
-/// Effect: `map2check_check_mem_endprog` only runs the leak check once this
-/// has been called; before that it is a no-op.
+/// Selects the memcleanup property for the end-of-program leak check.
+/// Effect: `map2check_check_mem_endprog` reports a leak as
+/// `MemsafetyMemcleanup` instead of `MemsafetyMemtrack`. The option is
+/// configuration: `map2check_init()` and `map2check_reset()` keep it.
 #[no_mangle]
 pub extern "C" fn map2check_set_memcleanup() {
     ffi_guard(
         || {
-            if let Err(e) = state::with_state(|s| {
-                s.memcleanup_enabled = true;
-                Ok(())
-            }) {
-                log_error(&e);
-            }
+            state::update_config(|c| c.memcleanup = true);
         },
         (),
     );
 }
 
-/// Marks NULL as valid for the current scope's pointer checks.
+/// Marks NULL as valid for load checks.
 /// Effect: `map2check_check_load` treats a NULL `ptr` as safe once this has
-/// been called, instead of always flagging it as `MemsafetyDeref`.
+/// been called, instead of flagging it as `MemsafetyDeref`. Kept across
+/// `map2check_init()` and `map2check_reset()`.
 #[no_mangle]
 pub extern "C" fn map2check_set_null_is_valid() {
     ffi_guard(
         || {
-            if let Err(e) = state::with_state(|s| {
-                s.null_is_valid = true;
-                Ok(())
-            }) {
-                log_error(&e);
-            }
+            state::update_config(|c| c.null_is_valid = true);
         },
         (),
     );
@@ -926,7 +918,7 @@ pub unsafe extern "C" fn map2check_check_load(
                 return;
             }
             let ctx = VccContext::new(line as u32, scope, fname);
-            let is_null_valid = state::with_state(|s| Ok(s.null_is_valid)).unwrap_or(false);
+            let is_null_valid = state::config().null_is_valid;
             run_vcc_check(
                 LoadChecker {
                     address: ptr as usize,
@@ -1058,17 +1050,22 @@ pub unsafe extern "C" fn map2check_check_deref(
     );
 }
 
-/// Checks for memory leaks at end of program.
-/// No-op unless `map2check_set_memcleanup()` was called first.
+/// Checks for memory leaks at end of program, in both modes (SD-04). A leak is
+/// `MemsafetyMemcleanup` after `map2check_set_memcleanup()`, otherwise
+/// `MemsafetyMemtrack`, as in the `develop` C runtime.
 #[no_mangle]
 pub extern "C" fn map2check_check_mem_endprog() {
     ffi_guard(
         || {
-            if !state::with_state(|s| Ok(s.memcleanup_enabled)).unwrap_or(false) {
-                return;
-            }
             let ctx = VccContext::new(0, 0, "end_of_program");
-            run_vcc_check(MemCleanupChecker, &ctx, 0, "end_of_program");
+            run_vcc_check(
+                MemCleanupChecker {
+                    memcleanup: state::config().memcleanup,
+                },
+                &ctx,
+                0,
+                "end_of_program",
+            );
         },
         (),
     );

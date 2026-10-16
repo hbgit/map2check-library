@@ -14,16 +14,61 @@ use crate::{
 static ANALYSIS_STATE: LazyLock<Mutex<AnalysisState>> =
     LazyLock::new(|| Mutex::new(AnalysisState::default()));
 
+static CONFIG: Mutex<Config> = Mutex::new(Config::new());
+
+/// Run configuration, kept apart from the analysis state: it changes only
+/// through its setters, so `map2check_init()` and `map2check_reset()` never
+/// clear it. Task 2.3 adds the analysis mode here.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Config {
+    /// Set by `map2check_set_memcleanup()`: a leak at exit is reported as
+    /// `MemsafetyMemcleanup` instead of `MemsafetyMemtrack`.
+    pub memcleanup: bool,
+    /// Set by `map2check_set_null_is_valid()`: a NULL load is safe.
+    pub null_is_valid: bool,
+}
+
+impl Config {
+    pub const fn new() -> Self {
+        Self {
+            memcleanup: false,
+            null_is_valid: false,
+        }
+    }
+}
+
+impl Default for Config {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Returns a copy of the current configuration.
+pub fn config() -> Config {
+    *CONFIG
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+}
+
+/// Changes the configuration. Only the option setters call this.
+pub fn update_config(f: impl FnOnce(&mut Config)) {
+    f(&mut CONFIG
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner));
+}
+
+/// Restores the default configuration (tests only; the library never does).
+#[cfg(test)]
+pub(crate) fn reset_config() {
+    update_config(|c| *c = Config::new());
+}
+
 #[derive(Debug, Default)]
 pub struct AnalysisState {
     pub result: AnalysisResult,
     pub nondets: Vec<NonDetEntry>,
     pub memtrack: Vec<MemTrackEntry>,
     pub bbtrack: Vec<BasicBlockEntry>,
-    /// Set by `map2check_set_null_is_valid()`; read by `map2check_check_load`.
-    pub null_is_valid: bool,
-    /// Set by `map2check_set_memcleanup()`; read by `map2check_check_mem_endprog`.
-    pub memcleanup_enabled: bool,
     pub legacy_nondet_logs: Vec<Box<crate::ffi::non_det_log_t>>,
     pub legacy_bbtrack_logs: Vec<Box<crate::ffi::bbtrack_log_t>>,
 }

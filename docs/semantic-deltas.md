@@ -121,41 +121,56 @@ map2check_check_load((void *)0x1000, 2, 0, 4, "main");
 /* get_current_property() == Reachability (before #36: None) */
 ```
 
-### SD-04 — End-of-program leak check is opt-in
+### SD-04 — End-of-program leak check runs in both modes
 
-**Classification:** intentional
-**Tests:** `rust/src/ffi_tests.rs::check_mem_endprog_is_a_no_op_until_memcleanup_is_enabled`, `rust/src/ffi_tests.rs::set_memcleanup_enables_end_of_program_check`
+**Classification:** fixed (#10)
+**Tests:** `rust/src/ffi_tests.rs::without_memcleanup_leak_is_reported_as_memtrack_at_exit`, `rust/src/ffi_tests.rs::memcleanup_reports_leak_as_memcleanup_at_exit`, `rust/src/ffi_tests.rs::endprog_keeps_an_earlier_violation`, `rust/src/ffi_tests.rs::options_survive_init_and_reset`
 
-**Rust:** `map2check_check_mem_endprog()` does nothing until
-`map2check_set_memcleanup()` has been called. After that call, a dynamic
-allocation that was never freed reports `MEMSAFETY_MEMCLEANUP`.
+**Rust:** `map2check_check_mem_endprog()` always runs the leak check. A
+dynamic allocation that was never freed reports `MEMSAFETY_MEMCLEANUP` after
+`map2check_set_memcleanup()` and `MEMSAFETY_MEMTRACK` otherwise. The option
+is configuration: `map2check_init()` and `map2check_reset()` keep it. Until
+the analysis mode is configurable (Task 2.3) the memcleanup option picks
+between the memtrack and memcleanup verdicts. A violation recorded earlier
+stays final (SD-03).
 
-**Legacy (embedded C library):** `map2check_exit()` calls
-`analysis_is_program_correct()` at the end of every run
-(`lib_old/Map2CheckFunctions.c:89-102`). Whether a flag gated it was not
-verified (#15).
+**Before #10:** the Rust function did nothing until
+`map2check_set_memcleanup()` had been called, so a leak in memtrack mode went
+unreported.
+
+**C runtime of Map2Check `develop`:** `map2check_exit()` calls
+`analysis_is_program_correct()` when no error was recorded
+(`Map2CheckFunctions.c:89-92`). In memtrack mode it writes `FALSE_MEMTRACK`
+(`AnalysisModeMemtrack.c:138-146`, tag at `:141`); in memcleanup mode it
+writes `FALSE_MEMCLEANUP` (`AnalysisModeMemcleanup.c:138-146`, tag at `:142`).
+Both use the same `valid_allocation_log()` scan, and both report line 0 with
+an empty function name.
 
 **Reproduce:**
 
 ```c
 map2check_init();
 map2check_map_malloc((void *)0x1000, 16);
-map2check_check_mem_endprog();   /* None */
-map2check_set_memcleanup();
-map2check_check_mem_endprog();   /* MemsafetyMemcleanup */
+map2check_check_mem_endprog();   /* MemsafetyMemtrack */
+/* with map2check_set_memcleanup() first: MemsafetyMemcleanup */
 ```
 
 ### SD-05 — NULL load is a violation unless NULL is declared valid
 
 **Classification:** intentional
-**Tests:** `rust/src/ffi_tests.rs::check_load_null_depends_on_null_is_valid`
+**Tests:** `rust/src/ffi_tests.rs::check_load_null_depends_on_null_is_valid`, `rust/src/ffi_tests.rs::null_is_valid_accepts_null_load`, `rust/src/ffi_tests.rs::options_survive_init_and_reset`
 
 **Rust:** `map2check_check_load(NULL, ...)` reports `MEMSAFETY_DEREF` unless
 `map2check_set_null_is_valid()` was called first. After that call it is
-safe.
+safe. The option survives `map2check_init()` and `map2check_reset()`.
 
-**Legacy (embedded C library):** `map2check_load(ptr, size)` has no NULL
-case and no flag (`lib_old/AnalysisModeMemtrack.c:156-162`).
+**C runtime of Map2Check `develop`:** there is no NULL-is-valid notion on
+load. `map2check_load(ptr, size)` finds NULL in neither the heap log nor the
+allocation log and sets `ERROR_DEREF` (`AnalysisModeMemtrack.c:156-162`);
+`map2check_check_deref` then reports `FALSE_DEREF` (`:297-301`). The default
+(option off) matches that verdict. The only NULL flag in `develop` is
+`isNullValid` of `map2check_free_resolved_address`, for frees
+(`:164-169`). The load option is a Rust extension, hence intentional.
 
 **Reproduce:**
 
