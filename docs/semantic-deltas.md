@@ -393,40 +393,61 @@ map2check_check_free_resolved_address((void *)0x1000, 3, "main", 0);  /* None; d
 ### SD-14 — The analysis mode is chosen at run time; unset keeps every check
 
 **Classification:** intentional
-**Tests:** `rust/src/ffi_tests.rs::unset_mode_keeps_every_check_active`, `rust/src/ffi_tests.rs::mode_none_reports_nothing`, `rust/src/ffi_tests.rs::mode_memtrack_reports_memory_errors_only`, `rust/src/ffi_tests.rs::mode_memcleanup_reports_only_the_leak_as_memcleanup`, `rust/src/ffi_tests.rs::mode_overflow_reports_overflow_only`, `rust/src/ffi_tests.rs::mode_assert_reports_assert_only`, `rust/src/ffi_tests.rs::mode_target_reports_nothing_from_checks`, `rust/src/ffi_tests.rs::memcleanup_option_is_an_alias_of_memcleanup_mode_for_the_leak`, `rust/src/ffi_tests.rs::is_valid_assert_false_reports_assert`, `rust/src/analysismode/mode.rs::program_correct_memcleanup_reports_leak_as_memcleanup`
+**Tests:** `rust/src/ffi_tests.rs::unset_mode_keeps_every_check_active`, `rust/src/ffi_tests.rs::mode_none_reports_nothing`, `rust/src/ffi_tests.rs::mode_memtrack_reports_memory_errors_only`, `rust/src/ffi_tests.rs::mode_memcleanup_reports_only_the_leak_as_memcleanup`, `rust/src/ffi_tests.rs::mode_overflow_reports_overflow_only`, `rust/src/ffi_tests.rs::mode_assert_reports_assert_only`, `rust/src/ffi_tests.rs::mode_target_reports_nothing_from_checks`, `rust/src/ffi_tests.rs::memcleanup_option_is_an_alias_of_memcleanup_mode_for_the_leak`, `rust/src/ffi_tests.rs::is_valid_assert_false_reports_assert`, `rust/src/ffi_tests.rs::set_mode_ignores_out_of_range_values`, `rust/src/ffi_tests.rs::memcleanup_mode_leak_never_stored_has_no_verdict`, `rust/src/ffi_tests.rs::memcleanup_mode_checks_only_the_last_leak`, `rust/src/ffi_tests.rs::memtrack_mode_reports_any_leak_reachable_or_not`
 
 **Rust:** `map2check_set_mode()` selects the mode before `map2check_init()`;
-init and reset keep it. Each mode activates the checks that its
-`AnalysisMode*.c` defines in develop; a check of another mode records
-nothing. Tracking calls record in every mode, and an inactive
-`map2check_check_free_resolved_address` still records the release. When
-`map2check_set_mode()` is never called the mode is unset: every check is
-active and the leak tag follows the memcleanup option, as before Task 2.3.
-The memcleanup option is an alias of the memcleanup mode for the leak tag,
-so memtrack mode plus the option reports `MEMSAFETY_MEMCLEANUP`. A failed
-assert reports `ASSERT` instead of `REACHABILITY`. In memcleanup mode a leak
-is any live allocation by the Rust leak rule; develop also requires
-`is_memcleanup_error` (`ListLog.c:40-65`) to hold.
+init and reset keep it, and a value outside 0–5 is ignored with a
+diagnostic. With a mode set, the checks and the end-of-program verdict
+follow the `AnalysisMode*.c` of that mode, at parity with develop:
 
-**C runtime of Map2Check `develop`:** the mode is fixed at link time
-(`modules/frontend/caller.cpp:575-612`): one of `AnalysisModeNone.c`
-(cover-branches and reachability), `AnalysisModeMemtrack.c`,
-`AnalysisModeMemcleanup.c`, `AnalysisModeOverflow.c` or
-`AnalysisModeAssert.c` is linked, so calls of another mode are never emitted
-and there is no unset mode. `map2check_assert` writes `ASSERT`
-(`AnalysisModeAssert.c:18-23`, `PropertyGenerator.c:92-97`). The memcleanup
-mode never fails a load, deref or free (`AnalysisModeMemcleanup.c:158`,
-`:293`, `:166`, `:343`).
+- a check of another mode records nothing;
+- memtrack reports any live heap block at exit;
+- memcleanup reports `MEMSAFETY_MEMCLEANUP` only when the last leaked
+  block, in allocation order, is still referenced by a pointer variable's
+  latest stored value.
+
+The differences that remain are these:
+
+- **Unset mode.** When `map2check_set_mode()` is never called the mode is
+  unset: every check is active and the leak tag follows the memcleanup
+  option, as before Task 2.3. Develop has no unset mode.
+- **Memcleanup option.** The option only retags the unset/memtrack leak
+  verdict as `MEMSAFETY_MEMCLEANUP`. It does not apply the memcleanup-mode
+  reachability rule.
+- **Tracking calls** record in every mode.
+- **Free records.** The Rust free record has no pointer-variable address.
+  So the memcleanup replay does not rebuild the FREE row that develop's
+  `map2check_free` appends for the pointer variable
+  (`AnalysisModeMemcleanup.c:336-341`). That row matters only when a freed
+  address is allocated again.
+
+**C runtime of Map2Check `develop`:**
+
+- **Mode selection.** The mode is fixed at link time
+  (`modules/frontend/caller.cpp:575-612`), so calls of another mode are
+  never emitted.
+- **Memtrack verdict.** Memtrack reports FALSE_MEMTRACK when
+  `valid_allocation_log` (`AllocationLog.c:69-101`) returns non-zero
+  (`AnalysisModeMemtrack.c:138-146`).
+- **Memcleanup verdict.** Memcleanup additionally requires
+  `is_memcleanup_error` (`ListLog.c:40-65`) for that last address
+  (`AnalysisModeMemcleanup.c:138-148`), over the list log that
+  `map2check_add_store_pointer` and `update_reference_list_log` maintain
+  (`:181-291`).
+- **Asserts.** `map2check_assert` writes `ASSERT`
+  (`AnalysisModeAssert.c:18-23`).
 
 **Reproduce:**
 
 ```c
-map2check_set_mode(AnalysisMode_None);
+map2check_set_mode(AnalysisMode_Memcleanup);
 map2check_init();
-map2check_check_deref((void *)0xdead, 0, 1, "main");   /* None */
-map2check_set_mode(AnalysisMode_Memtrack);
+map2check_map_malloc((void *)0x3000, 8);
+map2check_check_mem_endprog();                 /* None: nothing points to it */
 map2check_init();
-map2check_check_deref((void *)0xdead, 0, 1, "main");   /* MemsafetyDeref */
+map2check_map_malloc((void *)0x3000, 8);
+map2check_map_store_pointer((void *)0x10, (void *)0x3000, 0, "p", 1, "main");
+map2check_check_mem_endprog();                 /* MemsafetyMemcleanup */
 ```
 
 ### SD-15 — Reaching the target records the violation and returns

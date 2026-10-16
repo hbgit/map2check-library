@@ -54,7 +54,7 @@ build with `--features libfuzzer`.
 | `vcc_reset_meta_data` | `void vcc_reset_meta_data(void)` | `vcc_reset_meta_data` | same | Host/test-only: the Map2Check passes never call it. It clears a recorded violation by design, bypassing the first-violation rule (SD-03). |
 | `map2check_set_memcleanup` | `void map2check_set_memcleanup(void)` | `map2check_set_memcleanup` | same | Selects `MEMSAFETY_MEMCLEANUP` instead of `MEMSAFETY_MEMTRACK` for the end-of-program leak (SD-04): an alias of the memcleanup mode for the leak tag, in every mode that checks leaks (SD-14). Kept by `map2check_init()` and `map2check_reset()`. |
 | `map2check_set_null_is_valid` | `void map2check_set_null_is_valid(void)` | `map2check_set_null_is_valid` | same | Makes a NULL load safe (SD-05). Kept by `map2check_init()` and `map2check_reset()`. |
-| `map2check_set_mode` | `void map2check_set_mode(enum AnalysisMode mode)` | — | new | Selects the analysis mode at run time (`AnalysisMode_None` 0, `_Memtrack` 1, `_Memcleanup` 2, `_Overflow` 3, `_Assert` 4, `_Target` 5); develop selects it at link time. Called before `map2check_init()`; kept by `map2check_init()` and `map2check_reset()`. Never called: mode unset, every check active. See “Analysis modes” (SD-14). A value outside 0–5 is undefined behaviour. |
+| `map2check_set_mode` | `void map2check_set_mode(int32_t mode)` | — | new | Selects the analysis mode at run time; `mode` is one of the `enum AnalysisMode` values the header declares (`AnalysisMode_None` 0, `_Memtrack` 1, `_Memcleanup` 2, `_Overflow` 3, `_Assert` 4, `_Target` 5). Develop selects it at link time. Called before `map2check_init()`; kept by `map2check_init()` and `map2check_reset()`. Never called: mode unset, every check active. Any other value is ignored with a diagnostic on stderr and leaves the mode unchanged. See “Analysis modes” (SD-14). |
 | `map2check_reach_target` | `void map2check_reach_target(const char *func, int32_t scope, int32_t line)` | — | new | Replaces the pass symbol `map2check_target_function`. Records `REACHABILITY` (develop `TARGET-REACHED`) at `line` in `func`, in every mode; `scope` is ignored. Does not end the process (SD-15). |
 | `map2check_save_nondet_log_int` | `non_det_log_t *map2check_save_nondet_log_int(int line, int scope, enum var_type_t type_var, int *value, const char *function_name)` | returns `non_det_log_t *` | same | Returned record is not linked into a list (SD-10). |
 | `map2check_save_nondet_log_uint` | `non_det_log_t *map2check_save_nondet_log_uint(int line, int scope, enum var_type_t type_var, unsigned int *value, const char *function_name)` | returns `non_det_log_t *` | same | Returned record is not linked into a list (SD-10). |
@@ -88,7 +88,7 @@ build with `--features libfuzzer`.
 | `map2check_check_free` | `void map2check_check_free(const char *_name, const void *ptr, uint32_t _scope, uint32_t line, const char *function_name)` | `map2check_check_free` | same | `_name` and `_scope` are ignored. Untracked address is a violation (SD-06). Active in unset and memtrack modes only (SD-14). |
 | `map2check_check_free_resolved_address` | `void map2check_check_free_resolved_address(const void *ptr, uint32_t line, const char *function_name, int16_t is_null_valid)` | `analysis_memory.h:46` | same | Semantics in its section; records the release when the check passes, unlike `map2check_check_free`; untracked address is a violation (SD-06); see also SD-13. The check is active in unset and memtrack modes only; when inactive the release is still recorded (SD-14). |
 | `map2check_check_deref` | `void map2check_check_deref(const void *ptr, uint32_t scope, uint32_t line, const char *function_name)` | `map2check_check_deref` | same | Name collides with the pass ABI `map2check_check_deref(i64, ptr)`; see the pass matrix (#21). Active in unset and memtrack modes only (SD-14). |
-| `map2check_check_mem_endprog` | `void map2check_check_mem_endprog(void)` | `map2check_check_mem_endprog` | changed | Leak algorithm rewritten. Runs `analysis_is_program_correct` of the mode: unset and memtrack report memtrack or memcleanup by option, memcleanup mode reports memcleanup, the other modes nothing (SD-04, SD-14). |
+| `map2check_check_mem_endprog` | `void map2check_check_mem_endprog(void)` | `map2check_check_mem_endprog` | changed | Leak algorithm rewritten. Runs `analysis_is_program_correct` of the mode: unset and memtrack report memtrack or memcleanup by option, memcleanup mode reports memcleanup only for a still-referenced last leak, the other modes nothing (SD-04, SD-14). |
 | `LLVMFuzzerTestOneInput` | `int32_t LLVMFuzzerTestOneInput(const uint8_t *data, uintptr_t size)` | `LLVMFuzzerTestOneInput` | same | Feature `libfuzzer`. Resets the analysis state on every iteration (SD-11). |
 | `__VERIFIER_nondet_bool` | `bool __VERIFIER_nondet_bool(void)` | — | new | Feature `libfuzzer`; replaces `map2check_gen_data_fuzzer_*`. |
 | `__VERIFIER_nondet_char` | `int8_t __VERIFIER_nondet_char(void)` | — | new | Feature `libfuzzer`; replaces `map2check_gen_data_fuzzer_*`. |
@@ -169,12 +169,14 @@ per-mode `match` is in `rust/src/analysismode/mode.rs`. Tracking calls
 |---|---|---|---|
 | unset (`map2check_set_mode` never called) | — | all | leak → `MEMSAFETY_MEMTRACK`, or `MEMSAFETY_MEMCLEANUP` with the option |
 | `AnalysisMode_None` (0) | `COVER_BRANCHES_MODE` | none | nothing |
-| `AnalysisMode_Memtrack` (1) | `MEMTRACK_MODE` | load, deref, free, free resolved | leak → `MEMSAFETY_MEMTRACK`, or `MEMSAFETY_MEMCLEANUP` with the option |
-| `AnalysisMode_Memcleanup` (2) | `MEMCLEANUP_MODE` | none (free resolved still records the release) | leak → `MEMSAFETY_MEMCLEANUP` |
+| `AnalysisMode_Memtrack` (1) | `MEMTRACK_MODE` | load, deref, free, free resolved | any live heap block (reachable or not) → `MEMSAFETY_MEMTRACK`, or `MEMSAFETY_MEMCLEANUP` with the option |
+| `AnalysisMode_Memcleanup` (2) | `MEMCLEANUP_MODE` | none (free resolved still records the release) | `MEMSAFETY_MEMCLEANUP` only when the last leaked block is still referenced by a pointer variable, as in develop; an unreachable leak gives no verdict |
 | `AnalysisMode_Overflow` (3) | `OVERFLOW_MODE` | `map2check_binop_*` | nothing |
 | `AnalysisMode_Assert` (4) | `ASSERT_MODE` | `map2check_is_valid_assert` (`ASSERT`) | nothing |
 | `AnalysisMode_Target` (5) | `REACHABILITY_MODE` | none | nothing |
 
+The memcleanup option only changes the tag of the unset/memtrack leak
+verdict; it does not apply the memcleanup-mode reachability rule.
 `map2check_reach_target` and `set_false_result` record in every mode.
 `ViolatedProperty` gained `Assert` (8) and `Unknown` (9), appended after
 `None`; `Reachability` is the target-reached property.

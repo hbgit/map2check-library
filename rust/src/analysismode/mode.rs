@@ -136,12 +136,16 @@ pub fn analysis_is_program_correct(
     match config.mode {
         // Unset: the pre-Task-2.3 leak check, tagged by the option (SD-04).
         None => leak(memtrack_tag),
-        // AnalysisModeMemtrack.c:138-146 — a live allocation is FALSE_MEMTRACK.
+        // AnalysisModeMemtrack.c:138-146 — FALSE_MEMTRACK when
+        // valid_allocation_log returns non-zero, i.e. any heap block is still
+        // live; no reachability rule. `has_memcleanup_error` is that test.
         Some(AnalysisMode::Memtrack) => leak(memtrack_tag),
-        // AnalysisModeMemcleanup.c:138-148 — a live allocation is
-        // FALSE_MEMCLEANUP (develop also asks `is_memcleanup_error`,
-        // ListLog.c:40-65; Rust uses its own leak rule, see SD-14).
-        Some(AnalysisMode::Memcleanup) => leak(ViolatedProperty::MemsafetyMemcleanup),
+        // AnalysisModeMemcleanup.c:138-148 — FALSE_MEMCLEANUP only when the
+        // last leaked address (valid_allocation_log, AllocationLog.c:69-101)
+        // is still referenced by a pointer variable (is_memcleanup_error,
+        // ListLog.c:40-65). An unreachable leak gives no verdict.
+        Some(AnalysisMode::Memcleanup) => memtrack::has_develop_memcleanup_error(&state.memtrack)
+            .then_some(ViolatedProperty::MemsafetyMemcleanup),
         // AnalysisModeNone.c:19 — TRUE.
         Some(AnalysisMode::None) => None,
         // AnalysisModeOverflow.c:283 — TRUE.
@@ -413,7 +417,20 @@ mod tests {
 
     #[test]
     fn program_correct_memcleanup_reports_leak_as_memcleanup() {
-        let s = leaked_state();
+        // Develop reports only a leak still referenced by a pointer
+        // (AnalysisModeMemcleanup.c:138-148, ListLog.c:40-65).
+        assert_eq!(
+            analysis_is_program_correct(
+                config(Some(AnalysisMode::Memcleanup), false),
+                &leaked_state()
+            ),
+            None,
+            "an unreferenced leak is no memcleanup error"
+        );
+        let mut s = leaked_state();
+        s.memtrack.push(MemTrackEntry::new(
+            2, 1, 0, 0x10, 0x1000, false, false, "p", "main", 0, 1, false,
+        ));
         let c = config(Some(AnalysisMode::Memcleanup), false);
         assert_eq!(
             analysis_is_program_correct(c, &s),

@@ -272,21 +272,37 @@ pub extern "C" fn map2check_set_null_is_valid() {
 
 /// Selects the analysis mode, as the frontend of Map2Check `develop` does by
 /// linking one `AnalysisMode*.c` per run (`caller.cpp:575-612`). The
-/// instrumented program calls it before `map2check_init()`. The mode is
-/// configuration: `map2check_init()` and `map2check_reset()` keep it. Until
-/// it is called the mode is unset and every check is active. Per-mode effects
-/// are in `rust/src/analysismode/mode.rs`.
-///
-/// `mode` must be one of the `AnalysisMode` values (0 to 5); any other value
-/// is undefined behaviour, as for any C enum passed to Rust.
+/// instrumented program calls it before `map2check_init()` with one of the
+/// `AnalysisMode` values (`AnalysisMode_None` 0 to `AnalysisMode_Target` 5).
+/// Any other value is ignored with a diagnostic on stderr and leaves the mode
+/// as it was. The mode is configuration: `map2check_init()` and
+/// `map2check_reset()` keep it. Until a valid value is set the mode is unset
+/// and every check is active. Per-mode effects are in
+/// `rust/src/analysismode/mode.rs`.
 #[no_mangle]
-pub extern "C" fn map2check_set_mode(mode: AnalysisMode) {
+pub extern "C" fn map2check_set_mode(mode: i32) {
     ffi_guard(
         || {
+            let Some(mode) = analysis_mode_from_raw(mode) else {
+                eprintln!("[map2check] invalid analysis mode: {mode}");
+                return;
+            };
             state::update_config(|c| c.mode = Some(mode));
         },
         (),
     );
+}
+
+fn analysis_mode_from_raw(raw: i32) -> Option<AnalysisMode> {
+    match raw {
+        0 => Some(AnalysisMode::None),
+        1 => Some(AnalysisMode::Memtrack),
+        2 => Some(AnalysisMode::Memcleanup),
+        3 => Some(AnalysisMode::Overflow),
+        4 => Some(AnalysisMode::Assert),
+        5 => Some(AnalysisMode::Target),
+        _ => None,
+    }
 }
 
 /// Records that the target function was reached, without ending the process.

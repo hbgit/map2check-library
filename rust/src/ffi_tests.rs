@@ -1260,7 +1260,7 @@ const MODES: [AnalysisMode; 6] = [
 /// Starts an analysis in `mode`, as the instrumented program will.
 fn start(mode: AnalysisMode) {
     state::reset();
-    map2check_set_mode(mode);
+    map2check_set_mode(mode as i32);
     map2check_init();
 }
 
@@ -1278,8 +1278,19 @@ fn reports_in(mode: AnalysisMode) -> [ViolatedProperty; 7] {
         &|| unsafe { map2check_binop_add_int(i32::MAX, 1, 1, 0, c"main".as_ptr()) },
         &|| unsafe { map2check_is_valid_assert(1, c"main".as_ptr(), 0) },
         &|| {
-            // SAFETY: fake address is never dereferenced.
-            unsafe { map2check_map_malloc(addr(0x3000), 8) };
+            // A leak still referenced by `p`, so it counts in every leak mode.
+            // SAFETY: fake addresses are never dereferenced.
+            unsafe {
+                map2check_map_malloc(addr(0x3000), 8);
+                map2check_map_store_pointer(
+                    addr(0x10),
+                    addr(0x3000),
+                    0,
+                    c"p".as_ptr(),
+                    1,
+                    c"main".as_ptr(),
+                );
+            }
             map2check_check_mem_endprog();
         },
     ];
@@ -1296,7 +1307,7 @@ use ViolatedProperty as P;
 #[test]
 fn mode_none_never_reports_memory_errors() {
     let _guard = fresh();
-    map2check_set_mode(AnalysisMode::None);
+    map2check_set_mode(AnalysisMode::None as i32);
     map2check_init();
     // SAFETY: C-string literal is valid; fake address is never dereferenced.
     unsafe { map2check_check_deref(addr(0xdead), 0, 1, c"main".as_ptr()) };
@@ -1306,7 +1317,7 @@ fn mode_none_never_reports_memory_errors() {
 #[test]
 fn mode_memtrack_reports_invalid_deref() {
     let _guard = fresh();
-    map2check_set_mode(AnalysisMode::Memtrack);
+    map2check_set_mode(AnalysisMode::Memtrack as i32);
     map2check_init();
     // SAFETY: C-string literal is valid; fake address is never dereferenced.
     unsafe { map2check_check_deref(addr(0xdead), 0, 1, c"main".as_ptr()) };
@@ -1380,8 +1391,19 @@ fn unset_mode_keeps_every_check_active() {
         &|| unsafe { map2check_binop_add_int(i32::MAX, 1, 1, 0, c"main".as_ptr()) },
         &|| unsafe { map2check_is_valid_assert(1, c"main".as_ptr(), 0) },
         &|| {
-            // SAFETY: fake address is never dereferenced.
-            unsafe { map2check_map_malloc(addr(0x3000), 8) };
+            // A leak still referenced by `p`, so it counts in every leak mode.
+            // SAFETY: fake addresses are never dereferenced.
+            unsafe {
+                map2check_map_malloc(addr(0x3000), 8);
+                map2check_map_store_pointer(
+                    addr(0x10),
+                    addr(0x3000),
+                    0,
+                    c"p".as_ptr(),
+                    1,
+                    c"main".as_ptr(),
+                );
+            }
             map2check_check_mem_endprog();
         },
     ];
@@ -1436,7 +1458,7 @@ fn memcleanup_mode_records_release_on_resolved_free() {
 fn set_mode_is_configuration_kept_by_init_and_reset() {
     let _guard = fresh();
     for mode in MODES {
-        map2check_set_mode(mode);
+        map2check_set_mode(mode as i32);
         map2check_init();
         assert_eq!(state::config().mode, Some(mode));
         map2check_reset();
@@ -1447,7 +1469,7 @@ fn set_mode_is_configuration_kept_by_init_and_reset() {
 #[test]
 fn reset_keeps_selected_mode() {
     let _guard = fresh();
-    map2check_set_mode(AnalysisMode::Overflow);
+    map2check_set_mode(AnalysisMode::Overflow as i32);
     map2check_init();
     map2check_reset();
     assert_eq!(state::config().mode, Some(AnalysisMode::Overflow));
@@ -1456,7 +1478,7 @@ fn reset_keeps_selected_mode() {
 #[test]
 fn reach_target_sets_target_reached() {
     let _guard = fresh();
-    map2check_set_mode(AnalysisMode::Target);
+    map2check_set_mode(AnalysisMode::Target as i32);
     map2check_init();
     // SAFETY: C-string literal is valid and null-terminated.
     unsafe { mark_target_reached(c"reach_error".as_ptr(), 0, 12) };
@@ -1511,4 +1533,159 @@ fn set_false_result_accepts_the_appended_properties() {
     // SAFETY: as above.
     unsafe { set_false_result(9, 0, c"main".as_ptr()) };
     assert_violated(ViolatedProperty::Unknown, 0, "main");
+}
+
+// ── I-1: map2check_set_mode validates its raw value ────────────────────────
+
+#[test]
+fn set_mode_accepts_a_valid_raw_value() {
+    let _guard = fresh();
+    map2check_set_mode(2);
+    assert_eq!(state::config().mode, Some(AnalysisMode::Memcleanup));
+}
+
+#[test]
+fn set_mode_ignores_out_of_range_values() {
+    let _guard = fresh();
+    map2check_set_mode(AnalysisMode::Overflow as i32);
+    for raw in [-1, 6, i32::MAX] {
+        map2check_set_mode(raw);
+        assert_eq!(
+            state::config().mode,
+            Some(AnalysisMode::Overflow),
+            "raw {raw}"
+        );
+    }
+}
+
+#[test]
+fn set_mode_out_of_range_before_any_mode_keeps_it_unset() {
+    let _guard = fresh();
+    map2check_set_mode(-1);
+    assert_eq!(state::config().mode, None);
+}
+
+// ── I-2: memcleanup mode follows develop's last-leak + reference rule ──────
+
+/// Stores `value` into the pointer variable at `var` (`var = value;`).
+fn store(var: usize, value: usize) {
+    // SAFETY: C-string literals are valid; fake addresses are never dereferenced.
+    unsafe {
+        map2check_map_store_pointer(
+            addr(var),
+            addr(value),
+            0,
+            c"p".as_ptr(),
+            1,
+            c"main".as_ptr(),
+        )
+    };
+}
+
+fn malloc_at(a: usize) {
+    // SAFETY: fake address is never dereferenced.
+    unsafe { map2check_map_malloc(addr(a), 8) };
+}
+
+fn memcleanup_endprog() -> ViolatedProperty {
+    map2check_check_mem_endprog();
+    snapshot(|s| s.result.property)
+}
+
+#[test]
+fn memcleanup_mode_leak_still_pointed_to_is_memcleanup() {
+    let _guard = fresh();
+    start(AnalysisMode::Memcleanup);
+    malloc_at(0x3000);
+    store(0x10, 0x3000);
+    map2check_check_mem_endprog();
+    assert_violated(P::MemsafetyMemcleanup, 0, "end_of_program");
+}
+
+#[test]
+fn memcleanup_mode_leak_whose_pointer_was_overwritten_has_no_verdict() {
+    let _guard = fresh();
+    start(AnalysisMode::Memcleanup);
+    malloc_at(0x3000);
+    store(0x10, 0x3000);
+    store(0x10, 0);
+    assert_eq!(memcleanup_endprog(), P::None);
+}
+
+#[test]
+fn memcleanup_mode_leak_never_stored_has_no_verdict() {
+    let _guard = fresh();
+    start(AnalysisMode::Memcleanup);
+    malloc_at(0x3000);
+    assert_eq!(memcleanup_endprog(), P::None);
+}
+
+#[test]
+fn memcleanup_mode_checks_only_the_last_leak() {
+    // valid_allocation_log returns the last leaked address only
+    // (AllocationLog.c:69-101): the referenced earlier leak is not checked.
+    let _guard = fresh();
+    start(AnalysisMode::Memcleanup);
+    malloc_at(0x3000);
+    malloc_at(0x4000);
+    store(0x10, 0x3000);
+    assert_eq!(memcleanup_endprog(), P::None);
+
+    start(AnalysisMode::Memcleanup);
+    malloc_at(0x3000);
+    malloc_at(0x4000);
+    store(0x10, 0x4000);
+    assert_eq!(memcleanup_endprog(), P::MemsafetyMemcleanup);
+}
+
+#[test]
+fn memcleanup_mode_another_pointer_keeps_the_leak_reachable() {
+    let _guard = fresh();
+    start(AnalysisMode::Memcleanup);
+    malloc_at(0x3000);
+    store(0x10, 0x3000);
+    store(0x20, 0x3000);
+    store(0x10, 0);
+    assert_eq!(memcleanup_endprog(), P::MemsafetyMemcleanup);
+}
+
+#[test]
+fn memcleanup_mode_freed_block_is_no_leak() {
+    let _guard = fresh();
+    start(AnalysisMode::Memcleanup);
+    malloc_at(0x3000);
+    store(0x10, 0x3000);
+    // SAFETY: C-string literals are valid; fake address is never dereferenced.
+    unsafe { map2check_map_free(c"p".as_ptr(), addr(0x3000), 0, 2, c"main".as_ptr()) };
+    assert_eq!(memcleanup_endprog(), P::None);
+}
+
+#[test]
+fn memcleanup_mode_free_of_an_old_target_re_points_the_variable_as_develop() {
+    // update_reference_list_log (AnalysisModeMemcleanup.c:181-240) appends a
+    // FREE copy of `p = A` when A is freed, so `p` reads as pointing to A
+    // again and B (the last leak) is no longer referenced by it.
+    let _guard = fresh();
+    start(AnalysisMode::Memcleanup);
+    malloc_at(0x3000);
+    malloc_at(0x4000);
+    store(0x10, 0x3000);
+    store(0x10, 0x4000);
+    // SAFETY: C-string literal is valid; fake address is never dereferenced.
+    unsafe { map2check_check_free_resolved_address(addr(0x3000), 3, c"main".as_ptr(), 0) };
+    assert_eq!(memcleanup_endprog(), P::None);
+}
+
+#[test]
+fn memtrack_mode_reports_any_leak_reachable_or_not() {
+    // AnalysisModeMemtrack.c:138-146: any address from valid_allocation_log.
+    let _guard = fresh();
+    start(AnalysisMode::Memtrack);
+    malloc_at(0x3000);
+    assert_eq!(memcleanup_endprog(), P::MemsafetyMemtrack);
+    start(AnalysisMode::Memtrack);
+    malloc_at(0x3000);
+    store(0x10, 0x3000);
+    store(0x10, 0);
+    assert_eq!(memcleanup_endprog(), P::MemsafetyMemtrack);
 }

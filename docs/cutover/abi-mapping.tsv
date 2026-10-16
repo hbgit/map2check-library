@@ -1,5 +1,5 @@
 c_symbol	core_symbol	owner_task	notes
-map2check_init	map2check_set_mode+map2check_init	2.3	C: (i32 isSvComp) → núcleo: set_mode(AnalysisMode)+init(void) (Task 2.3; o modo vinha do .bc ligado, caller.cpp:575-612); o arg int isSvComp é morto: Map2CheckFunctions.c:35 grava sv_comp e nenhum arquivo o lê
+map2check_init	map2check_set_mode+map2check_init	2.3	C: (i32 isSvComp) → núcleo: set_mode(int32_t, valores de enum AnalysisMode 0-5; outro valor é ignorado)+init(void) (Task 2.3; o modo vinha do .bc ligado, caller.cpp:575-612); o arg int isSvComp é morto: Map2CheckFunctions.c:35 grava sv_comp e nenhum arquivo o lê
 map2check_success	map2check_success	-	C: () → núcleo: () (LibraryFunctions.hpp:48)
 map2check_track_bb	map2check_save_basic_block_log	-	C: (i32 line,ptr fn) → núcleo: (line:i32,fn); mesma ordem (LibraryFunctions.hpp:54, ffi.rs:111); retorno do núcleo é bbtrack_log_t*, ignorado
 map2check_target_function	map2check_reach_target	2.3	C: (ptr fn,i32 scope,i32 line) (TargetPass.cpp:89); C runtime grava TARGET_REACHED e aborta (Map2CheckFunctions.c:61-65); núcleo: map2check_reach_target(const char*,i32,i32) (Task 2.3) registra Reachability (=TARGET-REACHED) em qualquer modo, ignora scope e retorna; C encerra na primeira violação; núcleo registra e continua (SD-03/#36, SD-15); término do processo é a Task 2.4

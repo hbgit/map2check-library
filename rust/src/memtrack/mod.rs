@@ -152,6 +152,186 @@ pub fn has_memcleanup_error(entries: &[MemTrackEntry]) -> bool {
     })
 }
 
+// ── develop's memcleanup verdict ─────────────────────────────────────────────
+//
+// Memcleanup mode of the Map2Check `develop` C runtime decides the
+// end-of-program verdict on two logs that this crate does not keep: the
+// allocation log (one row per heap address, updated in place) and the list
+// log (pointer-variable rows). `DevelopLogs::replay` rebuilds both from the
+// memtrack entries, in order, with the same rules as
+// `AnalysisModeMemcleanup.c`, so the verdict can be computed exactly.
+
+/// `enum MemoryAddressStatus` (`Map2CheckTypes.h:34`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum AddressStatus {
+    Static,
+    Free,
+    Dynamic,
+}
+
+/// A list-log row: `memory_address`, `memory_address_points_to` and the
+/// status that `get_type_from_list_log_row` reads (`ListLog.c:159-168`).
+#[derive(Debug, Clone, Copy)]
+struct ListRow {
+    var: usize,
+    points_to: usize,
+    status: AddressStatus,
+}
+
+#[derive(Debug, Default)]
+struct DevelopLogs {
+    /// `(addr, is_free)`, one row per address in first-allocation order.
+    allocation: Vec<(usize, bool)>,
+    list: Vec<ListRow>,
+}
+
+impl DevelopLogs {
+    fn replay(entries: &[MemTrackEntry]) -> Self {
+        let mut logs = Self::default();
+        for e in entries {
+            if e.is_dynamic && !e.is_free {
+                logs.malloc(e.points_to);
+            } else if e.is_free {
+                logs.free(e.points_to);
+            } else if e.size_destiny == 0 {
+                logs.store_pointer(e.var_addr, e.points_to);
+            }
+            // Stack slots and function addresses go to develop's heap log,
+            // which the verdict does not read.
+        }
+        logs
+    }
+
+    /// `map2check_malloc` (`AnalysisModeMemcleanup.c:295-313`): updates the
+    /// row of the address in place or appends one. A NULL result ends the
+    /// develop run with UNKNOWN (`:297-300`), so it adds no row here.
+    fn malloc(&mut self, addr: usize) {
+        if addr == 0 {
+            return;
+        }
+        match self.allocation.iter_mut().rev().find(|(a, _)| *a == addr) {
+            Some(row) => row.1 = false,
+            None => self.allocation.push((addr, false)),
+        }
+    }
+
+    /// The free paths, `map2check_free` (`:329-356`) and
+    /// `map2check_free_resolved_address` (`:160-179`): mark the row free and
+    /// run `update_reference_list_log(addr, FREE)`. `map2check_free` also
+    /// appends a FREE row for the pointer variable (`:336-341`); the Rust free
+    /// record carries only the heap address, so that row is not rebuilt.
+    fn free(&mut self, addr: usize) {
+        if addr == 0 {
+            return;
+        }
+        if let Some(row) = self.allocation.iter_mut().rev().find(|(a, _)| *a == addr) {
+            row.1 = true;
+        }
+        self.update_reference(addr, AddressStatus::Free);
+    }
+
+    /// `check_address_allocation_log` (`AllocationLog.c:34-51`).
+    fn status_of(&self, addr: usize) -> AddressStatus {
+        match self.allocation.iter().rev().find(|(a, _)| *a == addr) {
+            Some((_, true)) => AddressStatus::Free,
+            Some((_, false)) => AddressStatus::Dynamic,
+            None => AddressStatus::Static,
+        }
+    }
+
+    /// `map2check_add_store_pointer` (`AnalysisModeMemcleanup.c:242-291`).
+    fn store_pointer(&mut self, var: usize, value: usize) {
+        let status = self.status_of(value);
+        let redundant = self
+            .list
+            .iter()
+            .rev()
+            .find(|r| r.var == var)
+            .is_some_and(|r| r.points_to == value && r.status == status);
+        if !redundant {
+            self.list.push(ListRow {
+                var,
+                points_to: value,
+                status,
+            });
+            self.update_reference(value, status);
+        }
+    }
+
+    /// `update_reference_list_log` (`AnalysisModeMemcleanup.c:181-240`): for
+    /// each row that points to `address` with another status, the newest row
+    /// of the same variable that points to `address` gets a copy with the new
+    /// status appended. Rows appended here are not revisited.
+    fn update_reference(&mut self, address: usize, status: AddressStatus) {
+        let current_size = self.list.len();
+        for i in 0..current_size {
+            let i_row = self.list[i];
+            if i_row.points_to != address || i_row.status == status {
+                continue;
+            }
+            if let Some(j_row) = self.list[i..current_size]
+                .iter()
+                .rev()
+                .find(|r| r.points_to == address && r.var == i_row.var)
+                .copied()
+            {
+                if j_row.status != status {
+                    self.list.push(ListRow { status, ..j_row });
+                }
+            }
+        }
+    }
+
+    /// `valid_allocation_log` (`AllocationLog.c:69-101`): the LAST address,
+    /// in allocation-log order, that is not free. Rows are unique per
+    /// address, so "no later freed row" reduces to the row's own flag.
+    fn last_leaked_address(&self) -> Option<usize> {
+        self.allocation
+            .iter()
+            .filter(|(_, is_free)| !is_free)
+            .map(|(addr, _)| *addr)
+            .next_back()
+    }
+
+    /// `is_memcleanup_error` (`ListLog.c:40-65`).
+    fn is_memcleanup_error(&self, address: usize) -> bool {
+        let list = &self.list;
+        (0..list.len()).rev().any(|i| {
+            if list[i].points_to != address {
+                return false;
+            }
+            let pointer = list[i].var;
+            list[i + 1..]
+                .iter()
+                .rev()
+                .find(|r| r.var == pointer)
+                .is_none_or(|r| r.points_to == address)
+        })
+    }
+}
+
+/// The address `valid_allocation_log` of the Map2Check `develop` C runtime
+/// returns for these entries: the last leaked heap address, or `None`.
+pub fn last_leaked_address(entries: &[MemTrackEntry]) -> Option<usize> {
+    DevelopLogs::replay(entries).last_leaked_address()
+}
+
+/// `is_memcleanup_error(address, &list_log)` of the Map2Check `develop` C
+/// runtime over these entries: some pointer variable's latest stored value
+/// still points to `address`.
+pub fn is_memcleanup_error(entries: &[MemTrackEntry], address: usize) -> bool {
+    DevelopLogs::replay(entries).is_memcleanup_error(address)
+}
+
+/// The memcleanup-mode verdict of the Map2Check `develop` C runtime
+/// (`AnalysisModeMemcleanup.c:138-148`): the last leaked address is still
+/// referenced by a pointer variable.
+pub fn has_develop_memcleanup_error(entries: &[MemTrackEntry]) -> bool {
+    let logs = DevelopLogs::replay(entries);
+    logs.last_leaked_address()
+        .is_some_and(|addr| logs.is_memcleanup_error(addr))
+}
+
 /// Checks whether the `size` bytes at `address` lie outside every valid block.
 /// Replaces `is_a_invalid_address_in_cntr`.
 ///
@@ -198,6 +378,81 @@ pub fn find_by_address(entries: &[MemTrackEntry], address: usize) -> Option<&Mem
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // ── develop's memcleanup rule (AllocationLog.c:69-101, ListLog.c:40-65) ──
+
+    fn alloc(a: usize) -> MemTrackEntry {
+        make_entry(a, a, true, false, 8)
+    }
+
+    fn free(a: usize) -> MemTrackEntry {
+        let mut e = make_entry(a, a, false, false, 0);
+        e.set_free();
+        e
+    }
+
+    fn store(var: usize, value: usize) -> MemTrackEntry {
+        MemTrackEntry::new(1, 1, 0, var, value, false, false, "p", "main", 0, 1, false)
+    }
+
+    #[test]
+    fn last_leaked_address_is_the_last_live_block_in_allocation_order() {
+        assert_eq!(last_leaked_address(&[]), None);
+        assert_eq!(last_leaked_address(&[alloc(0xA0), free(0xA0)]), None);
+        assert_eq!(last_leaked_address(&[alloc(0xA0), alloc(0xB0)]), Some(0xB0));
+        assert_eq!(
+            last_leaked_address(&[alloc(0xA0), alloc(0xB0), free(0xB0)]),
+            Some(0xA0)
+        );
+        // develop updates the row of a reused address in place, so the order
+        // is that of the first allocation of each address.
+        assert_eq!(
+            last_leaked_address(&[alloc(0xA0), alloc(0xB0), free(0xA0), alloc(0xA0)]),
+            Some(0xB0)
+        );
+        // Pointer stores and stack slots are not allocations.
+        assert_eq!(last_leaked_address(&[store(0x10, 0xA0)]), None);
+    }
+
+    #[test]
+    fn memcleanup_error_needs_a_pointer_whose_latest_value_is_the_block() {
+        let e = [alloc(0xA0), store(0x10, 0xA0)];
+        assert!(is_memcleanup_error(&e, 0xA0));
+        let e = [alloc(0xA0), store(0x10, 0xA0), store(0x10, 0xB0)];
+        assert!(!is_memcleanup_error(&e, 0xA0));
+        let e = [alloc(0xA0)];
+        assert!(!is_memcleanup_error(&e, 0xA0));
+        let e = [
+            alloc(0xA0),
+            store(0x10, 0xA0),
+            store(0x20, 0xA0),
+            store(0x10, 0),
+        ];
+        assert!(is_memcleanup_error(&e, 0xA0));
+    }
+
+    #[test]
+    fn memcleanup_redundant_store_is_not_logged_again() {
+        // add_store_pointer skips a store equal to the variable's latest row
+        // (AnalysisModeMemcleanup.c:272-283); the verdict is unchanged.
+        let e = [alloc(0xA0), store(0x10, 0xA0), store(0x10, 0xA0)];
+        assert!(is_memcleanup_error(&e, 0xA0));
+    }
+
+    #[test]
+    fn memcleanup_free_re_points_variables_as_update_reference_list_log() {
+        // AnalysisModeMemcleanup.c:181-240: freeing A appends a FREE copy of
+        // the latest `p = A` row, which makes `p` point to A again.
+        let e = [
+            alloc(0xA0),
+            alloc(0xB0),
+            store(0x10, 0xA0),
+            store(0x10, 0xB0),
+            free(0xA0),
+        ];
+        assert!(!is_memcleanup_error(&e, 0xB0));
+        assert!(is_memcleanup_error(&e[..4], 0xB0));
+    }
 
     fn make_entry(
         var_addr: usize,

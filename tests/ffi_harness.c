@@ -382,6 +382,32 @@ static int test_analysis_modes(void) {
     if (get_current_property() != Reachability) {
         return 4;
     }
+
+    /* Out-of-range values are ignored: the mode stays Target (I-1). */
+    map2check_set_mode(-1);
+    map2check_set_mode(6);
+    map2check_set_mode(2147483647);
+    map2check_init();
+    map2check_check_deref((void *)0xdead, 0, 1, "main");
+    if (get_current_property() != None) {
+        return 5;
+    }
+
+    /* Memcleanup mode: only a leak still referenced by a pointer (I-2). */
+    map2check_set_mode(AnalysisMode_Memcleanup);
+    map2check_init();
+    map2check_map_malloc((void *)0x3000, 8);
+    map2check_check_mem_endprog();
+    if (get_current_property() != None) {
+        return 6;
+    }
+    map2check_init();
+    map2check_map_malloc((void *)0x3000, 8);
+    map2check_map_store_pointer((void *)0x10, (void *)0x3000, 0, "p", 1, "main");
+    map2check_check_mem_endprog();
+    if (get_current_property() != MemsafetyMemcleanup) {
+        return 7;
+    }
     map2check_reset();
     return 0;
 }

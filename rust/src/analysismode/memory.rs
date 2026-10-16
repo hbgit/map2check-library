@@ -122,33 +122,6 @@ impl VccChecker for DerefChecker {
     }
 }
 
-// ── End-of-program memory cleanup check ──────────────────────────────────────
-
-/// Checks for memory leaks at end of program.
-/// Replaces `map2check_check_mem_endprog`.
-pub struct MemCleanupChecker {
-    /// `true` reports `MemsafetyMemcleanup`, `false` `MemsafetyMemtrack`.
-    pub memcleanup: bool,
-}
-
-impl VccChecker for MemCleanupChecker {
-    fn check(&self, _ctx: &VccContext) -> Result<VccOutcome, Map2CheckError> {
-        state::with_state(|s| {
-            if memtrack::has_memcleanup_error(&s.memtrack) {
-                Ok(VccOutcome::Violated {
-                    property: if self.memcleanup {
-                        ViolatedProperty::MemsafetyMemcleanup
-                    } else {
-                        ViolatedProperty::MemsafetyMemtrack
-                    },
-                })
-            } else {
-                Ok(VccOutcome::Safe)
-            }
-        })
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -337,32 +310,6 @@ mod tests {
         assert_eq!(
             DerefChecker { address: 0x5555 }.check(&ctx()).unwrap(),
             violated(ViolatedProperty::MemsafetyDeref)
-        );
-    }
-
-    #[test]
-    fn mem_cleanup_flags_leaked_allocation() {
-        let _g = with_entries(vec![stack(0x30), heap(0x10, 0x1000, 16, false)]);
-        assert_eq!(
-            MemCleanupChecker { memcleanup: true }
-                .check(&ctx())
-                .unwrap(),
-            violated(ViolatedProperty::MemsafetyMemcleanup)
-        );
-    }
-
-    #[test]
-    fn mem_cleanup_accepts_freed_allocation_and_stack_vars() {
-        let _g = with_entries(vec![
-            stack(0x30),
-            heap(0x10, 0x1000, 16, false),
-            heap(0x10, 0x1000, 16, true),
-        ]);
-        assert_eq!(
-            MemCleanupChecker { memcleanup: true }
-                .check(&ctx())
-                .unwrap(),
-            VccOutcome::Safe
         );
     }
 }
