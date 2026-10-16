@@ -2,7 +2,16 @@
 #![deny(unsafe_code)]
 
 use serde::Serialize;
-use std::collections::HashSet;
+use std::collections::{hash_map::DefaultHasher, HashSet};
+use std::hash::BuildHasherDefault;
+
+/// A `HashSet` with fixed SipHash keys instead of `RandomState`.
+///
+/// `RandomState::new()` seeds itself from the OS (`getrandom`, reached
+/// through a weak symbol), which under KLEE is an invalid function pointer
+/// and kills the path (D1 route A'). These sets only answer membership
+/// questions, so the hash seed changes nothing in their results.
+pub(crate) type FixedHashSet<T> = HashSet<T, BuildHasherDefault<DefaultHasher>>;
 
 /// Single memory tracking record — analogous to `memtrack_log_t` in C.
 /// Addresses are `usize` (platform pointer width) instead of `long`.
@@ -157,7 +166,9 @@ pub fn is_invalid_free_resolved(entries: &[MemTrackEntry], address: usize) -> bo
         .iter()
         .rev()
         .find(|e| (e.is_dynamic || e.is_free) && e.points_to == address)
-        .is_none_or(|e| e.is_free)
+        // `map_or(true, ..)`, not `is_none_or`: the KLEE runtime builds this
+        // file with rustc 1.72 (D1 condition 5).
+        .map_or(true, |e| e.is_free)
 }
 
 /// Checks whether dereferencing `address` is invalid (not allocated or already freed).
@@ -177,7 +188,7 @@ pub fn is_deref_error(entries: &[MemTrackEntry], address: usize) -> bool {
 /// Checks whether there is a memory cleanup error (leaked allocation still referenced).
 /// Replaces `has_a_memcleanup_error_in_cntr`.
 pub fn has_memcleanup_error(entries: &[MemTrackEntry]) -> bool {
-    let mut resolved = HashSet::new();
+    let mut resolved = FixedHashSet::default();
     entries.iter().rev().any(|entry| {
         if !entry.is_dynamic && !entry.is_free {
             return false;
@@ -355,7 +366,7 @@ impl DevelopLogs {
                 .iter()
                 .rev()
                 .find(|r| r.var == pointer)
-                .is_none_or(|r| r.points_to == address)
+                .map_or(true, |r| r.points_to == address)
         })
     }
 }
@@ -409,7 +420,7 @@ pub fn is_invalid_address(entries: &[MemTrackEntry], address: usize, size: usize
                 .checked_add(entry.size_destiny)
                 .is_some_and(|allocation_end| address_end <= allocation_end)
     };
-    let mut decided = HashSet::new();
+    let mut decided = FixedHashSet::default();
     !entries.iter().rev().any(|entry| {
         if entry.is_dynamic || entry.is_free {
             decided.insert(entry.points_to) && !entry.is_free && covers(entry)

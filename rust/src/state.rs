@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #![deny(unsafe_code)]
 
-use std::sync::{LazyLock, Mutex};
+use std::sync::{Mutex, OnceLock};
 
 use crate::{
     analysismode::mode::AnalysisMode,
@@ -12,8 +12,9 @@ use crate::{
     nondet::NonDetEntry,
 };
 
-static ANALYSIS_STATE: LazyLock<Mutex<AnalysisState>> =
-    LazyLock::new(|| Mutex::new(AnalysisState::default()));
+// `OnceLock` and not `LazyLock`: the KLEE runtime compiles this file with
+// rustc 1.72 (D1 condition 5, klee/Cargo.toml), where `LazyLock` is unstable.
+static ANALYSIS_STATE: OnceLock<Mutex<AnalysisState>> = OnceLock::new();
 
 static CONFIG: Mutex<Config> = Mutex::new(Config::new());
 
@@ -121,7 +122,7 @@ impl AnalysisState {
 }
 
 fn ensure_state() -> &'static Mutex<AnalysisState> {
-    &ANALYSIS_STATE
+    ANALYSIS_STATE.get_or_init(|| Mutex::new(AnalysisState::default()))
 }
 
 /// Starts a fresh analysis: forces the singleton into existence and runs the
@@ -147,6 +148,10 @@ fn with_state_recovering(f: impl FnOnce(&mut AnalysisState)) {
         Err(poisoned) => {
             let mut guard = poisoned.into_inner();
             f(&mut guard);
+            // `Mutex::clear_poison` is unstable in rustc 1.72, which builds
+            // the KLEE runtime. That build has `panic = "abort"`, so no
+            // caught panic can poison the lock there (D1, "Custo do pin").
+            #[cfg(not(feature = "klee"))]
             state.clear_poison();
         }
     }

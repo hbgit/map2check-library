@@ -161,7 +161,7 @@ pub fn write_checked_error(dir: &Path) -> io::Result<()> {
 /// `map2check_track_bb` keeps only the first block of each line
 /// (`Map2CheckFunctions.c:49-55`), so later rows of a line are skipped.
 pub fn write_trackbb_log(dir: &Path, rows: &[BasicBlockEntry]) -> io::Result<()> {
-    let mut seen = std::collections::HashSet::new();
+    let mut seen = crate::memtrack::FixedHashSet::default();
     let mut out = String::new();
     for row in rows.iter().filter(|r| seen.insert(r.line)) {
         let _ = writeln!(out, "{};{}", row.line, row.function_name);
