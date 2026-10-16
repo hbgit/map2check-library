@@ -12,12 +12,16 @@ with "unimplemented intrinsic". Each declaration found is renamed to an
 internal function with the same signature and semantics, written with
 extractelement/insertelement and scalar arithmetic, which KLEE supports.
 
-Any other `llvm.vector.*` or `llvm.x86.*` declaration is an error: a new
-rustc brought one this script does not know, and it must be added here.
+After the rewrite, every intrinsic still declared must be one KLEE 3.1
+executes (KLEE_31_INTRINSICS below); any other one is an error, because
+under KLEE it would kill a path silently ("unimplemented intrinsic") and a
+killed path can hide a violation. A new rustc or std that brings one must
+add a scalar version here, or prove KLEE runs it.
 
-`llvm.bitreverse.*` (miniz_oxide, which only std's backtrace printing
-reaches) is left alone: KLEE warns "unsupported intrinsic" at load, and its
-own --optimize would fold a scalar version back into the intrinsic anyway.
+Why a rewrite and not `opt-16 -enable-new-pm=0 -expand-reductions`: that
+pass only covers the reduce family (pmulhu.w and pause would still need
+this script) and lives in the legacy pass manager LLVM is removing, so one
+mechanism, checked by `lli-16` on tests/klee/lower-intrinsics.ll, is kept.
 
 Usage: klee-lower-intrinsics.py <in.ll> <out.ll>"""
 import re
@@ -31,7 +35,45 @@ REDUCE = re.compile(
 )
 PMULHU = re.compile(r"^declare\s+<8 x i16>\s+@(?P<name>llvm\.x86\.sse2\.pmulhu\.w)\([^\n]*$", re.M)
 PAUSE = re.compile(r"^declare\s+void\s+@(?P<name>llvm\.x86\.sse2\.pause)\(\)[^\n]*$", re.M)
-LEFTOVER = re.compile(r"^declare[^\n]*@(llvm\.(?:vector|x86)\.[\w.]+)", re.M)
+DECLARED = re.compile(r"^declare[^\n]*?@(llvm\.[\w.]+)\(", re.M)
+
+# Intrinsics KLEE 3.1 executes: the `case Intrinsic::` labels of
+# lib/Core/Executor.cpp (executeCall) and lib/Module/IntrinsicCleaner.cpp
+# (lowered before execution) at tag v3.1, `_` written as `.`. A declared
+# intrinsic matches when its name is one of these or one of these followed
+# by `.<type suffix>`.
+KLEE_31_INTRINSICS = """
+abs addressofreturnaddress annotation assume bswap ceil copysign cos ctlz
+ctpop cttz dbg.declare dbg.label dbg.value eh.typeid.for exp exp2 expect
+experimental.noalias.scope.decl fabs floor flt.rounds fma fmuladd
+frameaddress fshl fshr get.dynamic.area.offset get.rounding invariant.end
+invariant.start is.constant lifetime.end lifetime.start log log10 log2
+memcpy memmove memset objectsize pcmarker pow prefetch ptr.annotation
+readcyclecounter returnaddress round roundeven sadd.sat sadd.with.overflow
+sin smax smin smul.with.overflow sqrt ssub.sat ssub.with.overflow
+stackrestore stacksave trap trunc uadd.sat uadd.with.overflow umax umin
+umul.with.overflow usub.sat usub.with.overflow vacopy vaend var.annotation
+vastart
+""".split()
+
+# Declared but accepted although KLEE 3.1 cannot run them, each with why it
+# is never executed by the runtime.
+ACCEPTED = {
+    # miniz_oxide, reached only by std's backtrace printing, which
+    # panic = "abort" never runs. KLEE warns "unsupported intrinsic" at
+    # load; KLEE's --optimize folds any scalar version back into it.
+    "bitreverse": "backtrace symbolisation only",
+}
+
+
+def unsupported(names):
+    allowed = KLEE_31_INTRINSICS + list(ACCEPTED)
+    bad = []
+    for name in names:
+        base = name[len("llvm."):]
+        if not any(base == a or base.startswith(a + ".") for a in allowed):
+            bad.append(name)
+    return sorted(set(bad))
 
 
 def new_name(name):
@@ -104,9 +146,12 @@ def main():
     for name in renamed:
         ir = re.sub(r"@" + re.escape(name) + r"(?![\w.])", "@" + new_name(name), ir)
 
-    leftover = sorted(set(LEFTOVER.findall(ir)))
-    if leftover:
-        sys.exit("klee-lower-intrinsics: no scalar version of: " + ", ".join(leftover))
+    bad = unsupported(DECLARED.findall(ir))
+    if bad:
+        sys.exit(
+            "klee-lower-intrinsics: KLEE 3.1 cannot execute, and there is no "
+            "scalar version of: " + ", ".join(bad)
+        )
 
     with open(sys.argv[2], "w") as f:
         f.write(ir)

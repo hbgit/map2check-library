@@ -72,13 +72,18 @@ fail() {
 KLEE_FLAGS=(--external-calls=all --optimize --use-cex-cache
   --solver-backend=z3 --libc=uclibc --max-time=300s)
 
-echo "== scripts/klee-lower-intrinsics.py keeps the intrinsics' semantics"
-python3 -I "$ROOT/scripts/klee-lower-intrinsics.py" "$T/lower-intrinsics.ll" "$W/lowered.ll" >/dev/null
-if [ "$(lli-16 "$T/lower-intrinsics.ll")" = "$(lli-16 "$W/lowered.ll")" ] &&
-  ! grep -q '@llvm\.\(vector\|x86\)' "$W/lowered.ll"; then
-  pass "lower-intrinsics.ll: same output from the intrinsics and their scalar versions"
+# The lowering's self-tests (lli-16 equivalence on tests/klee/
+# lower-intrinsics.ll, rejection of tests/klee/unknown-intrinsic.ll) run
+# inside scripts/build-klee-runtime.sh, so the CI build runs them too.
+echo "== a failing build leaves no bitcode"
+touch "$W/broken.bc"
+if LLI=false CARGO_TARGET_DIR="$ROOT/target/klee-docker" \
+  "$ROOT/scripts/build-klee-runtime.sh" "$W/broken.bc" >"$W/broken.log" 2>&1; then
+  fail "build-klee-runtime.sh succeeded with a broken lli"
+elif [ -e "$W/broken.bc" ]; then
+  fail "build-klee-runtime.sh failed but left $W/broken.bc"
 else
-  fail "lower-intrinsics.ll: the scalar versions differ from the intrinsics"
+  pass "build-klee-runtime.sh fails on a broken lowering self-test and leaves no .bc"
 fi
 
 echo "== building the KLEE runtime"

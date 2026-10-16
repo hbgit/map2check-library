@@ -14,11 +14,12 @@
 #
 # Environment:
 #   KLEE_RUSTC_TOOLCHAIN  rustup toolchain (default 1.72.1)
-#   OPT, LLVM_DIS, LLVM_NM, LLVM_AS  LLVM 16 tools (default opt-16,
-#                         llvm-dis-16, llvm-nm-16, llvm-as-16)
+#   OPT, LLVM_DIS, LLVM_NM, LLVM_AS, LLI  LLVM 16 tools (default opt-16,
+#                         llvm-dis-16, llvm-nm-16, llvm-as-16, lli-16)
 #   CARGO_TARGET_DIR      target directory (default <repo>/target/klee)
 #
-# Every step must succeed; the script stops at the first failure.
+# Every step must succeed; the script stops at the first failure and then
+# leaves nothing at <out.bc>.
 set -euo pipefail
 
 die() {
@@ -33,15 +34,19 @@ case "$out" in
   *) die "the output must end in .bc: $out" ;;
 esac
 
+# A failed build must not leave an earlier (or partial) runtime behind.
+rm -f "$out"
+
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 TOOLCHAIN="${KLEE_RUSTC_TOOLCHAIN:-1.72.1}"
 OPT="${OPT:-opt-16}"
 LLVM_DIS="${LLVM_DIS:-llvm-dis-16}"
 LLVM_NM="${LLVM_NM:-llvm-nm-16}"
 LLVM_AS="${LLVM_AS:-llvm-as-16}"
+LLI="${LLI:-lli-16}"
 TARGET_DIR="${CARGO_TARGET_DIR:-$ROOT/target/klee}"
 
-for tool in cargo rustc python3 "$OPT" "$LLVM_DIS" "$LLVM_NM" "$LLVM_AS"; do
+for tool in cargo rustc python3 "$OPT" "$LLVM_DIS" "$LLVM_NM" "$LLVM_AS" "$LLI"; do
   command -v "$tool" >/dev/null || die "$tool not found in PATH"
 done
 
@@ -64,8 +69,9 @@ if [ -d "$deps" ]; then
   find "$deps" -maxdepth 1 -name 'map2check-*.bc' -delete
 fi
 
-log="$(mktemp)"
-trap 'rm -f "$log" "$log.ll" "$log.lowered.ll"' EXIT
+work="$(mktemp -d)"
+trap 'rm -rf "$work"' EXIT
+log="$work/cargo.log"
 # --locked: the dependency graph is the one in klee/Cargo.lock (v3), never
 # a fresh resolution. The profile (klee/Cargo.toml) sets panic = abort,
 # lto = fat and codegen-units = 1; the check below proves rustc got them.
@@ -94,30 +100,45 @@ mapfile -t modules < <(find "$deps" -maxdepth 1 -name 'map2check-*.bc')
 # The debug info of the precompiled std does not survive llvm-link-16 +
 # KLEE ("Broken module found"); only the runtime loses it, the analysed
 # program keeps its -g.
-mkdir -p "$(dirname "$out")"
-"$OPT" --strip-debug "${modules[0]}" -o "$out" || die "$OPT --strip-debug failed"
-"$LLVM_DIS" "$out" -o /dev/null || die "$LLVM_DIS cannot read $out"
+# Everything is built in $work and moved to $out only at the end, so a
+# failed step never leaves a bitcode behind.
+"$OPT" --strip-debug "${modules[0]}" -o "$work/stripped.bc" || die "$OPT --strip-debug failed"
+"$LLVM_DIS" "$work/stripped.bc" -o "$work/stripped.ll" || die "$LLVM_DIS cannot read the stripped module"
 
 # KLEE 3.1 cannot execute the vector/x86 intrinsics of the precompiled std
 # ("unimplemented intrinsic" in core::fmt padding): replace them by scalar
-# functions. Fails on an intrinsic the script does not know.
-"$LLVM_DIS" "$out" -o "$log.ll" || die "$LLVM_DIS cannot read $out"
-python3 -I "$ROOT/scripts/klee-lower-intrinsics.py" "$log.ll" "$log.lowered.ll" ||
-  die "lowering the vector intrinsics failed"
-"$LLVM_AS" "$log.lowered.ll" -o "$out" || die "$LLVM_AS rejected the lowered module"
-rm -f "$log.ll" "$log.lowered.ll"
-"$LLVM_DIS" "$out" -o /dev/null || die "$LLVM_DIS cannot read $out"
+# functions. The script fails on any remaining intrinsic KLEE 3.1 does not
+# execute. Its two self-tests run first: the scalar versions must compute
+# what the intrinsics compute (lli-16), and an unknown intrinsic must be
+# rejected.
+lower="$ROOT/scripts/klee-lower-intrinsics.py"
+fixtures="$ROOT/tests/klee"
+python3 -I "$lower" "$fixtures/lower-intrinsics.ll" "$work/fixture.ll" >/dev/null ||
+  die "the lowering self-test fixture was rejected"
+expected="$("$LLI" "$fixtures/lower-intrinsics.ll")" || die "$LLI failed on the fixture"
+got="$("$LLI" "$work/fixture.ll")" || die "$LLI failed on the lowered fixture"
+[ "$expected" = "$got" ] ||
+  die "the scalar versions differ from the intrinsics: '$expected' vs '$got'"
+if python3 -I "$lower" "$fixtures/unknown-intrinsic.ll" "$work/unknown.ll" >/dev/null 2>&1; then
+  die "the lowering accepted an intrinsic KLEE 3.1 cannot execute (unknown-intrinsic.ll)"
+fi
+python3 -I "$lower" "$work/stripped.ll" "$work/lowered.ll" ||
+  die "lowering the intrinsics failed"
+"$LLVM_AS" "$work/lowered.ll" -o "$work/runtime.bc" || die "$LLVM_AS rejected the lowered module"
+"$LLVM_DIS" "$work/runtime.bc" -o /dev/null || die "$LLVM_DIS cannot read the lowered module"
 
 # The module must define what the symex pipeline links against, and leave
 # the KLEE intrinsics to KLEE.
-defined="$("$LLVM_NM" --defined-only "$out")"
+defined="$("$LLVM_NM" --defined-only "$work/runtime.bc")"
 for sym in main __VERIFIER_nondet_int __VERIFIER_nondet_double __VERIFIER_assume \
   __VERIFIER_error map2check_init map2check_set_mode map2check_success; do
   grep -Eq "[[:space:]]$sym\$" <<<"$defined" || die "$out does not define $sym"
 done
-undefined="$("$LLVM_NM" --undefined-only "$out")"
+undefined="$("$LLVM_NM" --undefined-only "$work/runtime.bc")"
 for sym in klee_make_symbolic klee_assume __map2check_main__; do
   grep -Eq "[[:space:]]$sym\$" <<<"$undefined" || die "$out does not import $sym"
 done
 
+mkdir -p "$(dirname "$out")"
+mv -f "$work/runtime.bc" "$out" || die "cannot write $out"
 echo "build-klee-runtime: wrote $out (rustc $TOOLCHAIN, LLVM $llvm_version)"

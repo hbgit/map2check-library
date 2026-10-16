@@ -171,12 +171,21 @@ jobs:
       - name: Baixar o código do repositório
         uses: actions/checkout@v4
 
-      - name: Instalar as ferramentas do LLVM 16 (opt, llvm-dis, llvm-nm, llvm-as)
+      - name: Instalar as ferramentas do LLVM 16 (opt, llvm-dis, llvm-nm, llvm-as, lli)
         run: sudo apt-get update && sudo apt-get install -y llvm-16
 
-      - name: Instalar o rustc 1.72.1 (LLVM 16)
-        run: rustup toolchain install 1.72.1 --profile minimal
+      - name: Instalar o rustc 1.72.1 (LLVM 16) com clippy
+        run: rustup toolchain install 1.72.1 --profile minimal --component clippy
 
+      # O clippy em 1.82 do job acima não compila nondet/klee.rs (feature
+      # `klee` só existe em klee/Cargo.toml); este é o lint dele.
+      - name: Clippy do build KLEE (rustc 1.72.1, feature klee)
+        run: RUSTUP_TOOLCHAIN=1.72.1 cargo clippy --locked --manifest-path klee/Cargo.toml --features klee -- -D warnings
+
+      # O script roda os autotestes da troca de intrínsecos antes de usá-la:
+      # equivalência por lli-16 em tests/klee/lower-intrinsics.ll e recusa
+      # de tests/klee/unknown-intrinsic.ll; qualquer intrínseco que o KLEE
+      # 3.1 não execute faz o build falhar.
       - name: Compilar o runtime KLEE em bitcode (klee/Cargo.toml, --locked)
         run: scripts/build-klee-runtime.sh target/klee/map2check-klee.bc
 

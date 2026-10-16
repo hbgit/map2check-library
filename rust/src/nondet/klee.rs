@@ -219,6 +219,9 @@ pub extern "C" fn __VERIFIER_assert(condition: i32) {
 /// KLEE's entry point. develop's KLEE generator defines `main` the same way
 /// (`NonDetGeneratorKlee.c:16`): the passes renamed the program's `main` to
 /// `__map2check_main__` and inserted the mode, init and success calls.
+// `argv` is only handed on to the program's own `main`, never dereferenced
+// here; the signature is the C one, so the function cannot be `unsafe`.
+#[allow(clippy::not_unsafe_ptr_arg_deref)]
 #[no_mangle]
 pub extern "C" fn main(argc: c_int, argv: *mut *mut c_char) -> c_int {
     crate::ffi::ffi_guard(
