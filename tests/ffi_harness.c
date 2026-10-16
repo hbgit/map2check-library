@@ -323,10 +323,14 @@ static int test_result_and_control_flags(void) {
     map2check_reset();
     map2check_map_malloc((void *)0x1000, 4);
     map2check_check_mem_endprog();
-    if (get_current_property() != None) {
+    /* The pre-init round already set memcleanup and reset keeps options
+     * (#10), so the leak reads as memcleanup; the memtrack default is
+     * covered by the Rust tests (no API clears an option). */
+    if (get_current_property() != MemsafetyMemcleanup) {
         return 3;
     }
-    map2check_set_memcleanup();
+    map2check_reset();
+    map2check_map_malloc((void *)0x1000, 4);
     map2check_check_mem_endprog();
     if (get_current_property() != MemsafetyMemcleanup) {
         return 4;
