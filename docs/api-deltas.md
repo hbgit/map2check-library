@@ -126,8 +126,8 @@ build with `--features libfuzzer`.
 | `__VERIFIER_nondet_pchar` | `char *__VERIFIER_nondet_pchar(void)` | `map2check_gen_data_fuzzer_pchar` | new | Feature `libfuzzer`. Core target of `map2check_non_det_pchar` (#6). An `unsigned` length, NULL for 0, capped at 4096, then `length - 1` chars and a NUL, as `NonDetGeneratorAFL.c:101-118`; the string comes from the C `malloc` and the program may `free` it (SD-18). |
 | `__VERIFIER_assume` | `void __VERIFIER_assume(int32_t condition)` | — | new | Feature `libfuzzer`. `__VERIFIER_assume(0)` abandons the current fuzzer input and `LLVMFuzzerTestOneInput` returns 0, as develop's `nondet_cancel`; with no iteration running it calls `exit(0)` (SD-07). Defined `extern "C-unwind"`. The analysed program must be compiled with `-fexceptions` (D1 condition 11); see “`__VERIFIER_assume` under a fuzzer”. |
 | `map2check_fuzzer_assume` | `void map2check_fuzzer_assume(int32_t condition)` | `map2check_fuzzer_assume(int)` (`nondet_gen_libfuzzer.h:41`) | changed | Feature `libfuzzer`. Same behaviour as `__VERIFIER_assume` (SD-07). |
-| `__VERIFIER_error` | `void __VERIFIER_error(void)` | — | new | Feature `libfuzzer`. Records REACHABILITY, prints the JSON report when the mode is unset, then aborts (SD-08). |
-| `__VERIFIER_assert` | `void __VERIFIER_assert(int32_t condition)` | — | new | Feature `libfuzzer`. `__VERIFIER_assert(0)` calls `__VERIFIER_error()` (SD-08). |
+| `__VERIFIER_error` | `void __VERIFIER_error(void)` | — | new | Features `libfuzzer` and `klee`. With an analysis mode set it does nothing, as develop's; with the mode unset it records REACHABILITY, prints the JSON report and aborts (SD-08). |
+| `__VERIFIER_assert` | `void __VERIFIER_assert(int32_t condition)` | — | new | Features `libfuzzer` and `klee`. `__VERIFIER_assert(0)` calls `__VERIFIER_error()`: nothing with a mode set, an abort without (SD-08). |
 | `next_current_step` | — | `next_current_step()` | discontinued | Use `get_next_step()`; same effect (#13). |
 | `map2check_save_memtrack_log` | — | `memtracklog.h:44` | discontinued | Covered by the `map2check_map_*` exports; no external caller. |
 | `map2check_gen_data_fuzzer_*` | — | bool, char, uchar, short, ushort, int32_t, int64_t, uint, unsigned, long, ulong, float, double, size_t | discontinued | Replaced by `__VERIFIER_nondet_*` (#12). |
@@ -172,8 +172,8 @@ Map2Check.
 | `map2check_wasm_check_access` | — | out-of-scope | As above. |
 | `__VERIFIER_nondet_*` | `int`, `uint`, `char`, `long`, `ushort`, `pointer` | same | Feature `libfuzzer`. |
 | `__VERIFIER_assume` | `(int)` | same | Feature `libfuzzer` (SD-07). |
-| `__VERIFIER_assert` | `(int)` | same | Feature `libfuzzer` (SD-08). |
-| `__VERIFIER_error` | `(void)` | same | Feature `libfuzzer` (SD-08). |
+| `__VERIFIER_assert` | `(int)` | same | Features `libfuzzer` and `klee` (SD-08). |
+| `__VERIFIER_error` | `(void)` | same | Features `libfuzzer` and `klee` (SD-08). |
 
 The passes also expect the result channel of the embedded library: the
 files that the Map2Check frontend parses. This library writes them when a
@@ -303,6 +303,31 @@ the same. The cost: a pass that calls the wrong saver logs the wrong type
 silently, so Task 3.2 must map each `map2check_nondet_<t>` to its
 `map2check_save_nondet_log_<t>` exactly as `docs/cutover/abi-mapping.tsv`
 says.
+
+## KLEE generator (feature `klee`)
+
+The `symex` runtime (`rust/src/nondet/klee.rs`) is built only from
+`klee/Cargo.toml` with rustc 1.72.1 as LLVM 16 bitcode
+(`scripts/build-klee-runtime.sh`), not as `libmap2check.a`, and is not in
+the header (`cbindgen:ignore`). It exports the same `__VERIFIER_nondet_*`,
+`__VERIFIER_assume`, `__VERIFIER_error` and `__VERIFIER_assert` as the
+libFuzzer generator, with the same signatures, plus `main`, which calls
+`__map2check_main__(argc, argv)` as develop's `NonDetGeneratorKlee.c:16`.
+Differences from develop's KLEE generator (`docs/klee-feasibility.md`):
+
+- each value is a `klee_make_symbolic` object of `sizeof(type)` bytes named
+  `non_det_<t>` as develop names it; `__VERIFIER_nondet_uint` stands for
+  develop's `map2check_non_det_uint` and `_unsigned` and is named
+  `non_det_uint` (the frontend reads both names as a 4-byte unsigned);
+- `__VERIFIER_nondet_float` is new (`non_det_float`, 4 bytes), and the
+  frontend decodes it as a signed int;
+- `__VERIFIER_nondet_pchar` caps its length at 4096, as the AFL++ reader,
+  where develop's KLEE generator has no cap (D1 condition 9);
+- `__VERIFIER_assume` is `klee_assume(condition != 0)`;
+- `__VERIFIER_error` / `__VERIFIER_assert` behave as in the libFuzzer
+  generator (SD-08): nothing with a mode set, as develop;
+- values are concretised (`klee_get_value_*` + `klee_assume`) before the
+  witness logs or the JSON report format them (D1 condition 7).
 
 ## `__VERIFIER_assume` under a fuzzer
 

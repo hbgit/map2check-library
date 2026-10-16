@@ -40,7 +40,7 @@ O programa já vem dos passes com o `main` renomeado para `__map2check_main__`. 
 | `float` | não existe | 4 bytes, `non_det_float`. O frontend não conhece o nome e o decodifica como int com sinal |
 | `pchar` | comprimento `non_det_unsigned` sem limite, depois `length - 1` × `non_det_char` | o mesmo, **com teto de 4096** no comprimento, como o leitor AFL++, para que o vetor do KLEE gere a mesma string no replay (condição 9) |
 | assume | `klee_assume(expr)` | `klee_assume(cond != 0)`. Um assume comprovadamente falso é erro de usuário do KLEE nos dois |
-| `__VERIFIER_error` / `_assert` | `__VERIFIER_error` vazio. O alvo vira `map2check_target_function` | registra `Reachability` e aborta, como no gerador libFuzzer (corpo compartilhado em `nondet/mod.rs`) |
+| `__VERIFIER_error` / `_assert` | os dois vazios (`Map2CheckFunctions.c:57-59`, `AnalysisModeAssert.c:25-27`). O alvo vira `map2check_target_function`; o assert, `map2check_assert` | com modo definido, **nada**, como em `develop`: o alvo vem só de `map2check_reach_target` e o assert de `map2check_is_valid_assert`. Sem modo (uso direto da API), registra `Reachability` e aborta (SD-08). Corpo compartilhado com o gerador libFuzzer em `nondet/mod.rs` |
 | Violação | `map2check_exit` → `abort()` | `output/termination.rs` → `std::process::abort()` → `abort` da uClibc. O KLEE registra `.abort.err` nos dois |
 | Saída | `fprintf` da uClibc com o valor simbólico | `output::prepare_for_output` → `klee::concretize` antes de formatar (condição 7) |
 
@@ -54,7 +54,7 @@ Os comandos rodaram na imagem `map2check-dev:cutover-klee-rust`, construída de 
 DEVELOP_SRC=../Map2Check-cutover tests/klee_paths.sh
 ```
 
-Resultado: 16 PASS, 0 FAIL (`all KLEE checks passed`).
+Resultado: 18 PASS, 0 FAIL (`all KLEE checks passed`).
 
 | Programa | O que verifica | Rust: completos + parciais | `develop` C: completos + parciais |
 |---|---|---|---|
@@ -63,6 +63,8 @@ Resultado: 16 PASS, 0 FAIL (`all KLEE checks passed`).
 | `range.c` | `x > 1000` atinge o erro. O log formata um valor com muitos dígitos possíveis | **1 + 1** | **1 + 7** |
 | `json.c` | sem modo, o relatório JSON de um `x` sem restrição (o caso 2 → 22 do spike) | 1 + 0 | não se aplica (o C não tem JSON) |
 | `deref.c` | leitura fora do bloco com `i == 4`: abort, `FALSE-DEREF`, ktest com `i = 4` | 3 + 1 | 3 + 1 |
+| `vererr_deref.c` | modo memtrack: `__VERIFIER_error()` (e, no Rust, `__VERIFIER_assert(0)`) antes da leitura fora do bloco. Com modo definido os dois não fazem nada, e o resultado é `FALSE-DEREF` | 3 + 1 | 3 + 1 |
+| `vererr_target.c` | modo target: `__VERIFIER_error()` sozinho não informa nada (2 caminhos, nenhum abort, `NONE`) | 2 + 0 | 2 + 0 |
 | `layout.c` | oito tipos. O ktest do erro vira semente e passa pelo leitor libFuzzer do Rust | 8 + 1 | 8 + 1 |
 
 "Parciais" são os caminhos encerrados por erro, aqui o abort da violação. Exploração completa, sem `--exit-on-error-type`. Os veredictos foram conferidos numa segunda execução com `--exit-on-error-type=Abort`, como o frontend roda os modos de propriedade.
@@ -90,13 +92,13 @@ A semente tem esses 30 bytes concatenados. O mesmo `layout.c` foi ligado a `libm
 
 ## Achados e limitações
 
-1. **Intrínsecos vetoriais do `std` pré-compilado.** O `std` do 1.72.1 vem vetorizado, e o LTO fat leva esse código para o módulo. O KLEE 3.1 não executa `llvm.vector.reduce.add/or` nem `llvm.x86.sse2.pmulhu.w`. O caminho de `deref.c` morria com `unimplemented intrinsic` em `core::fmt::Formatter::pad_integral`, ao formatar o log de heap em hexadecimal com largura. Desligar a vetorização no LTO (`-C no-vectorize-loops -C no-vectorize-slp`) não resolve, porque o código já vem vetorizado no bitcode do `std`. `scripts/klee-lower-intrinsics.py` troca cada intrínseco por uma função interna escalar (`extractelement`/`insertelement` e aritmética). A equivalência é conferida com `lli-16` em `tests/klee/lower-intrinsics.ll`. Um intrínseco vetorial ou x86 desconhecido faz o build falhar. Isto é uma sexta peça do produto, além das cinco da D1.
+1. **Intrínsecos vetoriais do `std` pré-compilado.** O `std` do 1.72.1 vem vetorizado, e o LTO fat leva esse código para o módulo. O KLEE 3.1 não executa `llvm.vector.reduce.add/or` nem `llvm.x86.sse2.pmulhu.w`. O caminho de `deref.c` morria com `unimplemented intrinsic` em `core::fmt::Formatter::pad_integral`, ao formatar o log de heap em hexadecimal com largura. Desligar a vetorização no LTO (`-C no-vectorize-loops -C no-vectorize-slp`) não resolve, porque o código já vem vetorizado no bitcode do `std`. `scripts/klee-lower-intrinsics.py` troca cada intrínseco por uma função interna escalar (`extractelement`/`insertelement` e aritmética). Antes de usar a troca, o build roda dois autotestes: a equivalência com `lli-16` em `tests/klee/lower-intrinsics.ll` e a recusa de `tests/klee/unknown-intrinsic.ll` (`llvm.masked.load`). Depois da troca, qualquer intrínseco declarado que não esteja na lista dos que o KLEE 3.1 executa faz o build falhar. A lista vem dos `case Intrinsic::` de `Executor.cpp` e `IntrinsicCleaner.cpp` na tag v3.1, mais `bitreverse` como exceção justificada (item 3). O build escreve tudo num diretório temporário e só move o `.bc` no fim: uma falha não deixa bitcode no destino. Não usei o `opt-16 -enable-new-pm=0 -expand-reductions`: ele só cobre a família reduce (o script continuaria necessário para os intrínsecos x86) e vive no gerenciador de passes legado que o LLVM está removendo. Isto é uma sexta peça do produto, além das cinco da D1.
 2. **`RandomState` do `HashSet`.** O `RandomState::new()` busca a semente do SO por um símbolo fraco (`getrandom`). Sob o KLEE, isso vira `invalid function pointer`, e o caminho morre ao gravar os logs de witness. Os três `HashSet` do crate passaram a usar `memtrack::FixedHashSet`, com chaves SipHash fixas. Eles só respondem pertinência, então o resultado não muda em nenhum build.
 3. **`llvm.bitreverse` (miniz_oxide).** Só a impressão de backtrace do `std` chega a ele, e com `panic = "abort"` ela não é executada. O KLEE avisa `unsupported intrinsic` no carregamento. Não dá para trocá-lo: o `--optimize` do KLEE refaz o intrínseco a partir da versão escalar.
 4. **Chamadas externas.** O `std` grava os arquivos por `open64`/`write`/`close`/`unlink` externos, como o `fopen`/`fprintf` do C. O KLEE avisa, por exemplo, `undefined reference to function: statx`, `pthread_key_create` e `_Unwind_*`. Nenhum desses símbolos é executado nos caminhos testados.
 5. **`--external-calls=all` e o `std`.** O que usa símbolos fracos via `dlsym` ou `syscall!` (entropia, `statx`, TLS com destrutor) é inseguro sob o KLEE. Hoje o crate não usa nada disso no estado, mas qualquer código novo que entre no build `symex` precisa passar por `tests/klee_paths.sh`.
 6. **Escopo dos testes.** Os programas imitam a instrumentação dos passes à mão (`tests/klee/m2c.h`). O pipeline real com os passes do Map2Check é a Task 3.x, e o `tests/klee_paths.sh` no CI do Map2Check é a Task 3.4. Overflow, memcleanup, `pchar` e `double` simbólicos não têm programa próprio. `layout.c` cobre os oito tipos inteiros.
-7. **CI.** O job `klee_runtime` compila o bitcode em 1.72.1 com `--locked`, confere que ele existe e que o `llvm-dis-16` o lê, roda o `cargo-deny` sobre `klee/Cargo.lock` e publica o `.bc` como artefato. O KLEE não roda no CI desta biblioteca, porque a imagem com o KLEE 3.1 é a de desenvolvimento do Map2Check e não está num registro público. `tests/klee_paths.sh` roda localmente e entra no CI do Map2Check na Task 3.4.
+7. **CI.** O job `klee_runtime` roda o clippy 1.72.1 sobre o build `klee` (é o único lint de `nondet/klee.rs`), compila o bitcode em 1.72.1 com `--locked`, com os autotestes da troca de intrínsecos, confere que ele existe e que o `llvm-dis-16` o lê, roda o `cargo-deny` sobre `klee/Cargo.lock` e publica o `.bc` como artefato. O KLEE não roda no CI desta biblioteca, porque a imagem com o KLEE 3.1 é a de desenvolvimento do Map2Check e não está num registro público. `tests/klee_paths.sh` roda localmente e entra no CI do Map2Check na Task 3.4.
 
 ## Custos aceitos (D1, "Custo do pin do rustc 1.72.1")
 
