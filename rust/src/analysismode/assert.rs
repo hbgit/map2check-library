@@ -32,7 +32,7 @@ mod tests {
     use super::*;
     use crate::analysismode::VccContext;
 
-    fn ctx() -> VccContext {
+    fn ctx() -> VccContext<'static> {
         VccContext::new(12, 0, "foo")
     }
 

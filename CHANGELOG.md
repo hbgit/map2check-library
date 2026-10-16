@@ -81,6 +81,13 @@ breaking changes first.
   checks, and runtime options are separate from the analysis configuration
   (#10).
 - The memcleanup verdict matches develop's.
+- Throughput of the KLEE (`symex`) runtime: the load check no longer builds a
+  hash set per call, the check context borrows the function name, and no
+  build is instrumented for coverage any more (the repo-wide
+  `.cargo/config.toml` that added `-C instrument-coverage` is removed;
+  `cargo tarpaulin` adds it itself, and `scripts/build-klee-runtime.sh`
+  rejects it). On list-ext the runtime spends about 4 times fewer KLEE
+  instructions per path and finds the FALSE-DEREF that it missed before.
 
 ### Changed
 

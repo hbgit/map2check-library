@@ -155,7 +155,7 @@ mod tests {
 
     use crate::memtrack::MemTrackEntry;
 
-    fn ctx() -> VccContext {
+    fn ctx() -> VccContext<'static> {
         VccContext::new(1, 0, "test")
     }
 
