@@ -17,6 +17,11 @@ the C ABI or the JSON report must update them.
 
 ### Added
 
+- Feature `wasm`: the runtime of Map2Check's `--wasm` mode (D2) ported from the
+  C runtime: the `wasm_rt_*` stubs, `w2c_wasi__snapshot__preview1_proc_exit` and
+  `map2check_wasm_malloc`, `map2check_wasm_free`, `map2check_wasm_check_access`
+  (SD-19). `tests/core_api_coverage.rs` checks every `core_symbol` of
+  `docs/cutover/abi-mapping.tsv` against the staticlib.
 - `docs/api-deltas.md` symbol/signature matrix for the core C API and the
   Map2Check passes, and `docs/semantic-deltas.md` with reproducible
   behaviour differences, both checked by `tests/compat_docs.rs` (#5).

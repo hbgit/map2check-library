@@ -33,6 +33,16 @@ jobs:
       - name: Rodar todos os testes
         run: cargo test --all-features
 
+      # O espelho de wasm_rt_memory_t / wasm_rt_funcref_table_t (feature wasm)
+      # só é conferido contra o wasm-rt.h do wabt quando WASM_RT_INCLUDE existe.
+      - name: Conferir o layout de wasm-rt.h (wabt 1.0.41)
+        run: |
+          mkdir -p target/wabt-include
+          curl -fsSL https://raw.githubusercontent.com/WebAssembly/wabt/1.0.41/wasm2c/wasm-rt.h \
+            -o target/wabt-include/wasm-rt.h
+          WASM_RT_INCLUDE="$PWD/target/wabt-include" \
+            cargo test --features wasm --lib layout_matches_wasm_rt_h
+
       - name: Testar script de proteção de branches
         run: scripts/test-branch-protection.sh
 

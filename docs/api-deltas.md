@@ -128,6 +128,9 @@ build with `--features libfuzzer`.
 | `map2check_fuzzer_assume` | `void map2check_fuzzer_assume(int32_t condition)` | `map2check_fuzzer_assume(int)` (`nondet_gen_libfuzzer.h:41`) | changed | Feature `libfuzzer`. Same behaviour as `__VERIFIER_assume` (SD-07). |
 | `__VERIFIER_error` | `void __VERIFIER_error(void)` | — | new | Features `libfuzzer` and `klee`. With an analysis mode set it does nothing, as develop's; with the mode unset it records REACHABILITY, prints the JSON report and aborts (SD-08). |
 | `__VERIFIER_assert` | `void __VERIFIER_assert(int32_t condition)` | — | new | Features `libfuzzer` and `klee`. `__VERIFIER_assert(0)` calls `__VERIFIER_error()`: nothing with a mode set, an abort without (SD-08). |
+| `map2check_wasm_malloc` | `void map2check_wasm_malloc(uint64_t offset, uint64_t size)` | `map2check_wasm_malloc(uint64_t, uint64_t)` (`AnalysisModeMemtrack.c:385`) | same | Feature `wasm` (the header declares it without). Registers the block the lifted `malloc` returned at linear-memory `offset`; 0 and `UINT64_MAX` are ignored, a known offset is resized and revived. Records in every mode (SD-19). |
+| `map2check_wasm_free` | `void map2check_wasm_free(uint64_t offset, int64_t line)` | `map2check_wasm_free(uint64_t, int)` (`AnalysisModeMemtrack.c:399`) | same | Feature `wasm`. `line` is `int64_t`, the type the pass declares (`MemoryTrackPass.cpp:829`); develop's C reads the low 32 bits. An offset never registered is `MEMSAFETY_FREE` at `line`; a double free is not an error. Reported where the memory checks are active (SD-19). |
+| `map2check_wasm_check_access` | `void map2check_wasm_check_access(uint64_t offset, uint64_t access_size)` | `map2check_wasm_check_access(uint64_t, uint64_t)` (`AnalysisModeMemtrack.c:416`) | same | Feature `wasm`. An access outside every live block is reported as `OVERFLOW`, line 0, no function, exactly as develop does (SD-19). Reported where the memory checks are active. |
 | `next_current_step` | — | `next_current_step()` | discontinued | Use `get_next_step()`; same effect (#13). |
 | `map2check_save_memtrack_log` | — | `memtracklog.h:44` | discontinued | Covered by the `map2check_map_*` exports; no external caller. |
 | `map2check_gen_data_fuzzer_*` | — | bool, char, uchar, short, ushort, int32_t, int64_t, uint, unsigned, long, ulong, float, double, size_t | discontinued | Replaced by `__VERIFIER_nondet_*` (#12). |
@@ -167,9 +170,9 @@ Map2Check.
 | `map2check_nondet_*` | `(u32 line, u32 scope, i32 value, ptr fn)`, `double` value for `double` | pending | Core equivalents: `map2check_save_nondet_log_<t>(line, scope, type_var, T *value, fn)` for every type; the pass stores the value in an `alloca` and passes its address (Task 3.2). See “Nondet generators and the nondet log”. |
 | `map2check_nondet_cast_*` | — | pending | #21. |
 | `map2check_pointer_cast` | — | pending | #21. |
-| `map2check_wasm_malloc` | — | out-of-scope | Only used by the `feat-wasm-verification` flow (#21). |
-| `map2check_wasm_free` | — | out-of-scope | As above. |
-| `map2check_wasm_check_access` | — | out-of-scope | As above. |
+| `map2check_wasm_malloc` | `(i64, i64)` | same | Core export of the same name and signature, feature `wasm` (Task 2.8, D2). |
+| `map2check_wasm_free` | `(i64, i64)` | same | As above. |
+| `map2check_wasm_check_access` | `(i64, i64)` | same | As above. |
 | `__VERIFIER_nondet_*` | `int`, `uint`, `char`, `long`, `ushort`, `pointer` | same | Feature `libfuzzer`. |
 | `__VERIFIER_assume` | `(int)` | same | Feature `libfuzzer` (SD-07). |
 | `__VERIFIER_assert` | `(int)` | same | Features `libfuzzer` and `klee` (SD-08). |
@@ -178,6 +181,32 @@ Map2Check.
 The passes also expect the result channel of the embedded library: the
 files that the Map2Check frontend parses. This library writes them when a
 mode is set (#19); see “Result files”.
+
+## Feature `wasm`: the wasm2c runtime
+
+Map2Check's `--wasm` mode lifts a WebAssembly binary to C with wabt's wasm2c
+(1.0.41), instruments it with `-wasm-mode` and links the runtime support
+(decision D2, ported to Rust instead of dropped). `--features wasm` builds
+that support into `libmap2check.a`:
+
+- the three `map2check_wasm_*` exports of the core matrix, declared in the
+  header;
+- the `wasm_rt_*` functions of `WasmRuntimeStubs.c`, which wasm-rt.h
+  declares and the lifted code calls, so they are not in `map2check.h`
+  (`cbindgen:ignore`): `wasm_rt_allocate_memory`, `wasm_rt_grow_memory`,
+  `wasm_rt_free_memory`, `wasm_rt_allocate_funcref_table`,
+  `wasm_rt_free_funcref_table`, `wasm_rt_is_initialized`, `wasm_rt_init`,
+  `wasm_rt_free`, `wasm_rt_trap` and
+  `w2c_wasi__snapshot__preview1_proc_exit`. Memory and table are calloc/realloc
+  based (KLEE-friendly), as in develop.
+
+`wasm_rt_memory_t` and `wasm_rt_funcref_table_t` are mirrored with
+`#[repr(C)]` from wabt 1.0.41. `cargo test --features wasm --lib
+layout_matches_wasm_rt_h` compares size and field offsets with the real
+`wasm-rt.h` when `WASM_RT_INCLUDE` names its directory (CI sets it); without
+the variable the test says it is skipped. Link the lifted code against the
+wasm-rt.h of wabt 1.0.41; another wabt version may change the layout.
+Differences from develop: SD-19.
 
 ## Analysis modes
 

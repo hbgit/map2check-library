@@ -635,3 +635,53 @@ int __map2check_main__(void) {
   return 0;
 }
 ```
+
+### SD-19 — The wasm2c runtime: a bad access is OVERFLOW, and four small differences
+
+**Classification:** C behaviour preserved on purpose
+**Tests:** `rust/src/ffi_tests.rs::wasm_access_past_the_block_is_reported_as_develop_does`, `rust/src/ffi_tests.rs::wasm_free_of_an_untracked_offset_is_a_false_free_at_the_line`, `rust/src/ffi_tests.rs::wasm_double_free_is_not_reported_as_develop`, `rust/src/ffi_tests.rs::wasm_access_inside_a_freed_inner_block_is_covered_by_the_older_block`, `rust/src/ffi_tests.rs::wasm_checks_are_inactive_in_modes_without_memory_checks`, `rust/src/ffi_tests.rs::wasm_first_violation_is_final`, `rust/src/ffi_tests.rs::rt_funcref_table_allocates_zeroed_elements`
+
+**Rust (feature `wasm`):** `map2check_wasm_check_access(offset, size)`
+reports an access that does not lie inside a live registered block as
+`OVERFLOW` with line 0 and an empty function name. `map2check_wasm_free` of an
+offset that was never registered reports `MEMSAFETY_FREE` at the given line.
+
+**C runtime of Map2Check `develop`:** `AnalysisModeMemtrack.c:416-423`
+writes `FALSE_OVERFLOW` (`write_property(FALSE_OVERFLOW, 0, "")`, reported as
+`OVERFLOW`), not `FALSE-DEREF`, for a bad access; `:399-407` writes
+`FALSE_FREE` at the line for an unknown offset. `tests/integration/test_wasm_pipeline.sh`
+of Map2Check accepts `FALSE_OVERFLOW` for the heap-overflow program. The
+library keeps develop's tag on purpose, and the table semantics with it: the
+newest row whose range `[offset, offset + size - access + 1)` holds the
+offset decides, a freed row has size 0 (so its range is empty and an older
+covering block still answers), a double free is not an error, and an access
+with no registered block is invalid. The checks are active in the modes that
+check memory (memtrack and unset); tracking records in every mode.
+
+Differences:
+
+- **No abort without a mode.** As for every check (SD-03, SD-14), the first
+  violation is final and the run goes on unless an analysis mode is set,
+  when it writes the result files and aborts. develop always aborts.
+- **`line` type.** `map2check_wasm_free` takes `int64_t line`, as the pass
+  declares it; develop's C parameter is `int`.
+- **Trap.** `wasm_rt_trap` records an `UNKNOWN` verdict and aborts (develop
+  calls `map2check_error()`, which writes no property, so the frontend reads
+  UNKNOWN). The function never returns, with or without a mode, as wasm-rt.h
+  declares.
+- **Funcref table element size.** develop's `wasm_rt_allocate_funcref_table`
+  allocates `elements * sizeof(void*)` bytes for elements of
+  `sizeof(wasm_rt_funcref_t)` (32 bytes), a heap overflow once the module's
+  element segments are written. The library allocates the real element size.
+  `max_size` is left untouched in both.
+- **Grow.** `wasm_rt_grow_memory` does not clear bytes when the new size is
+  not larger than the old one (develop would `memset` a wrapped length).
+
+**Reproduce (link with `--features wasm`, analysis mode memtrack):**
+
+```c
+map2check_set_mode(AnalysisMode_Memtrack);
+map2check_init();
+map2check_wasm_malloc(0x10000, 16);
+map2check_wasm_check_access(0x10010, 4);   /* OVERFLOW, line 0, aborts */
+```
