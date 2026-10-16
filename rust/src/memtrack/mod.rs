@@ -110,13 +110,17 @@ pub fn is_invalid_free(entries: &[MemTrackEntry], address: usize) -> bool {
 /// the value obtained after following one level of indirection. Used by
 /// `map2check_check_free_resolved_address`, which receives the resolved
 /// pointer value directly instead of the address of the pointer variable.
+///
+/// Follows `is_invalid_free` of the Map2Check `develop` C runtime
+/// (`ListLog.c:95-118`): the most recent heap record (allocation or free) for
+/// `address` decides, a freed block is invalid, and an address with no heap
+/// record — untracked, or only a stack slot — is an invalid free (#37).
 pub fn is_invalid_free_resolved(entries: &[MemTrackEntry], address: usize) -> bool {
     entries
         .iter()
         .rev()
-        .find(|e| e.points_to == address)
-        .map(|e| e.is_free)
-        .unwrap_or(false)
+        .find(|e| (e.is_dynamic || e.is_free) && e.points_to == address)
+        .is_none_or(|e| e.is_free)
 }
 
 /// Checks whether dereferencing `address` is invalid (not allocated or already freed).
@@ -211,9 +215,26 @@ mod tests {
     }
 
     #[test]
-    fn free_resolved_unknown_address_not_flagged() {
+    fn free_resolved_unknown_address_is_invalid() {
         let entries = vec![make_entry(0x100, 0x200, true, false, 8)];
-        assert!(!is_invalid_free_resolved(&entries, 0xDEAD));
+        assert!(is_invalid_free_resolved(&entries, 0xDEAD));
+    }
+
+    #[test]
+    fn free_resolved_stack_slot_is_invalid() {
+        let entries = vec![make_entry(0x300, 0x300, false, false, 8)];
+        assert!(is_invalid_free_resolved(&entries, 0x300));
+    }
+
+    #[test]
+    fn free_resolved_ignores_pointer_stores_to_the_block() {
+        // A later `store_pointer` record (`p = block`) is not an allocation
+        // event and must not hide the live allocation.
+        let entries = vec![
+            make_entry(0x200, 0x200, true, false, 8),
+            make_entry(0x500, 0x200, false, false, 0),
+        ];
+        assert!(!is_invalid_free_resolved(&entries, 0x200));
     }
 
     #[test]

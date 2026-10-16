@@ -168,22 +168,35 @@ map2check_check_load(NULL, 12, 0, 4, "main");   /* None */
 
 ### SD-06 — Freeing an address with no record
 
-**Classification:** suspected regression (#37; differential check in #15)
-**Tests:** `rust/src/ffi_tests.rs::check_free_rejects_double_free_and_untracked_address`, `rust/src/analysismode/memory.rs::free_resolved_checker_outcomes`
+**Classification:** fixed (#37)
+**Tests:** `rust/src/ffi_tests.rs::sd06_untracked_free_is_invalid`, `rust/src/ffi_tests.rs::check_free_resolved_address_rejects_stack_slot`, `rust/src/ffi_tests.rs::check_free_rejects_double_free_and_untracked_address`, `rust/src/analysismode/memory.rs::free_resolved_checker_outcomes`, `rust/src/memtrack/mod.rs::free_resolved_unknown_address_is_invalid`
 
-**Rust:** `map2check_check_free` reports `MEMSAFETY_FREE` for an address
-with no record, but `map2check_check_free_resolved_address` treats that
-address as safe.
+**Rust:** `map2check_check_free` and `map2check_check_free_resolved_address`
+both report `MEMSAFETY_FREE` for an address with no heap record (no
+allocation or free event; a stack slot or a pointer store does not count).
+The most recent heap record for the address decides: a freed block is an
+invalid free, a live one is valid.
 
-**Legacy (embedded C library):** `is_invalid_free` returns true for an
-address with no record (`lib_old/ListLog.c:95-118`), and both
-`map2check_free` and `map2check_free_resolved_address` use it.
+Before #37, `map2check_check_free_resolved_address` treated an address with
+no record as a safe free (`is_invalid_free_resolved` ended in
+`.unwrap_or(false)`).
+
+**C runtime of Map2Check `develop`:** `is_invalid_free`
+(`modules/backend/library/lib/ListLog.c:95-118`) returns false for NULL,
+lets the most recent `list_log` row pointing to the address decide
+(invalid if freed or not dynamic) and returns true when no row is found.
+Both `map2check_free` (`AnalysisModeMemtrack.c:351`) and
+`map2check_free_resolved_address` (`AnalysisModeMemtrack.c:171`) use it in
+memtrack mode. `develop` matches `lib_old` here. (In memcleanup mode,
+`AnalysisModeMemcleanup.c:167` and `:341` hard-code `error = FALSE`; this
+library does not have that mode split.)
 
 **Reproduce:**
 
 ```c
 map2check_init();
-map2check_check_free_resolved_address((void *)0x5000, 3, "main", 0);  /* None */
+map2check_check_free_resolved_address((void *)0x5000, 3, "main", 0);  /* MemsafetyFree (before #37: None) */
+map2check_reset();
 map2check_check_free("p", (void *)0x5000, 0, 4, "main");             /* MemsafetyFree */
 ```
 

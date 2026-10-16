@@ -295,11 +295,12 @@ mod tests {
                 .unwrap(),
             violated(ViolatedProperty::MemsafetyFree)
         );
+        // SD-06 / #37: an untracked address is an invalid free.
         assert_eq!(
             FreeResolvedChecker { address: 0x9999 }
                 .check(&ctx())
                 .unwrap(),
-            VccOutcome::Safe
+            violated(ViolatedProperty::MemsafetyFree)
         );
     }
 

@@ -84,7 +84,7 @@ build with `--features libfuzzer`.
 | `map2check_binop_shr_unsigned` | `void map2check_binop_shr_unsigned(uint32_t param1, uint32_t param2, uint32_t line, uint32_t scope, const char *function_name)` | `map2check_binop_shr_unsigned` | same | `int`/`unsigned` (32-bit) only, as in C. |
 | `map2check_check_load` | `void map2check_check_load(const void *ptr, int32_t line, uint32_t scope, int32_t size, const char *function_name)` | `map2check_check_load` | changed | Address-validity rule rewritten (plan R1; differential check in #15). The first violation is final; a later check never clears or replaces it (SD-03); NULL handling in SD-05. |
 | `map2check_check_free` | `void map2check_check_free(const char *_name, const void *ptr, uint32_t _scope, uint32_t line, const char *function_name)` | `map2check_check_free` | same | `_name` and `_scope` are ignored. Untracked address is a violation (SD-06). |
-| `map2check_check_free_resolved_address` | `void map2check_check_free_resolved_address(const void *ptr, uint32_t line, const char *function_name, int16_t is_null_valid)` | `analysis_memory.h:46` | same | Semantics in its section; untracked address is safe (SD-06). |
+| `map2check_check_free_resolved_address` | `void map2check_check_free_resolved_address(const void *ptr, uint32_t line, const char *function_name, int16_t is_null_valid)` | `analysis_memory.h:46` | same | Semantics in its section; untracked address is a violation (SD-06). |
 | `map2check_check_deref` | `void map2check_check_deref(const void *ptr, uint32_t scope, uint32_t line, const char *function_name)` | `map2check_check_deref` | same | Name collides with the pass ABI `map2check_check_deref(i64, ptr)`; see the pass matrix (#21). |
 | `map2check_check_mem_endprog` | `void map2check_check_mem_endprog(void)` | `map2check_check_mem_endprog` | changed | Leak algorithm rewritten; no-op until `map2check_set_memcleanup()` (SD-04). |
 | `LLVMFuzzerTestOneInput` | `int32_t LLVMFuzzerTestOneInput(const uint8_t *data, uintptr_t size)` | `LLVMFuzzerTestOneInput` | same | Feature `libfuzzer`. Resets the analysis state on every iteration (SD-11). |
@@ -264,13 +264,13 @@ receives. The Rust export:
 - returns without a check when `ptr` is NULL and `is_null_valid != 0`;
 - reports `MEMSAFETY_FREE` when the most recent record whose
   `mem_address_points_to` equals `ptr` is already freed;
-- treats an address with no record as safe;
+- reports `MEMSAFETY_FREE` for an address with no heap record (SD-06, #37);
 - only checks: it does not mark the block freed. The caller records the
   release with `map2check_map_free`.
 
-The embedded C library of Map2Check
-(`lib_old/AnalysisModeMemtrack.c:164-183` and `lib_old/ListLog.c:95-118` on
-`origin/refactory_memory_log`) differs in two ways: an address with no
-record is an invalid free, and the function also marks the block freed. The
-first difference is SD-06. The second keeps the split between checking and
-recording that the rest of the core API already uses.
+The C runtime of Map2Check `develop`
+(`modules/backend/library/lib/AnalysisModeMemtrack.c:164-183` and
+`ListLog.c:95-118`) agrees on the untracked address since #37, and still
+differs in one way: the function also marks the block freed. That keeps the
+split between checking and recording that the rest of the core API already
+uses.

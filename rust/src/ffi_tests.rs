@@ -829,6 +829,34 @@ fn check_free_resolved_address_rejects_freed_target() {
 }
 
 #[test]
+fn sd06_untracked_free_is_invalid() {
+    // SD-06 / #37: both free paths use develop's `is_invalid_free`, which
+    // reports an address with no record as an invalid free.
+    let _guard = fresh();
+    // SAFETY: C-string literal is valid; fake address is never dereferenced.
+    unsafe { map2check_check_free_resolved_address(addr(0x5000), 3, c"main".as_ptr(), 0) };
+    assert_violated(ViolatedProperty::MemsafetyFree, 3, "main");
+
+    state::reset();
+    // SAFETY: as above.
+    unsafe { map2check_check_free(c"p".as_ptr(), addr(0x5000), 0, 4, c"main".as_ptr()) };
+    assert_violated(ViolatedProperty::MemsafetyFree, 4, "main");
+}
+
+#[test]
+fn check_free_resolved_address_rejects_stack_slot() {
+    // develop: a stack slot never reaches list_log as a dynamic row, so
+    // `is_invalid_free` reports it (ListLog.c:95-118).
+    let _guard = fresh();
+    // SAFETY: C-string literals are valid; fake address is never dereferenced.
+    unsafe {
+        map2check_map_alloca(c"x".as_ptr(), addr(0x6000), 8, 4, 1, 0);
+        map2check_check_free_resolved_address(addr(0x6000), 5, c"main".as_ptr(), 0);
+    }
+    assert_violated(ViolatedProperty::MemsafetyFree, 5, "main");
+}
+
+#[test]
 fn check_free_resolved_address_null_depends_on_flag() {
     let _guard = fresh();
     // SAFETY: C-string literal is valid; null is never dereferenced.
