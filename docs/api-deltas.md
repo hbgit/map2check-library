@@ -63,17 +63,17 @@ build with `--features libfuzzer`.
 | `map2check_save_nondet_log_float` | `non_det_log_t *map2check_save_nondet_log_float(int line, int scope, enum var_type_t type_var, float *value, const char *function_name)` | returns `non_det_log_t *` | same | Returned record is not linked into a list (SD-10). |
 | `map2check_save_nondet_log_double` | `non_det_log_t *map2check_save_nondet_log_double(int line, int scope, enum var_type_t type_var, double *value, const char *function_name)` | returns `non_det_log_t *` | same | Returned record is not linked into a list (SD-10). |
 | `map2check_save_nondet_log_char` | `non_det_log_t *map2check_save_nondet_log_char(int line, int scope, enum var_type_t type_var, char *value, const char *function_name)` | returns `non_det_log_t *`; `char` value | same | `char` is `i8` on the Rust side; see “`char` ABI”. Returned record is not linked (SD-10). |
-| `map2check_save_nondet_log_unsigned` | `non_det_log_t *map2check_save_nondet_log_unsigned(int line, int scope, int type_var, unsigned int *value, const char *function_name)` | — | new | Develop `map2check_nondet_unsigned` (`NonDetLog.c:105-150`), called by the pass with the value stored in an `alloca` of its C type (#6, #13). Row type UNSIGNED (5), value printed with `%u`; see “Nondet generators and the nondet log”. `type_var` is only kept in the returned record. Returned record is not linked (SD-10). |
-| `map2check_save_nondet_log_ulong` | `non_det_log_t *map2check_save_nondet_log_ulong(int line, int scope, int type_var, unsigned long *value, const char *function_name)` | — | new | Develop `map2check_nondet_ulong` (`NonDetLog.c:105-150`), called by the pass with the value stored in an `alloca` of its C type (#6, #13). Row type ULONG (6), low 32 bits with `%d`; see “Nondet generators and the nondet log”. `type_var` is only kept in the returned record. Returned record is not linked (SD-10). |
-| `map2check_save_nondet_log_uchar` | `non_det_log_t *map2check_save_nondet_log_uchar(int line, int scope, int type_var, unsigned char *value, const char *function_name)` | — | new | Develop `map2check_nondet_uchar` (`NonDetLog.c:105-150`), called by the pass with the value stored in an `alloca` of its C type (#6, #13). Row type UCHAR (8), value zero-extended; see “Nondet generators and the nondet log”. `type_var` is only kept in the returned record. Returned record is not linked (SD-10). |
-| `map2check_save_nondet_log_short` | `non_det_log_t *map2check_save_nondet_log_short(int line, int scope, int type_var, short *value, const char *function_name)` | — | new | Develop `map2check_nondet_short` (`NonDetLog.c:105-150`), called by the pass with the value stored in an `alloca` of its C type (#6, #13). Row type SHORT (14), value zero-extended as the pass does (`-2` is logged as `65534`); see “Nondet generators and the nondet log”. `type_var` is only kept in the returned record. Returned record is not linked (SD-10). |
-| `map2check_save_nondet_log_ushort` | `non_det_log_t *map2check_save_nondet_log_ushort(int line, int scope, int type_var, unsigned short *value, const char *function_name)` | — | new | Develop `map2check_nondet_ushort` (`NonDetLog.c:105-150`), called by the pass with the value stored in an `alloca` of its C type (#6, #13). Row type USHORT (3), value zero-extended; see “Nondet generators and the nondet log”. `type_var` is only kept in the returned record. Returned record is not linked (SD-10). |
-| `map2check_save_nondet_log_bool` | `non_det_log_t *map2check_save_nondet_log_bool(int line, int scope, int type_var, int *value, const char *function_name)` | — | new | Develop `map2check_nondet_bool` (`NonDetLog.c:105-150`), called by the pass with the value stored in an `alloca` of its C type (#6, #13). Row type BOOL (7); develop's `bool` is `typedef int bool` (`NonDetGenerator.h:74`), so the pass widens the `_Bool` to `int` before storing it; see “Nondet generators and the nondet log”. `type_var` is only kept in the returned record. Returned record is not linked (SD-10). |
-| `map2check_save_nondet_log_size_t` | `non_det_log_t *map2check_save_nondet_log_size_t(int line, int scope, int type_var, size_t *value, const char *function_name)` | — | new | Develop `map2check_nondet_size_t` (`NonDetLog.c:105-150`), called by the pass with the value stored in an `alloca` of its C type (#6, #13). Row type SIZE_T (10), low 32 bits with `%d`; see “Nondet generators and the nondet log”. `type_var` is only kept in the returned record. Returned record is not linked (SD-10). |
-| `map2check_save_nondet_log_loff_t` | `non_det_log_t *map2check_save_nondet_log_loff_t(int line, int scope, int type_var, long long *value, const char *function_name)` | — | new | Develop `map2check_nondet_loff_t` (`NonDetLog.c:105-150`), called by the pass with the value stored in an `alloca` of its C type (#6, #13). Row type LOFF_T (11); `loff_t` is glibc's `long long`; low 32 bits with `%d`; see “Nondet generators and the nondet log”. `type_var` is only kept in the returned record. Returned record is not linked (SD-10). |
-| `map2check_save_nondet_log_sector_t` | `non_det_log_t *map2check_save_nondet_log_sector_t(int line, int scope, int type_var, unsigned long *value, const char *function_name)` | — | new | Develop `map2check_nondet_sector_t` (`NonDetLog.c:105-150`), called by the pass with the value stored in an `alloca` of its C type (#6, #13). Row type SECTOR_T (12); `sector_t` is `unsigned long` (`NonDetGenerator.h:112`); low 32 bits with `%d`; see “Nondet generators and the nondet log”. `type_var` is only kept in the returned record. Returned record is not linked (SD-10). |
-| `map2check_save_nondet_log_pointer` | `non_det_log_t *map2check_save_nondet_log_pointer(int line, int scope, int type_var, void **value, const char *function_name)` | — | new | Develop `map2check_nondet_pointer` (`NonDetLog.c:105-150`), called by the pass with the value stored in an `alloca` of its C type (#6, #13). Row type POINTER (2); the address, logged as its low 32 bits (the pass's `ptrtoint` to `i32`); see “Nondet generators and the nondet log”. `type_var` is only kept in the returned record. Returned record is not linked (SD-10). |
-| `map2check_save_nondet_log_pchar` | `non_det_log_t *map2check_save_nondet_log_pchar(int line, int scope, int type_var, char **value, const char *function_name)` | — | new | Develop `map2check_nondet_pchar` (`NonDetLog.c:105-150`), called by the pass with the value stored in an `alloca` of its C type (#6, #13). Row type PCHAR (9); the string's address, logged as its low 32 bits; see “Nondet generators and the nondet log”. `type_var` is only kept in the returned record. Returned record is not linked (SD-10). |
+| `map2check_save_nondet_log_unsigned` | `non_det_log_t *map2check_save_nondet_log_unsigned(int line, int scope, int type_var, unsigned int *value, const char *function_name)` | — | new | Develop `map2check_nondet_unsigned` (`NonDetLog.c:105-150`), called by the pass with the value stored in an `alloca` of its C type (#6, #13). Row type UNSIGNED (5), value printed with `%u`; see “Nondet generators and the nondet log”. `type_var` is ignored for the row type (see “Nondet generators and the nondet log”). Returned record is not linked (SD-10). |
+| `map2check_save_nondet_log_ulong` | `non_det_log_t *map2check_save_nondet_log_ulong(int line, int scope, int type_var, unsigned long *value, const char *function_name)` | — | new | Develop `map2check_nondet_ulong` (`NonDetLog.c:105-150`), called by the pass with the value stored in an `alloca` of its C type (#6, #13). Row type ULONG (6), low 32 bits with `%d`; see “Nondet generators and the nondet log”. `type_var` is ignored for the row type (see “Nondet generators and the nondet log”). Returned record is not linked (SD-10). |
+| `map2check_save_nondet_log_uchar` | `non_det_log_t *map2check_save_nondet_log_uchar(int line, int scope, int type_var, unsigned char *value, const char *function_name)` | — | new | Develop `map2check_nondet_uchar` (`NonDetLog.c:105-150`), called by the pass with the value stored in an `alloca` of its C type (#6, #13). Row type UCHAR (8), value zero-extended; see “Nondet generators and the nondet log”. `type_var` is ignored for the row type (see “Nondet generators and the nondet log”). Returned record is not linked (SD-10). |
+| `map2check_save_nondet_log_short` | `non_det_log_t *map2check_save_nondet_log_short(int line, int scope, int type_var, short *value, const char *function_name)` | — | new | Develop `map2check_nondet_short` (`NonDetLog.c:105-150`), called by the pass with the value stored in an `alloca` of its C type (#6, #13). Row type SHORT (14), value zero-extended as the pass does (`-2` is logged as `65534`); see “Nondet generators and the nondet log”. `type_var` is ignored for the row type (see “Nondet generators and the nondet log”). Returned record is not linked (SD-10). |
+| `map2check_save_nondet_log_ushort` | `non_det_log_t *map2check_save_nondet_log_ushort(int line, int scope, int type_var, unsigned short *value, const char *function_name)` | — | new | Develop `map2check_nondet_ushort` (`NonDetLog.c:105-150`), called by the pass with the value stored in an `alloca` of its C type (#6, #13). Row type USHORT (3), value zero-extended; see “Nondet generators and the nondet log”. `type_var` is ignored for the row type (see “Nondet generators and the nondet log”). Returned record is not linked (SD-10). |
+| `map2check_save_nondet_log_bool` | `non_det_log_t *map2check_save_nondet_log_bool(int line, int scope, int type_var, int *value, const char *function_name)` | — | new | Develop `map2check_nondet_bool` (`NonDetLog.c:105-150`), called by the pass with the value stored in an `alloca` of its C type (#6, #13). Row type BOOL (7); develop's `bool` is `typedef int bool` (`NonDetGenerator.h:74`), so the pass widens the `_Bool` to `int` before storing it; see “Nondet generators and the nondet log”. `type_var` is ignored for the row type (see “Nondet generators and the nondet log”). Returned record is not linked (SD-10). |
+| `map2check_save_nondet_log_size_t` | `non_det_log_t *map2check_save_nondet_log_size_t(int line, int scope, int type_var, size_t *value, const char *function_name)` | — | new | Develop `map2check_nondet_size_t` (`NonDetLog.c:105-150`), called by the pass with the value stored in an `alloca` of its C type (#6, #13). Row type SIZE_T (10), low 32 bits with `%d`; see “Nondet generators and the nondet log”. `type_var` is ignored for the row type (see “Nondet generators and the nondet log”). Returned record is not linked (SD-10). |
+| `map2check_save_nondet_log_loff_t` | `non_det_log_t *map2check_save_nondet_log_loff_t(int line, int scope, int type_var, long long *value, const char *function_name)` | — | new | Develop `map2check_nondet_loff_t` (`NonDetLog.c:105-150`), called by the pass with the value stored in an `alloca` of its C type (#6, #13). Row type LOFF_T (11); `loff_t` is glibc's `long long`; low 32 bits with `%d`; see “Nondet generators and the nondet log”. `type_var` is ignored for the row type (see “Nondet generators and the nondet log”). Returned record is not linked (SD-10). |
+| `map2check_save_nondet_log_sector_t` | `non_det_log_t *map2check_save_nondet_log_sector_t(int line, int scope, int type_var, unsigned long *value, const char *function_name)` | — | new | Develop `map2check_nondet_sector_t` (`NonDetLog.c:105-150`), called by the pass with the value stored in an `alloca` of its C type (#6, #13). Row type SECTOR_T (12); `sector_t` is `unsigned long` (`NonDetGenerator.h:112`); low 32 bits with `%d`; see “Nondet generators and the nondet log”. `type_var` is ignored for the row type (see “Nondet generators and the nondet log”). Returned record is not linked (SD-10). |
+| `map2check_save_nondet_log_pointer` | `non_det_log_t *map2check_save_nondet_log_pointer(int line, int scope, int type_var, void **value, const char *function_name)` | — | new | Develop `map2check_nondet_pointer` (`NonDetLog.c:105-150`), called by the pass with the value stored in an `alloca` of its C type (#6, #13). Row type POINTER (2); the address, logged as its low 32 bits (the pass's `ptrtoint` to `i32`); see “Nondet generators and the nondet log”. `type_var` is ignored for the row type (see “Nondet generators and the nondet log”). Returned record is not linked (SD-10). |
+| `map2check_save_nondet_log_pchar` | `non_det_log_t *map2check_save_nondet_log_pchar(int line, int scope, int type_var, char **value, const char *function_name)` | — | new | Develop `map2check_nondet_pchar` (`NonDetLog.c:105-150`), called by the pass with the value stored in an `alloca` of its C type (#6, #13). Row type PCHAR (9); the string's address, logged as its low 32 bits; see “Nondet generators and the nondet log”. `type_var` is ignored for the row type (see “Nondet generators and the nondet log”). Returned record is not linked (SD-10). |
 | `map2check_save_basic_block_log` | `bbtrack_log_t *map2check_save_basic_block_log(int32_t line, const char *function_name)` | returns `bbtrack_log_t *` | same | Returned record is not linked into a list (SD-10). |
 | `map2check_is_in_trackbb_container` | `int32_t map2check_is_in_trackbb_container(int32_t line)` | `map2check_is_in_trackbb_container` | same |  |
 | `map2check_map_alloca` | `void map2check_map_alloca(const char *var_name, const void *ptr_address, int32_t size, int32_t size_primitive, int32_t line_number, int32_t scope)` | `container_memtracklog.h:41` | same |  |
@@ -124,7 +124,7 @@ build with `--features libfuzzer`.
 | `__VERIFIER_nondet_loff_t` | `int64_t __VERIFIER_nondet_loff_t(void)` | `map2check_gen_data_fuzzer_loff_t` | new | Feature `libfuzzer`. Core target of the pass's `map2check_non_det_loff_t` (#6); `loff_t` is glibc's `long long`, eight bytes (SD-18). |
 | `__VERIFIER_nondet_sector_t` | `unsigned long __VERIFIER_nondet_sector_t(void)` | `map2check_gen_data_fuzzer_sector_t` | new | Feature `libfuzzer`. Core target of `map2check_non_det_sector_t` (#6); develop's `sector_t` is `unsigned long` (`NonDetGenerator.h:112`), eight bytes (SD-18). |
 | `__VERIFIER_nondet_pchar` | `char *__VERIFIER_nondet_pchar(void)` | `map2check_gen_data_fuzzer_pchar` | new | Feature `libfuzzer`. Core target of `map2check_non_det_pchar` (#6). An `unsigned` length, NULL for 0, capped at 4096, then `length - 1` chars and a NUL, as `NonDetGeneratorAFL.c:101-118`; the string comes from the C `malloc` and the program may `free` it (SD-18). |
-| `__VERIFIER_assume` | `void __VERIFIER_assume(int32_t condition)` | — | new | Feature `libfuzzer`. `__VERIFIER_assume(0)` abandons the current fuzzer input and `LLVMFuzzerTestOneInput` returns 0, as develop's `nondet_cancel`; with no iteration running it calls `exit(0)` (SD-07). Defined `extern "C-unwind"`; see “`__VERIFIER_assume` under a fuzzer”. |
+| `__VERIFIER_assume` | `void __VERIFIER_assume(int32_t condition)` | — | new | Feature `libfuzzer`. `__VERIFIER_assume(0)` abandons the current fuzzer input and `LLVMFuzzerTestOneInput` returns 0, as develop's `nondet_cancel`; with no iteration running it calls `exit(0)` (SD-07). Defined `extern "C-unwind"`. The analysed program must be compiled with `-fexceptions` (D1 condition 11); see “`__VERIFIER_assume` under a fuzzer”. |
 | `map2check_fuzzer_assume` | `void map2check_fuzzer_assume(int32_t condition)` | `map2check_fuzzer_assume(int)` (`nondet_gen_libfuzzer.h:41`) | changed | Feature `libfuzzer`. Same behaviour as `__VERIFIER_assume` (SD-07). |
 | `__VERIFIER_error` | `void __VERIFIER_error(void)` | — | new | Feature `libfuzzer`. Records REACHABILITY, prints the JSON report when the mode is unset, then aborts (SD-08). |
 | `__VERIFIER_assert` | `void __VERIFIER_assert(int32_t condition)` | — | new | Feature `libfuzzer`. `__VERIFIER_assert(0)` calls `__VERIFIER_error()` (SD-08). |
@@ -291,7 +291,18 @@ number of the export (`Map2CheckTypes.h:41-58`), and the value as
 types zero-extended, wide types and addresses truncated to 32 bits),
 printed with `%u` for `unsigned`, `%lf` for `double` and `%d` otherwise
 (`NonDetLog.c:45-54`). The golden `tests/legacy_golden/NONDET-TYPES/` holds
-one row of each type. `type_var` is only kept in the returned record.
+one row of each type.
+
+**`type_var` is ignored for the row type.** It is only copied into the
+returned record. The row type comes from the export, as in develop, whose
+wrappers are generated per type (`MAP2CHECK_NONDET_GENERATOR(type,
+nondet_type)`, `NonDetLog.c:105-128`) and take no type argument. Trusting
+`type_var` would let one call carry two types, the export's C type for the
+pointer and `type_var` for the row; deriving it from the export keeps them
+the same. The cost: a pass that calls the wrong saver logs the wrong type
+silently, so Task 3.2 must map each `map2check_nondet_<t>` to its
+`map2check_save_nondet_log_<t>` exactly as `docs/cutover/abi-mapping.tsv`
+says.
 
 ## `__VERIFIER_assume` under a fuzzer
 
@@ -307,10 +318,43 @@ assume calls `std::panic::resume_unwind` with a private payload (no panic
 hook runs, nothing is printed), and `LLVMFuzzerTestOneInput` catches it with
 `catch_unwind` and returns 0. The exports and the `__map2check_main__`
 import are `extern "C-unwind"`, the ABI that lets a Rust unwind cross C
-frames (RFC 2945). The analysed program's frames in between must carry
-unwind tables, which clang emits by default on x86-64 Linux; they hold no
-cleanups, so the unwind skips exactly what develop's `longjmp` skips. The
-unwind needs `panic = "unwind"` (the `release` and `runtime` profiles).
+frames (RFC 2945). The unwind needs `panic = "unwind"` (the `release` and
+`runtime` profiles).
+
+**The analysed program must be compiled with `-fexceptions` (D1 condition
+11, Task 3.2).** clang marks every C function `nounwind` unless it gets
+`-fexceptions`, and LLVM IR makes unwinding out of a `nounwind` function
+undefined. Without the flag the unwind works only because x86-64 Linux
+emits `.eh_frame` by default; with `-fno-asynchronous-unwind-tables
+-fno-unwind-tables` it aborts ("failed to initiate panic, error 5"), which
+AFL++ would count as a crash. Measured on `tests/ffi_harness.c` at `-O2`,
+with clang-16 and afl-clang-fast 4.40c
+(`scripts/cutover/d1-remeasure/results/flags16.txt`):
+
+| Program flags | `__map2check_main__` attributes | Harness |
+|---|---|---|
+| default | `nounwind uwtable` | passes (undefined in IR) |
+| `-funwind-tables` | `nounwind uwtable` | passes (undefined in IR) |
+| `-fno-asynchronous-unwind-tables -fno-unwind-tables` | `nounwind` | aborts |
+| `-fexceptions` | `uwtable` | passes, defined |
+| `-fexceptions -fno-asynchronous-unwind-tables -fno-unwind-tables` | (none) | passes, defined |
+
+`-fexceptions` is the required flag. It is the only one that removes
+`nounwind`, and it keeps the unwind information even if a later flag drops
+the tables. It must be given where the program becomes bitcode (the
+`clang -emit-llvm` step), because the attributes travel in the bitcode
+that `afl-clang-fast` receives. Unwind tables alone are not enough: they
+make the unwind work, not defined. CI builds the harness at `-O2` with and
+without the flag.
+
+Plain C frames hold no cleanups, so the unwind skips what develop's
+`longjmp` skips. A frame with `__attribute__((cleanup))` compiled with
+`-fexceptions` would have its cleanup run, which `longjmp` would skip.
+
+`ITERATION_ACTIVE`, the flag that tells an assume whether an iteration is
+running, is process-wide: an assume on another thread while an iteration
+runs aborts the process (develop's cross-thread `longjmp` is undefined
+too).
 
 With no iteration running (no `LLVMFuzzerTestOneInput` on the stack), or in
 a `panic = "abort"` build, the assume keeps ending the process with

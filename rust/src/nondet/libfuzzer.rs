@@ -26,6 +26,12 @@ static FUZZER_CURSOR: AtomicUsize = AtomicUsize::new(0);
 static FUZZER_SIZE: AtomicUsize = AtomicUsize::new(0);
 static FUZZER_DATA: AtomicPtr<u8> = AtomicPtr::new(std::ptr::null_mut());
 /// True while `LLVMFuzzerTestOneInput` runs the program for one input.
+///
+/// Process-wide, not per thread: a program thread that calls
+/// `__VERIFIER_assume(0)` while an iteration runs on another thread unwinds
+/// a stack with no `catch_unwind` on it, and the process aborts. Develop's
+/// cross-thread `longjmp` is undefined as well; the fuzzer drives the
+/// program on one thread.
 static ITERATION_ACTIVE: AtomicBool = AtomicBool::new(false);
 
 struct FuzzerStateReset;
@@ -258,10 +264,17 @@ pub extern "C" fn __VERIFIER_nondet_pchar() -> *mut std::os::raw::c_char {
 // Every Rust function on that path is declared `C-unwind`
 // (`__VERIFIER_assume`, `map2check_fuzzer_assume`, the `__map2check_main__`
 // import), which is the defined way for a Rust unwind to cross C frames
-// (RFC 2945). The C frames in between are the analysed program's: they
-// must carry unwind tables, which clang emits by default on x86-64 Linux
-// (`-funwind-tables`); they hold no cleanups, so nothing is skipped that
-// develop's `longjmp` would not skip as well. The unwind needs
+// (RFC 2945). The C frames in between are the analysed program's. clang
+// marks C functions `nounwind` unless the program is compiled with
+// `-fexceptions`, and unwinding out of a `nounwind` function is undefined
+// in LLVM IR; without `-fexceptions` the unwind only works because x86-64
+// Linux emits `.eh_frame` by default, and with no unwind tables at all it
+// aborts ("failed to initiate panic"). D1 condition 11 therefore requires
+// the pipeline to compile the program with `-fexceptions` (Task 3.2). Plain
+// C frames hold no cleanups, so the unwind skips what develop's `longjmp`
+// skips; a frame with `__attribute__((cleanup))` compiled with
+// `-fexceptions` would have its cleanup run, which `longjmp` would skip.
+// The unwind needs
 // `panic = "unwind"` (the `runtime` and `release` profiles); built with
 // `panic = "abort"` the library keeps the exit(0) fallback below.
 //

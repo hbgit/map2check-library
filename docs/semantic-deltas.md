@@ -245,8 +245,12 @@ map2check_check_free("p", (void *)0x5000, 0, 4, "main");             /* Memsafet
 frames back to `LLVMFuzzerTestOneInput`, which catches it and returns 0.
 The fuzzer goes on with the next input in the same process, and the next
 iteration starts from an empty state (SD-11). Both exports, and the
-`__map2check_main__` import, are `extern "C-unwind"`; the program's frames
-need unwind tables, the clang default on x86-64 Linux. With no iteration
+`__map2check_main__` import, are `extern "C-unwind"`. The program must be
+compiled with `-fexceptions` (D1 condition 11): without it clang marks the
+C frames `nounwind`, and the unwind works only thanks to the default
+`.eh_frame`, undefined in LLVM IR. A program frame with
+`__attribute__((cleanup))` compiled with `-fexceptions` has its cleanup run
+by the unwind, where develop's `longjmp` skips it. With no iteration
 running (a program linked without a fuzzer driver), or in a
 `panic = "abort"` build, they keep calling `exit(0)`.
 

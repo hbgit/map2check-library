@@ -490,8 +490,11 @@ macro_rules! nondet_ffi {
 
 // One export per `map2check_nondet_<t>` of develop (`NonDetLog.c:105-150`),
 // each taking a pointer to the value in the C type `NonDetGenerator.h` gives
-// that family. The `type_var` argument is only kept in the returned record:
-// the `enum NONDET_TYPE` of the row comes from the export, as in develop.
+// that family. The `type_var` argument is ignored for the row type and only
+// kept in the returned record: the `enum NONDET_TYPE` of the row comes from
+// the export, as develop's per-type wrappers do (`NonDetLog.c:105-128`), so
+// the value's C type and the row type cannot disagree. A pass that calls the
+// wrong saver therefore logs the wrong type (docs/api-deltas.md).
 nondet_ffi!(map2check_save_nondet_log_int, i32, i, 0, NonDetValue::Int);
 nondet_ffi!(map2check_save_nondet_log_uint, u32, u, 0, NonDetValue::UInt);
 nondet_ffi!(

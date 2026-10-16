@@ -84,6 +84,25 @@ jobs:
           done
           [ "$ok" = 1 ]
 
+      # The harness rejects inputs with __VERIFIER_assume(0), which unwinds
+      # through the C frame of its __map2check_main__ (D1 condition 11).
+      # Optimised builds are where a missing unwind path would show: once
+      # with -fexceptions, the flag the pipeline must use, and once with
+      # clang's defaults.
+      - name: Compilar e executar harness FFI em -O2 (com e sem -fexceptions)
+        run: |
+          cargo build --release --all-features
+          for flags in "-fexceptions" ""; do
+            clang -O2 $flags -fsanitize=address,undefined -fno-omit-frame-pointer \
+              tests/ffi_harness.c target/release/libmap2check.a \
+              -ldl -lpthread -lm -o target/ffi_harness_o2
+            ok=0
+            for i in 1 2 3 4 5; do
+              if target/ffi_harness_o2; then ok=1; break; fi
+            done
+            [ "$ok" = 1 ] || { echo "ffi_harness -O2 $flags falhou"; exit 1; }
+          done
+
       - name: Compilar e executar test/codeAPI_by_caller_test.c (API núcleo)
         run: |
           cargo build --release
