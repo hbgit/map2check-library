@@ -37,6 +37,7 @@ MEMORY="AllocationLog ListLog HeapLog"
 # tag -> analysis mode files (:578-612)
 declare -A MODE=(
   [FALSE-FREE]="AnalysisModeMemtrack $MEMORY"
+  [FALSE-FREE-RESOLVED]="AnalysisModeMemtrack $MEMORY"
   [FALSE-DEREF]="AnalysisModeMemtrack $MEMORY"
   [FALSE-MEMTRACK]="AnalysisModeMemtrack $MEMORY"
   [FALSE-MEMCLEANUP]="AnalysisModeMemcleanup $MEMORY"
@@ -49,7 +50,7 @@ declare -A MODE=(
   [TARGET-REACHED]="AnalysisModeNone"
 )
 
-for tag in FALSE-FREE FALSE-DEREF FALSE-MEMTRACK FALSE-MEMCLEANUP NONE \
+for tag in FALSE-FREE FALSE-FREE-RESOLVED FALSE-DEREF FALSE-MEMTRACK FALSE-MEMCLEANUP NONE \
   UNKNOWN OVERFLOW DIVBYZERO POSIX-MEMALIGN ASSERT TARGET-REACHED; do
   bc "$DRIVERS/$tag.c" "$WORK/$tag-output.bc"
   inputs=("$WORK/$tag-output.bc")

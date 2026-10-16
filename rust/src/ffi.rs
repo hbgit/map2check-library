@@ -256,6 +256,7 @@ pub extern "C" fn vcc_reset_meta_data() {
                 s.result.ok = true;
                 s.result.line = 0;
                 s.result.function_name.clear();
+                s.failed_free = None;
                 Ok(())
             }) {
                 log_error(&e);
@@ -879,11 +880,22 @@ pub unsafe extern "C" fn map2check_map_posix_memalign(
     );
 }
 
+/// Records the release of the heap block `ptr_address` by `free(p)`, where
+/// `var_address` is the address of the pointer variable `p` whose value the
+/// program freed (develop's `map2check_free` receives that slot,
+/// `MemoryTrackPass.cpp:818`). The release is keyed on the block; the slot
+/// only names the variable in the legacy `list_log.csv`
+/// (`AnalysisModeMemtrack.c:339-347`). The pass loads `*var_address` for
+/// `ptr_address`, calls `map2check_check_free` first with the same
+/// arguments, and calls neither for a NULL block.
+///
 /// # Safety
 /// `var_name` and `function_name` must be null or valid null-terminated C strings.
+/// `var_address` is only stored, never dereferenced.
 #[no_mangle]
 pub unsafe extern "C" fn map2check_map_free(
     var_name: *const std::os::raw::c_char,
+    var_address: *const std::os::raw::c_void,
     ptr_address: *const std::os::raw::c_void,
     scope: u32,
     line_number: u32,
@@ -912,7 +924,9 @@ pub unsafe extern "C" fn map2check_map_free(
                     false,
                 );
                 entry.set_free();
-                s.memtrack.push(entry.with_origin(MemOrigin::Free));
+                s.memtrack.push(entry.with_origin(MemOrigin::Free {
+                    var_address: var_address as usize,
+                }));
                 Ok(())
             }) {
                 log_error(&e);
@@ -1293,15 +1307,23 @@ pub unsafe extern "C" fn map2check_check_load(
     );
 }
 
-/// Checks whether freeing `ptr` is valid.
+/// Checks whether `free(p)` of the heap block `ptr` is valid, where
+/// `var_address` is the address of the pointer variable `p` (the same
+/// arguments as `map2check_map_free`, which the pass calls after it).
+///
+/// On a first violation, keeps the FREE row that develop's `map2check_free`
+/// appends to `list_log.csv` before it fails (`AnalysisModeMemtrack.c:346-358`);
+/// the row is not a release.
 ///
 /// # Safety
-/// `function_name` must be null or a valid null-terminated C string; `ptr` may be null.
+/// `name` and `function_name` must be null or valid null-terminated C strings;
+/// `ptr` and `var_address` may be null and are never dereferenced.
 #[no_mangle]
 pub unsafe extern "C" fn map2check_check_free(
-    _name: *const std::os::raw::c_char,
+    name: *const std::os::raw::c_char,
+    var_address: *const std::os::raw::c_void,
     ptr: *const std::os::raw::c_void,
-    _scope: u32,
+    scope: u32,
     line: u32,
     function_name: *const std::os::raw::c_char,
 ) {
@@ -1310,17 +1332,37 @@ pub unsafe extern "C" fn map2check_check_free(
             if !check_active(Check::Free) {
                 return;
             }
-            // SAFETY: caller guarantees function_name is valid or null.
+            // SAFETY: caller guarantees string pointers are valid or null.
             let fname = unsafe { c_str(function_name) };
             let ctx = VccContext::new(line, 0, fname);
-            run_vcc_check(
-                FreeChecker {
-                    address: ptr as usize,
-                },
-                &ctx,
-                line,
-                fname,
-            );
+            let checker = FreeChecker {
+                address: ptr as usize,
+            };
+            match checker.check(&ctx) {
+                Ok(crate::analysismode::VccOutcome::Violated { property }) => {
+                    // SAFETY: as above.
+                    let var_name = unsafe { c_str(name) };
+                    if let Err(e) = state::with_state(|s| {
+                        if s.result.ok {
+                            let addr = ptr as usize;
+                            let mut entry = MemTrackEntry::new(
+                                0, line, scope, addr, addr, true, false, var_name, fname, 0, 1,
+                                false,
+                            );
+                            entry.set_free();
+                            s.failed_free = Some(entry.with_origin(MemOrigin::Free {
+                                var_address: var_address as usize,
+                            }));
+                        }
+                        Ok(())
+                    }) {
+                        log_error(&e);
+                    }
+                    record_violation(property, line, fname, false);
+                }
+                Ok(crate::analysismode::VccOutcome::Safe) => {}
+                Err(e) => log_error(&e),
+            }
         },
         (),
     );

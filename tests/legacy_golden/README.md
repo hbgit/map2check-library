@@ -20,7 +20,8 @@ compiled with `clang-16`. Each binary runs in a fresh directory.
 
 | Tag | Mode file | Calls after `map2check_init(0)` and the shared tracking calls |
 |---|---|---|
-| `FALSE-FREE` | `AnalysisModeMemtrack.c` | memory prelude, `map2check_free` of `p`, `map2check_free_resolved_address` of the same block |
+| `FALSE-FREE` | `AnalysisModeMemtrack.c` | memory prelude, `map2check_free` of `p` twice (the second fails after appending its FREE row) |
+| `FALSE-FREE-RESOLVED` | `AnalysisModeMemtrack.c` | memory prelude, `map2check_free` of `p`, `map2check_free_resolved_address` of the same block |
 | `FALSE-DEREF` | `AnalysisModeMemtrack.c` | memory prelude, `map2check_load` of an unallocated address, `map2check_check_deref` |
 | `FALSE-MEMTRACK` | `AnalysisModeMemtrack.c` | memory prelude, `map2check_success` (the block leaks) |
 | `FALSE-MEMCLEANUP` | `AnalysisModeMemcleanup.c` | memory prelude, `map2check_success` (the block leaks, `p` points to it) |

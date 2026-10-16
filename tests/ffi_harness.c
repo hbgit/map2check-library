@@ -72,9 +72,9 @@ static void run_pre_init_boundary(void) {
     map2check_map_store_pointer(&stack_obj, heap_obj, 0, "", 1, "main");
     map2check_check_load(heap_obj, 1, 0, 0, "main");
     map2check_check_deref(heap_obj, 0, 1, "main");
-    map2check_check_free("", heap_obj, 0, 1, "main");
+    map2check_check_free("", &stack_obj, heap_obj, 0, 1, "main");
     map2check_check_free_resolved_address(heap_obj, 1, "main", 0);
-    map2check_map_free("", heap_obj, 0, 1, "main");
+    map2check_map_free("", &stack_obj, heap_obj, 0, 1, "main");
     map2check_check_mem_endprog();
 
     (void)map2check_save_basic_block_log(1, "main");
@@ -161,7 +161,7 @@ static void run_bad_inputs(void) {
     /* memory/deref/free/load checks, pre-init */
     map2check_check_load(NULL, 1, 0, 8, NULL);
     map2check_check_deref(NULL, 0, 2, NULL);
-    map2check_check_free(NULL, NULL, 0, 3, NULL);
+    map2check_check_free(NULL, NULL, NULL, 0, 3, NULL);
     map2check_check_free_resolved_address(NULL, 3, NULL, 1);
     map2check_check_mem_endprog();
     map2check_reach_target(NULL, -1, -1);
@@ -179,7 +179,7 @@ static void run_bad_inputs(void) {
         map2check_map_posix_memalign(&null_block, -1);
     }
     map2check_map_store_pointer(NULL, NULL, 0, NULL, 6, NULL);
-    map2check_map_free(NULL, NULL, 0, 7, NULL);
+    map2check_map_free(NULL, NULL, NULL, 0, 7, NULL);
 
     /* basic-block tracking, pre-init */
     map2check_save_basic_block_log(8, NULL);
@@ -265,11 +265,11 @@ static void run_valid_pass(void) {
             free(aligned);
         }
     }
-    map2check_map_free("buf", (void *)0x1, 1, 22, "main");
+    map2check_map_free("buf", (void *)0x1, (void *)0x2, 1, 22, "main");
 
     map2check_check_load((void *)0x1, 23, 1, 4, "main");
     map2check_check_deref((void *)0x1, 1, 24, "main");
-    map2check_check_free("buf", (void *)0x1, 1, 25, "main");
+    map2check_check_free("buf", (void *)0x1, (void *)0x2, 1, 25, "main");
     map2check_check_free_resolved_address(NULL, 25, "main", 1);
     map2check_check_mem_endprog();
 
@@ -380,7 +380,7 @@ static int test_result_and_control_flags(void) {
      * later violation leave it in place. */
     map2check_reset();
     set_false_result(Overflow, 10, "main");
-    map2check_check_free(NULL, NULL, 0, 11, NULL);
+    map2check_check_free(NULL, NULL, NULL, 0, 11, NULL);
     set_false_result(Reachability, 12, "main");
     if (get_current_property() != Overflow) {
         return 5;

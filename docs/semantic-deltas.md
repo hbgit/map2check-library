@@ -517,23 +517,19 @@ map2check_map_malloc(NULL, 4);   /* writes map2check_property__unknown, aborts *
 ### SD-17 — The memory and nondet logs are rebuilt from this library's records
 
 **Classification:** accepted limitation
-**Tests:** `rust/src/ffi_golden_tests.rs::false_free_matches_c_runtime`, `rust/src/ffi_golden_tests.rs::none_matches_c_runtime`, `rust/src/ffi_golden_tests.rs::false_memtrack_matches_c_runtime`, `rust/src/output/legacy_files.rs::nondet_rows_use_develop_types_and_value_formats`
+**Tests:** `rust/src/ffi_golden_tests.rs::false_free_matches_c_runtime`, `rust/src/ffi_golden_tests.rs::false_free_resolved_matches_c_runtime`, `rust/src/ffi_golden_tests.rs::none_matches_c_runtime`, `rust/src/ffi_golden_tests.rs::false_memtrack_matches_c_runtime`, `rust/src/ffi_tests.rs::list_log_free_row_names_the_variable_passed_to_free`, `rust/src/ffi_tests.rs::failing_free_keeps_its_list_log_row_like_develop`, `rust/src/output/legacy_files.rs::nondet_rows_use_develop_types_and_value_formats`
 
 **Rust:** `heap_log.csv`, `allocation_log.csv`, `list_log.csv` and
 `klee_log.csv` are rebuilt at the end of the run by replaying the memory
 and nondet records in order with the rules of `AnalysisModeMemtrack.c`,
 including develop's own step counter. For the calls of
-`tests/legacy_golden/drivers/` the bytes match develop. These cases
-differ:
+`tests/legacy_golden/drivers/` the bytes match develop. Since Task 2.5
+`map2check_check_free` and `map2check_map_free` receive the pointer
+variable's slot, as develop's `map2check_free` does, so the FREE row names
+the variable that was freed, and a failing free keeps the row develop
+appends before it checks (`AnalysisModeMemtrack.c:346-358`); the golden
+`FALSE-FREE` covers that path. These cases still differ:
 
-- **Pointer variable of a free.** `map2check_map_free` receives the block,
-  not the pointer variable, so the FREE row of `list_log.csv` names the
-  variable of the newest row that points to the block. Develop names the
-  variable passed to `map2check_free`.
-- **Failing `free`.** Develop's `map2check_free` appends that FREE row
-  before it checks (`AnalysisModeMemtrack.c:346-358`). Here
-  `map2check_check_free` aborts before `map2check_map_free` records it, so
-  the row is missing from `list_log.csv`.
 - **`klee_log.csv`.** Written on every violating witness run. Develop
   writes it only with the AFL++ or KLEE generator; `NonDetGeneratorNone.c`
   writes none (`:42`). A `float` value, which develop has no logger for, is
@@ -547,13 +543,9 @@ differ:
 **Reproduce:**
 
 ```c
-map2check_set_mode(AnalysisMode_Memtrack);
+map2check_set_mode(AnalysisMode_Overflow);
 map2check_enable_witness();
 map2check_init();
-map2check_map_malloc((void *)0x3000, 8);
-map2check_map_store_pointer((void *)0x10, (void *)0x3000, 0, "p", 1, "main");
-map2check_map_store_pointer((void *)0x20, (void *)0x3000, 0, "q", 2, "main");
-map2check_check_free("p", (void *)0x3000, 0, 3, "main");
-map2check_map_free("p", (void *)0x3000, 0, 3, "main");
-/* list_log.csv: the FREE row names 0x20 (q); develop names 0x10 (p) */
+map2check_binop_add_signed(INT64_MAX, 1, 64, 1, "main");
+/* klee_log.csv is written; develop's NonDetGeneratorNone.c writes none */
 ```

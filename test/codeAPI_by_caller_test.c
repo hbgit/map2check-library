@@ -34,15 +34,16 @@ int main(void) {
 
     /* Heap allocation: check-before-free must be safe on both free checks. */
     void *heap_ptr = (void *)0x1000; /* synthetic address, never dereferenced */
+    void *heap_var = &heap_ptr;      /* the pointer variable being freed */
     map2check_map_malloc(heap_ptr, 16);
-    map2check_check_free("heap_obj", heap_ptr, 0, 15, "main");
+    map2check_check_free("heap_obj", heap_var, heap_ptr, 0, 15, "main");
     assert(get_current_property() == None);
     map2check_check_free_resolved_address(heap_ptr, 15, "main", 0);
     assert(get_current_property() == None);
 
     /* After the free is recorded, both checks must flag the double free. */
-    map2check_map_free("heap_obj", heap_ptr, 0, 16, "main");
-    map2check_check_free("heap_obj", heap_ptr, 0, 17, "main");
+    map2check_map_free("heap_obj", heap_var, heap_ptr, 0, 16, "main");
+    map2check_check_free("heap_obj", heap_var, heap_ptr, 0, 17, "main");
     assert(get_current_property() == MemsafetyFree);
     map2check_check_free_resolved_address(heap_ptr, 17, "main", 0);
     assert(get_current_property() == MemsafetyFree);

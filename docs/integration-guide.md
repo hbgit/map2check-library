@@ -148,7 +148,8 @@ print:
 
 `Container_AllocationLog` appears only for memory-safety violations (SD-02).
 `map2check_map_malloc((void *)0x1000, 16)` followed by
-`map2check_check_free("p", (void *)0x2000, 0, 20, "main")` prints:
+`map2check_check_free("p", (void *)0x10, (void *)0x2000, 0, 20, "main")`
+(free of `p`, at `0x10`, holding `0x2000`) prints:
 
 <!-- example: memory -->
 ```json

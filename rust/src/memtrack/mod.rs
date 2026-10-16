@@ -49,8 +49,11 @@ pub enum MemOrigin {
     Malloc,
     /// `map2check_map_store_pointer`.
     StorePointer,
-    /// `map2check_map_free`.
-    Free,
+    /// `map2check_map_free`, with the address of the pointer variable that
+    /// was freed (develop's `map2check_free` argument). The entry itself is
+    /// keyed on the block, so the memory checks never see the variable;
+    /// only the legacy list log names it.
+    Free { var_address: usize },
     /// The release recorded by `map2check_check_free_resolved_address`.
     FreeResolved,
 }
@@ -226,6 +229,9 @@ impl DevelopLogs {
             if e.is_dynamic && !e.is_free {
                 logs.malloc(e.points_to);
             } else if e.is_free {
+                if let MemOrigin::Free { var_address } = e.origin {
+                    logs.free_row(var_address, e.points_to);
+                }
                 logs.free(e.points_to);
             } else if e.size_destiny == 0 {
                 logs.store_pointer(e.var_addr, e.points_to);
@@ -249,11 +255,21 @@ impl DevelopLogs {
         }
     }
 
-    /// The free paths, `map2check_free` (`:329-356`) and
-    /// `map2check_free_resolved_address` (`:160-179`): mark the row free and
-    /// run `update_reference_list_log(addr, FREE)`. `map2check_free` also
-    /// appends a FREE row for the pointer variable (`:336-341`); the Rust free
-    /// record carries only the heap address, so that row is not rebuilt.
+    /// The FREE row `map2check_free` appends for the pointer variable before
+    /// it releases the block (`:336-343`). A NULL block returns before it.
+    fn free_row(&mut self, var: usize, addr: usize) {
+        if addr != 0 {
+            self.list.push(ListRow {
+                var,
+                points_to: addr,
+                status: AddressStatus::Free,
+            });
+        }
+    }
+
+    /// The free paths, `map2check_free` (`:329-356`, after [`Self::free_row`])
+    /// and `map2check_free_resolved_address` (`:160-179`): mark the row free
+    /// and run `update_reference_list_log(addr, FREE)`.
     fn free(&mut self, addr: usize) {
         if addr == 0 {
             return;
@@ -427,6 +443,20 @@ mod tests {
 
     fn store(var: usize, value: usize) -> MemTrackEntry {
         MemTrackEntry::new(1, 1, 0, var, value, false, false, "p", "main", 0, 1, false)
+    }
+
+    #[test]
+    fn map_free_row_names_its_variable_in_the_memcleanup_verdict() {
+        // develop's map2check_free appends a FREE row for the variable it
+        // received (AnalysisModeMemcleanup.c:336-343), even when no store
+        // of that variable was tracked; the row still points to the block,
+        // so a block reallocated at the same address counts as referenced.
+        let freed_through_p = free(0x3000).with_origin(MemOrigin::Free { var_address: 0x10 });
+        let entries = vec![alloc(0x3000), freed_through_p, alloc(0x3000)];
+        assert!(has_develop_memcleanup_error(&entries));
+        // A release without a variable (free_resolved) appends no row.
+        let entries = vec![alloc(0x3000), free(0x3000), alloc(0x3000)];
+        assert!(!has_develop_memcleanup_error(&entries));
     }
 
     #[test]

@@ -553,11 +553,174 @@ fn map_calloc_ignores_negative_arguments() {
     assert!(snapshot(|s| s.memtrack.is_empty()));
 }
 
+/// `list_log.csv` as develop would write it for the records so far.
+fn list_log_rows() -> Vec<String> {
+    let dir = tempfile::tempdir().unwrap();
+    snapshot(|s| {
+        crate::output::legacy_files::LegacyLogs::replay(
+            &s.memtrack,
+            &s.nondets,
+            s.failed_free.as_ref(),
+            false,
+        )
+        .write_list_log(dir.path())
+    })
+    .unwrap();
+    std::fs::read_to_string(dir.path().join("list_log.csv"))
+        .unwrap()
+        .lines()
+        .map(str::to_owned)
+        .collect()
+}
+
+#[test]
+fn list_log_free_row_names_the_variable_passed_to_free() {
+    // develop `map2check_free` (AnalysisModeMemtrack.c:339-347) takes the
+    // pointer variable's slot, so its FREE row names that variable even
+    // when another variable holds the same block (SD-17 before Task 2.5).
+    let _guard = fresh();
+    // SAFETY: C-string literals are valid; fake addresses are never dereferenced.
+    unsafe {
+        map2check_map_malloc(addr(0x3000), 8);
+        map2check_map_store_pointer(
+            addr(0x10),
+            addr(0x3000),
+            0,
+            c"p".as_ptr(),
+            1,
+            c"main".as_ptr(),
+        );
+        map2check_map_store_pointer(
+            addr(0x20),
+            addr(0x3000),
+            0,
+            c"q".as_ptr(),
+            2,
+            c"main".as_ptr(),
+        );
+        map2check_check_free(
+            c"p".as_ptr(),
+            addr(0x10),
+            addr(0x3000),
+            0,
+            3,
+            c"main".as_ptr(),
+        );
+        map2check_map_free(
+            c"p".as_ptr(),
+            addr(0x10),
+            addr(0x3000),
+            0,
+            3,
+            c"main".as_ptr(),
+        );
+    }
+    assert_ok();
+    let rows = list_log_rows();
+    assert_eq!(rows[2], "0;0x10;0x3000;0;1;0;p;3;main;2", "{rows:#?}");
+}
+
+#[test]
+fn failing_free_keeps_its_list_log_row_like_develop() {
+    // develop appends the FREE row before `is_invalid_free` decides
+    // (AnalysisModeMemtrack.c:346-358); the check here runs first, so it
+    // keeps the row for the legacy logs.
+    let _guard = fresh();
+    // SAFETY: C-string literals are valid; fake addresses are never dereferenced.
+    unsafe {
+        map2check_map_malloc(addr(0x3000), 8);
+        map2check_map_store_pointer(
+            addr(0x10),
+            addr(0x3000),
+            0,
+            c"p".as_ptr(),
+            1,
+            c"main".as_ptr(),
+        );
+        map2check_check_free(
+            c"p".as_ptr(),
+            addr(0x10),
+            addr(0x3000),
+            0,
+            2,
+            c"main".as_ptr(),
+        );
+        map2check_map_free(
+            c"p".as_ptr(),
+            addr(0x10),
+            addr(0x3000),
+            0,
+            2,
+            c"main".as_ptr(),
+        );
+        map2check_check_free(
+            c"p".as_ptr(),
+            addr(0x10),
+            addr(0x3000),
+            0,
+            3,
+            c"main".as_ptr(),
+        );
+    }
+    assert_violated(ViolatedProperty::MemsafetyFree, 3, "main");
+    let rows = list_log_rows();
+    assert_eq!(rows.len(), 3, "{rows:#?}");
+    assert_eq!(rows[2], "0;0x10;0x3000;0;1;0;p;3;main;2");
+    // Not a release: the memory records are unchanged by the failed free.
+    assert_eq!(snapshot(|s| s.memtrack.len()), 3);
+}
+
+#[test]
+fn vcc_reset_meta_data_drops_the_failing_free_row() {
+    let _guard = fresh();
+    // SAFETY: C-string literals are valid; fake addresses are never dereferenced.
+    unsafe {
+        map2check_check_free(
+            c"p".as_ptr(),
+            addr(0x10),
+            addr(0x3000),
+            0,
+            3,
+            c"main".as_ptr(),
+        )
+    };
+    assert!(snapshot(|s| s.failed_free.is_some()));
+    vcc_reset_meta_data();
+    assert!(snapshot(|s| s.failed_free.is_none()));
+}
+
+#[test]
+fn only_the_first_violation_keeps_a_failing_free_row() {
+    let _guard = fresh();
+    // SAFETY: C-string literals are valid; fake addresses are never dereferenced.
+    unsafe {
+        map2check_binop_add_signed(i64::MAX, 1, 64, 1, c"main".as_ptr());
+        map2check_check_free(
+            c"p".as_ptr(),
+            addr(0x10),
+            addr(0x3000),
+            0,
+            3,
+            c"main".as_ptr(),
+        );
+    }
+    assert!(snapshot(|s| s.failed_free.is_none()));
+}
+
 #[test]
 fn map_free_records_released_slot() {
     let _guard = fresh();
     // SAFETY: C-string literals are valid; fake address is never dereferenced.
-    unsafe { map2check_map_free(c"p".as_ptr(), addr(0x1000), 1, 9, c"main".as_ptr()) };
+    unsafe {
+        map2check_map_free(
+            c"p".as_ptr(),
+            addr(0x10),
+            addr(0x1000),
+            1,
+            9,
+            c"main".as_ptr(),
+        )
+    };
     let e = only_memtrack();
     assert_eq!(
         (e.line, e.scope, e.var_addr, e.size_destiny),
@@ -976,9 +1139,23 @@ fn sd03_safe_check_keeps_earlier_violation() {
     // SAFETY: as above.
     unsafe {
         map2check_check_deref(addr(0x1000), 0, 3, c"main".as_ptr());
-        map2check_check_free(c"p".as_ptr(), addr(0x1000), 0, 4, c"main".as_ptr());
+        map2check_check_free(
+            c"p".as_ptr(),
+            addr(0x10),
+            addr(0x1000),
+            0,
+            4,
+            c"main".as_ptr(),
+        );
         map2check_check_free_resolved_address(addr(0x1000), 5, c"main".as_ptr(), 0);
-        map2check_map_free(c"p".as_ptr(), addr(0x1000), 0, 5, c"main".as_ptr());
+        map2check_map_free(
+            c"p".as_ptr(),
+            addr(0x10),
+            addr(0x1000),
+            0,
+            5,
+            c"main".as_ptr(),
+        );
     }
     map2check_check_mem_endprog();
     map2check_set_memcleanup();
@@ -994,7 +1171,14 @@ fn sd03_later_violation_does_not_overwrite_first() {
     // SAFETY: C-string literals are valid; fake addresses are never dereferenced.
     unsafe {
         map2check_check_load(addr(0x9000), 7, 0, 4, c"first".as_ptr());
-        map2check_check_free(c"p".as_ptr(), addr(0x9000), 0, 8, c"main".as_ptr());
+        map2check_check_free(
+            c"p".as_ptr(),
+            addr(0x10),
+            addr(0x9000),
+            0,
+            8,
+            c"main".as_ptr(),
+        );
         map2check_check_deref(std::ptr::null(), 0, 9, c"main".as_ptr());
         set_false_result(5, 10, c"main".as_ptr());
         map2check_binop_add_int(i32::MAX, 1, 11, 0, c"main".as_ptr());
@@ -1011,7 +1195,14 @@ fn deref_after_free_is_invalid() {
     // SAFETY: C-string literals are valid; fake addresses are never dereferenced.
     unsafe {
         map2check_map_malloc(addr(0x2000), 16);
-        map2check_map_free(c"p".as_ptr(), addr(0x2000), 0, 9, c"main".as_ptr());
+        map2check_map_free(
+            c"p".as_ptr(),
+            addr(0x10),
+            addr(0x2000),
+            0,
+            9,
+            c"main".as_ptr(),
+        );
         map2check_check_deref(addr(0x2000), 0, 10, c"main".as_ptr());
     }
     assert_violated(ViolatedProperty::MemsafetyDeref, 10, "main");
@@ -1025,7 +1216,14 @@ fn load_after_free_is_invalid() {
     // SAFETY: C-string literals are valid; fake addresses are never dereferenced.
     unsafe {
         map2check_map_malloc(addr(0x2000), 16);
-        map2check_map_free(c"p".as_ptr(), addr(0x2000), 0, 9, c"main".as_ptr());
+        map2check_map_free(
+            c"p".as_ptr(),
+            addr(0x10),
+            addr(0x2000),
+            0,
+            9,
+            c"main".as_ptr(),
+        );
         map2check_check_load(addr(0x2004), 10, 0, 4, c"main".as_ptr());
     }
     assert_violated(ViolatedProperty::MemsafetyDeref, 10, "main");
@@ -1039,18 +1237,39 @@ fn reallocation_at_same_address_is_valid_again() {
     // SAFETY: C-string literals are valid; fake addresses are never dereferenced.
     unsafe {
         map2check_map_malloc(addr(0x2000), 16);
-        map2check_map_free(c"p".as_ptr(), addr(0x2000), 0, 9, c"main".as_ptr());
+        map2check_map_free(
+            c"p".as_ptr(),
+            addr(0x10),
+            addr(0x2000),
+            0,
+            9,
+            c"main".as_ptr(),
+        );
         map2check_map_malloc(addr(0x2000), 16);
         map2check_check_load(addr(0x2004), 10, 0, 4, c"main".as_ptr());
         map2check_check_deref(addr(0x2000), 0, 11, c"main".as_ptr());
-        map2check_check_free(c"p".as_ptr(), addr(0x2000), 0, 12, c"main".as_ptr());
+        map2check_check_free(
+            c"p".as_ptr(),
+            addr(0x10),
+            addr(0x2000),
+            0,
+            12,
+            c"main".as_ptr(),
+        );
         map2check_check_free_resolved_address(addr(0x2000), 13, c"main".as_ptr(), 0);
     }
     assert_ok();
 
     // SAFETY: as above.
     unsafe {
-        map2check_map_free(c"p".as_ptr(), addr(0x2000), 0, 14, c"main".as_ptr());
+        map2check_map_free(
+            c"p".as_ptr(),
+            addr(0x10),
+            addr(0x2000),
+            0,
+            14,
+            c"main".as_ptr(),
+        );
         map2check_check_load(addr(0x2004), 15, 0, 4, c"main".as_ptr());
     }
     assert_violated(ViolatedProperty::MemsafetyDeref, 15, "main");
@@ -1062,7 +1281,14 @@ fn reallocation_with_smaller_size_shrinks_the_valid_range() {
     // SAFETY: C-string literals are valid; fake addresses are never dereferenced.
     unsafe {
         map2check_map_malloc(addr(0x2000), 16);
-        map2check_map_free(c"p".as_ptr(), addr(0x2000), 0, 9, c"main".as_ptr());
+        map2check_map_free(
+            c"p".as_ptr(),
+            addr(0x10),
+            addr(0x2000),
+            0,
+            9,
+            c"main".as_ptr(),
+        );
         map2check_map_malloc(addr(0x2000), 8);
         map2check_check_load(addr(0x2004), 10, 0, 4, c"main".as_ptr());
     }
@@ -1101,7 +1327,14 @@ fn pointer_store_does_not_revive_a_freed_block() {
     // SAFETY: C-string literals are valid; fake addresses are never dereferenced.
     unsafe {
         map2check_map_malloc(addr(0x2000), 16);
-        map2check_map_free(c"p".as_ptr(), addr(0x2000), 0, 9, c"main".as_ptr());
+        map2check_map_free(
+            c"p".as_ptr(),
+            addr(0x10),
+            addr(0x2000),
+            0,
+            9,
+            c"main".as_ptr(),
+        );
         map2check_map_store_pointer(
             addr(0x3000),
             addr(0x2000),
@@ -1121,11 +1354,27 @@ fn check_free_accepts_live_allocation_and_null() {
     // SAFETY: C-string literals are valid; fake addresses are never dereferenced.
     unsafe {
         map2check_map_malloc(addr(0x1000), 16);
-        map2check_check_free(c"p".as_ptr(), addr(0x1000), 0, 20, c"main".as_ptr());
+        map2check_check_free(
+            c"p".as_ptr(),
+            addr(0x10),
+            addr(0x1000),
+            0,
+            20,
+            c"main".as_ptr(),
+        );
     }
     assert_ok();
     // SAFETY: as above.
-    unsafe { map2check_check_free(c"p".as_ptr(), std::ptr::null(), 0, 20, c"main".as_ptr()) };
+    unsafe {
+        map2check_check_free(
+            c"p".as_ptr(),
+            addr(0x10),
+            std::ptr::null(),
+            0,
+            20,
+            c"main".as_ptr(),
+        )
+    };
     assert_ok();
 }
 
@@ -1135,14 +1384,37 @@ fn check_free_rejects_double_free_and_untracked_address() {
     // SAFETY: C-string literals are valid; fake addresses are never dereferenced.
     unsafe {
         map2check_map_malloc(addr(0x1000), 16);
-        map2check_map_free(c"p".as_ptr(), addr(0x1000), 0, 19, c"main".as_ptr());
-        map2check_check_free(c"p".as_ptr(), addr(0x1000), 0, 20, c"main".as_ptr());
+        map2check_map_free(
+            c"p".as_ptr(),
+            addr(0x10),
+            addr(0x1000),
+            0,
+            19,
+            c"main".as_ptr(),
+        );
+        map2check_check_free(
+            c"p".as_ptr(),
+            addr(0x10),
+            addr(0x1000),
+            0,
+            20,
+            c"main".as_ptr(),
+        );
     }
     assert_violated(ViolatedProperty::MemsafetyFree, 20, "main");
 
     state::reset();
     // SAFETY: as above.
-    unsafe { map2check_check_free(c"p".as_ptr(), addr(0x9000), 0, 21, c"main".as_ptr()) };
+    unsafe {
+        map2check_check_free(
+            c"p".as_ptr(),
+            addr(0x10),
+            addr(0x9000),
+            0,
+            21,
+            c"main".as_ptr(),
+        )
+    };
     assert_violated(ViolatedProperty::MemsafetyFree, 21, "main");
 }
 
@@ -1158,7 +1430,14 @@ fn check_free_resolved_address_rejects_freed_target() {
 
     // SAFETY: as above.
     unsafe {
-        map2check_map_free(c"p".as_ptr(), addr(0x1000), 0, 30, c"main".as_ptr());
+        map2check_map_free(
+            c"p".as_ptr(),
+            addr(0x10),
+            addr(0x1000),
+            0,
+            30,
+            c"main".as_ptr(),
+        );
         map2check_check_free_resolved_address(addr(0x1000), 31, c"main".as_ptr(), 0);
     }
     assert_violated(ViolatedProperty::MemsafetyFree, 31, "main");
@@ -1175,7 +1454,16 @@ fn sd06_untracked_free_is_invalid() {
 
     state::reset();
     // SAFETY: as above.
-    unsafe { map2check_check_free(c"p".as_ptr(), addr(0x5000), 0, 4, c"main".as_ptr()) };
+    unsafe {
+        map2check_check_free(
+            c"p".as_ptr(),
+            addr(0x10),
+            addr(0x5000),
+            0,
+            4,
+            c"main".as_ptr(),
+        )
+    };
     assert_violated(ViolatedProperty::MemsafetyFree, 4, "main");
 }
 
@@ -1247,7 +1535,14 @@ fn sd13_free_of_a_never_stored_pointer_is_valid() {
         map2check_map_malloc(addr(0x1000), 8);
         map2check_check_free_resolved_address(addr(0x1000), 3, c"main".as_ptr(), 0);
         map2check_map_malloc(addr(0x2000), 8);
-        map2check_check_free(c"p".as_ptr(), addr(0x2000), 0, 4, c"main".as_ptr());
+        map2check_check_free(
+            c"p".as_ptr(),
+            addr(0x10),
+            addr(0x2000),
+            0,
+            4,
+            c"main".as_ptr(),
+        );
     }
     assert_ok();
 }
@@ -1272,7 +1567,14 @@ fn check_deref_accepts_live_and_rejects_freed_null_or_untracked() {
 
     // SAFETY: as above.
     unsafe {
-        map2check_map_free(c"p".as_ptr(), addr(0x1000), 0, 41, c"main".as_ptr());
+        map2check_map_free(
+            c"p".as_ptr(),
+            addr(0x10),
+            addr(0x1000),
+            0,
+            41,
+            c"main".as_ptr(),
+        );
         map2check_check_deref(addr(0x1000), 0, 42, c"main".as_ptr());
     }
     assert_violated(ViolatedProperty::MemsafetyDeref, 42, "main");
@@ -1312,7 +1614,14 @@ fn check_mem_endprog_accepts_freed_allocation() {
     // SAFETY: C-string literals are valid; fake address is never dereferenced.
     unsafe {
         map2check_map_malloc(addr(0x1000), 16);
-        map2check_map_free(c"p".as_ptr(), addr(0x1000), 0, 50, c"main".as_ptr());
+        map2check_map_free(
+            c"p".as_ptr(),
+            addr(0x10),
+            addr(0x1000),
+            0,
+            50,
+            c"main".as_ptr(),
+        );
     }
     map2check_check_mem_endprog();
     assert_ok();
@@ -1524,7 +1833,16 @@ fn reports_in(mode: AnalysisMode) -> [ViolatedProperty; 7] {
         // are never dereferenced.
         &|| unsafe { map2check_check_load(addr(0xdead), 1, 0, 4, c"main".as_ptr()) },
         &|| unsafe { map2check_check_deref(addr(0xdead), 0, 1, c"main".as_ptr()) },
-        &|| unsafe { map2check_check_free(c"p".as_ptr(), addr(0xdead), 0, 1, c"main".as_ptr()) },
+        &|| unsafe {
+            map2check_check_free(
+                c"p".as_ptr(),
+                addr(0x10),
+                addr(0xdead),
+                0,
+                1,
+                c"main".as_ptr(),
+            )
+        },
         &|| unsafe { map2check_check_free_resolved_address(addr(0xdead), 1, c"main".as_ptr(), 0) },
         &|| unsafe { map2check_binop_add_int(i32::MAX, 1, 1, 0, c"main".as_ptr()) },
         &|| unsafe { map2check_is_valid_assert(1, c"main".as_ptr(), 0) },
@@ -1637,7 +1955,16 @@ fn unset_mode_keeps_every_check_active() {
         // SAFETY (all closures): as in `reports_in`.
         &|| unsafe { map2check_check_load(addr(0xdead), 1, 0, 4, c"main".as_ptr()) },
         &|| unsafe { map2check_check_deref(addr(0xdead), 0, 1, c"main".as_ptr()) },
-        &|| unsafe { map2check_check_free(c"p".as_ptr(), addr(0xdead), 0, 1, c"main".as_ptr()) },
+        &|| unsafe {
+            map2check_check_free(
+                c"p".as_ptr(),
+                addr(0x10),
+                addr(0xdead),
+                0,
+                1,
+                c"main".as_ptr(),
+            )
+        },
         &|| unsafe { map2check_check_free_resolved_address(addr(0xdead), 1, c"main".as_ptr(), 0) },
         &|| unsafe { map2check_binop_add_int(i32::MAX, 1, 1, 0, c"main".as_ptr()) },
         &|| unsafe { map2check_is_valid_assert(1, c"main".as_ptr(), 0) },
@@ -1907,7 +2234,16 @@ fn memcleanup_mode_freed_block_is_no_leak() {
     malloc_at(0x3000);
     store(0x10, 0x3000);
     // SAFETY: C-string literals are valid; fake address is never dereferenced.
-    unsafe { map2check_map_free(c"p".as_ptr(), addr(0x3000), 0, 2, c"main".as_ptr()) };
+    unsafe {
+        map2check_map_free(
+            c"p".as_ptr(),
+            addr(0x10),
+            addr(0x3000),
+            0,
+            2,
+            c"main".as_ptr(),
+        )
+    };
     assert_eq!(memcleanup_endprog(), P::None);
 }
 

@@ -82,6 +82,11 @@ pub struct AnalysisState {
     pub bbtrack: Vec<BasicBlockEntry>,
     pub legacy_nondet_logs: Vec<Box<crate::ffi::non_det_log_t>>,
     pub legacy_bbtrack_logs: Vec<Box<crate::ffi::bbtrack_log_t>>,
+    /// The free that `map2check_check_free` found invalid, when it is the
+    /// first violation. Develop's `map2check_free` appends its FREE row to
+    /// the list log before it checks (`AnalysisModeMemtrack.c:346-358`), so
+    /// the legacy logs keep it; it is not a release and no check reads it.
+    pub failed_free: Option<MemTrackEntry>,
 }
 
 impl AnalysisState {

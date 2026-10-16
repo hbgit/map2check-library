@@ -69,7 +69,12 @@ fn write_aux_files(dir: &Path, config: Config, s: &AnalysisState, end_of_program
         legacy_files::TRACKBB_LOG_FILE,
         legacy_files::write_trackbb_log(dir, &s.bbtrack),
     );
-    let logs = LegacyLogs::replay(&s.memtrack, &s.nondets, end_of_program);
+    let logs = LegacyLogs::replay(
+        &s.memtrack,
+        &s.nondets,
+        s.failed_free.as_ref(),
+        end_of_program,
+    );
     if matches!(
         config.mode,
         Some(AnalysisMode::Memtrack | AnalysisMode::Memcleanup)

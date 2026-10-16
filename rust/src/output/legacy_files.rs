@@ -275,12 +275,15 @@ enum Event<'a> {
 
 impl LegacyLogs {
     /// Replays the memory and nondet records in the order the program made
-    /// them (both carry this library's step). `end_of_program` adds what
-    /// `valid_allocation_log` appends when the end-of-program verdict runs
-    /// (`AllocationLog.c:69-101`).
+    /// them (both carry this library's step). `failed_free`, the free that
+    /// ended the run, adds the FREE row develop's `map2check_free` appends
+    /// before it fails (`AnalysisModeMemtrack.c:346-358`). `end_of_program`
+    /// adds what `valid_allocation_log` appends when the end-of-program
+    /// verdict runs (`AllocationLog.c:69-101`).
     pub fn replay(
         memtrack: &[MemTrackEntry],
         nondets: &[NonDetEntry],
+        failed_free: Option<&MemTrackEntry>,
         end_of_program: bool,
     ) -> Self {
         let mut events: Vec<(u64, Event<'_>)> = memtrack
@@ -296,6 +299,9 @@ impl LegacyLogs {
                 Event::Memory(e) => logs.memory(e),
                 Event::Nondet(e) => logs.nondet(e),
             }
+        }
+        if let Some(e) = failed_free {
+            logs.free_row(e);
         }
         if end_of_program {
             logs.valid_allocation_log();
@@ -332,7 +338,7 @@ impl LegacyLogs {
             }),
             MemOrigin::Malloc => self.malloc(e.points_to, e.size_destiny as u32),
             MemOrigin::StorePointer => self.store_pointer(e),
-            MemOrigin::Free => self.free(e),
+            MemOrigin::Free { .. } => self.free(e),
             MemOrigin::FreeResolved => self.free_resolved(e.points_to, e.line),
             MemOrigin::Unspecified => {}
         }
@@ -410,21 +416,26 @@ impl LegacyLogs {
     }
 
     /// `map2check_free` (`AnalysisModeMemtrack.c:339-366`): a FREE row for
-    /// the pointer variable, then the block is released. The C runtime reads
-    /// the variable's address from its argument; this library's free record
-    /// has only the block, so the variable is the one of the newest list row
-    /// that points to the block (SD-17).
+    /// the pointer variable, then the block is released.
     fn free(&mut self, e: &MemTrackEntry) {
+        if self.free_row(e) {
+            self.release(e.points_to, e.line);
+        }
+    }
+
+    /// The FREE row `map2check_free` appends for the pointer variable whose
+    /// slot it received (`:339-347`); returns false for a NULL block, where
+    /// develop returns first (`:342-344`). A record without the variable
+    /// (built outside `map2check_map_free`) names the block, as before.
+    fn free_row(&mut self, e: &MemTrackEntry) -> bool {
         let addr = e.points_to;
         if addr == 0 {
-            return;
+            return false;
         }
-        let var = self
-            .list
-            .iter()
-            .rev()
-            .find(|r| r.points_to == addr)
-            .map_or(addr, |r| r.var);
+        let var = match e.origin {
+            MemOrigin::Free { var_address } => var_address,
+            _ => addr,
+        };
         let step = self.next_step();
         self.list.push(ListRow {
             var,
@@ -437,7 +448,7 @@ impl LegacyLogs {
             function: e.function_name.clone(),
             step,
         });
-        self.release(addr, e.line);
+        true
     }
 
     /// `map2check_free_resolved_address` (`AnalysisModeMemtrack.c:164-183`).

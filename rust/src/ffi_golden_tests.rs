@@ -204,13 +204,32 @@ fn memory() {
     }
 }
 
-/// `free(p)` as the pass emits it: the check, then the release.
-fn free_p() {
+/// `free(p)` at `line` as the pass emits it for a free of a load of `p`:
+/// the check, then the release, both with the slot of `p` and the block.
+fn free_p_at(line: u32) {
     // SAFETY: as in `memory`.
     unsafe {
-        map2check_check_free(c"p".as_ptr(), addr(BLOCK), 1, 12, c"main".as_ptr());
-        map2check_map_free(c"p".as_ptr(), addr(BLOCK), 1, 12, c"main".as_ptr());
+        map2check_check_free(
+            c"p".as_ptr(),
+            addr(SLOT_P),
+            addr(BLOCK),
+            1,
+            line,
+            c"main".as_ptr(),
+        );
+        map2check_map_free(
+            c"p".as_ptr(),
+            addr(SLOT_P),
+            addr(BLOCK),
+            1,
+            line,
+            c"main".as_ptr(),
+        );
     }
+}
+
+fn free_p() {
+    free_p_at(12);
 }
 
 /// Starts the analysis as the instrumented witness binary does.
@@ -228,8 +247,9 @@ fn false_free_child() {
         start(AnalysisMode::Memtrack);
         memory();
         free_p();
-        // SAFETY: as in `memory`.
-        unsafe { map2check_check_free_resolved_address(addr(BLOCK), 13, c"main".as_ptr(), 0) };
+        // The second free fails in the check, after which develop's
+        // `map2check_free` has already appended its FREE row.
+        free_p_at(13);
         map2check_success();
     }
 }
@@ -237,6 +257,23 @@ fn false_free_child() {
 #[test]
 fn false_free_matches_c_runtime() {
     assert_matches_golden("FALSE-FREE", "false_free_child");
+}
+
+#[test]
+fn false_free_resolved_child() {
+    if is_child() {
+        start(AnalysisMode::Memtrack);
+        memory();
+        free_p();
+        // SAFETY: as in `memory`.
+        unsafe { map2check_check_free_resolved_address(addr(BLOCK), 13, c"main".as_ptr(), 0) };
+        map2check_success();
+    }
+}
+
+#[test]
+fn false_free_resolved_matches_c_runtime() {
+    assert_matches_golden("FALSE-FREE-RESOLVED", "false_free_resolved_child");
 }
 
 #[test]

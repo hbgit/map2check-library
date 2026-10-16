@@ -284,7 +284,14 @@ fn integration_guide_json_examples_match_the_serializer() {
     // SAFETY: C-string literals are valid; fake addresses are never dereferenced.
     unsafe {
         map2check_map_malloc(0x1000 as *const _, 16);
-        map2check_check_free(c"p".as_ptr(), 0x2000 as *const _, 0, 20, c"main".as_ptr());
+        map2check_check_free(
+            c"p".as_ptr(),
+            0x10 as *const _,
+            0x2000 as *const _,
+            0,
+            20,
+            c"main".as_ptr(),
+        );
     }
     assert_eq!(
         report(),

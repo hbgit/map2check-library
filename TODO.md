@@ -163,11 +163,12 @@ e não repetem as tarefas já listadas.
   núcleo; incluir a matriz completa de símbolos e resolver/documentar a colisão
   de assinatura de `map2check_check_deref`. Excluir explicitamente símbolos
   wasm se permanecerem fora do escopo.
-  Ao passar o endereço da variável-ponteiro em `map2check_free`, fechar a
-  parte do SD-17 sobre `list_log.csv`: a linha FREE com a variável certa e a
-  linha que o develop acrescenta antes de um `free` inválido, com um golden
-  do caminho `map2check_free` que falha (hoje o golden FALSE-FREE usa
-  `free_resolved_address`; ver `tests/legacy_golden/README.md`).
+  A parte do SD-17 sobre `list_log.csv` foi fechada na Task 2.5:
+  `map2check_check_free`/`map2check_map_free` recebem o endereço da
+  variável-ponteiro, a linha FREE nomeia a variável certa e um `free`
+  inválido mantém a linha que o develop acrescenta antes de checar (golden
+  `FALSE-FREE` pelo caminho `map2check_free`; o antigo virou
+  `FALSE-FREE-RESOLVED`).
 
 - [x] **Compatibilizar o canal de resultado legado.** Feito na Task 2.4
   (#19): `rust/src/output/legacy_files.rs` e golden tests em
