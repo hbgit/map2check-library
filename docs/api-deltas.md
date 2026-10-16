@@ -45,7 +45,7 @@ build with `--features libfuzzer`.
 |---|---|---|---|---|
 | `map2check_init` | `void map2check_init(void)` | `map2check_init` | same | Starts a fresh analysis through the `analysis_init` of the selected mode and keeps the options and the mode (#10, SD-14). With a mode set, also removes the `map2check_property*` files left in the current directory (see “Result files”). Map2Check passes call `map2check_init(int)`; see the pass matrix. |
 | `map2check_reset` | `void map2check_reset(void)` | — | new | Clears containers, result and step counter (#9). Keeps the options set by `map2check_set_memcleanup()` and `map2check_set_null_is_valid()` and the mode set by `map2check_set_mode()`: they are configuration, not analysis state (#10, SD-14). |
-| `map2check_success` | `void map2check_success(void)` | `map2check_success` | same | Prints the JSON report (SD-01). With a mode set it is develop's `map2check_success`: writes `NONE`, runs the end-of-program verdict, writes the witness files when enabled, and returns; a violating verdict writes its property and aborts (see “Result files”). |
+| `map2check_success` | `void map2check_success(void)` | `map2check_success` | same | Prints the JSON report when the mode is unset (SD-01). With a mode set it prints nothing and is develop's `map2check_success`: writes `NONE`, runs the end-of-program verdict, writes the witness files when enabled, and returns; a violating verdict writes its property and aborts (see “Result files”). |
 | `set_false_result` | `void set_false_result(int32_t prp, int32_t line_number, const char *function_name)` | `set_false_result` | same | `ViolatedProperty` keeps the C variant order (`caller_lib_result.h:22-31`); the appended `Assert` (8) and `Unknown` (9) are accepted; unknown values are ignored (SD-09). Ignored when a violation is already recorded (SD-03). |
 | `get_current_property` | `enum ViolatedProperty get_current_property(void)` | `get_current_property` | same |  |
 | `get_current_step` | `uint64_t get_current_step(void)` | `long get_current_step(void)` | changed | Returns `uint64_t` instead of `long`. |
@@ -72,7 +72,7 @@ build with `--features libfuzzer`.
 | `map2check_map_calloc` | `void map2check_map_calloc(const void *ptr_address, int32_t quantity, int32_t size)` | `map2check_map_calloc` | same | Negative sizes are ignored (SD-09). |
 | `map2check_map_free` | `void map2check_map_free(const char *var_name, const void *ptr_address, uint32_t scope, uint32_t line_number, const char *function_name)` | `map2check_map_free` | same |  |
 | `map2check_map_store_pointer` | `void map2check_map_store_pointer(const void *var_address, const void *value, uint32_t scope, const char *var_name, int32_t line_number, const char *funct_name)` | `map2check_map_store_pointer` | same |  |
-| `map2check_is_valid_assert` | `void map2check_is_valid_assert(int32_t line_number, const char *function_name, int32_t expression)` | `map2check_is_valid_assert` | changed | A failed assertion reports `ASSERT` (before Task 2.3: `REACHABILITY`) and prints the JSON report. Active in unset and assert modes only (SD-14). |
+| `map2check_is_valid_assert` | `void map2check_is_valid_assert(int32_t line_number, const char *function_name, int32_t expression)` | `map2check_is_valid_assert` | changed | A failed assertion reports `ASSERT` (before Task 2.3: `REACHABILITY`) and, with the mode unset, prints the JSON report; with a mode set it ends the run (“Result files”) and prints nothing. Active in unset and assert modes only (SD-14). |
 | `map2check_binop_add_int` | `void map2check_binop_add_int(int32_t param1, int32_t param2, uint32_t line, uint32_t scope, const char *function_name)` | `map2check_binop_add_int` | same | `int`/`unsigned` (32-bit) only, as in C. Active in unset and overflow modes only (SD-14). |
 | `map2check_binop_sub_int` | `void map2check_binop_sub_int(int32_t param1, int32_t param2, uint32_t line, uint32_t scope, const char *function_name)` | `map2check_binop_sub_int` | same | `int`/`unsigned` (32-bit) only, as in C. Active in unset and overflow modes only (SD-14). |
 | `map2check_binop_mul_int` | `void map2check_binop_mul_int(int32_t param1, int32_t param2, uint32_t line, uint32_t scope, const char *function_name)` | `map2check_binop_mul_int` | same | `int`/`unsigned` (32-bit) only, as in C. Active in unset and overflow modes only (SD-14). |
@@ -106,7 +106,7 @@ build with `--features libfuzzer`.
 | `__VERIFIER_nondet_pointer` | `void *__VERIFIER_nondet_pointer(void)` | — | new | Feature `libfuzzer`; replaces `map2check_gen_data_fuzzer_*`. |
 | `__VERIFIER_assume` | `void __VERIFIER_assume(int32_t condition)` | — | new | Feature `libfuzzer`. `__VERIFIER_assume(0)` ends the process with `exit(0)` (SD-07). |
 | `map2check_fuzzer_assume` | `void map2check_fuzzer_assume(int32_t condition)` | `map2check_fuzzer_assume(int)` (`nondet_gen_libfuzzer.h:41`) | same | Feature `libfuzzer`. Same `exit(0)` behaviour (SD-07). |
-| `__VERIFIER_error` | `void __VERIFIER_error(void)` | — | new | Feature `libfuzzer`. Prints a REACHABILITY report, then aborts (SD-08). |
+| `__VERIFIER_error` | `void __VERIFIER_error(void)` | — | new | Feature `libfuzzer`. Records REACHABILITY, prints the JSON report when the mode is unset, then aborts (SD-08). |
 | `__VERIFIER_assert` | `void __VERIFIER_assert(int32_t condition)` | — | new | Feature `libfuzzer`. `__VERIFIER_assert(0)` calls `__VERIFIER_error()` (SD-08). |
 | `next_current_step` | — | `next_current_step()` | discontinued | Use `get_next_step()`; same effect (#13). |
 | `map2check_save_memtrack_log` | — | `memtracklog.h:44` | discontinued | Covered by the `map2check_map_*` exports; no external caller. |
@@ -187,9 +187,15 @@ The Map2Check frontend does not read JSON. It reads the files that the
 runtime writes into the current directory and learns of a violation from
 the process aborting (`modules/frontend/utils/tools.cpp`, `caller.cpp`,
 `counter_example/`). That file channel is the result channel Map2Check
-consumes. The JSON report of `print_all_containers_as_json()` and
-`map2check_success()` is an additional channel with its own schema
-(SD-01), pinned by `rust/src/output/mod.rs::json_report_snapshot` (#14).
+consumes. The JSON report of `print_all_containers_as_json()`,
+`map2check_success()`, a failing `map2check_is_valid_assert()` and
+`__VERIFIER_error()` is an additional channel with its own schema (SD-01),
+pinned by `rust/src/output/mod.rs::json_report_snapshot` (#14). It is
+printed only when the mode is unset: with a mode set no export writes to
+stdout, as in develop, so the analysed program's output stays clean. The
+report is serialised under the state lock and printed after the lock is
+released, and a stdout error is only reported on stderr, so stdout can
+never change a verdict.
 
 The channel is tied to the mode. When `map2check_set_mode()` was called
 (a Map2Check-instrumented program):
@@ -201,7 +207,12 @@ The channel is tied to the mode. When `map2check_set_mode()` was called
   `map2check_error` → `map2check_exit` (`Map2CheckFunctions.c:72-102`);
 - `map2check_success()` writes `NONE`, runs the end-of-program verdict
   and, if it holds, writes the witness files (witness on) and returns;
-  otherwise it ends the run as a violation.
+  otherwise it ends the run as a violation;
+- if the analysis state cannot be read at the end (its lock was poisoned
+  by an earlier panic), the verdict is unknown: the property files already
+  written are removed, `map2check_property__unknown` is written (plus
+  `map2check_checked_error` with witness on) and the process aborts, as
+  develop's UNKNOWN path does.
 
 When the mode is unset (direct API users, `tests/ffi_harness.c`) nothing
 is written and nothing ends the process: violations are only recorded.

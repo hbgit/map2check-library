@@ -90,26 +90,50 @@ fn write_aux_files(dir: &Path, config: Config, s: &AnalysisState, end_of_program
 /// `analysis_destroy`, then, on a violation, the confirmation file and the
 /// abort. Returns only when there is no violation.
 fn exit(dir: &Path, config: Config, end_of_program: bool) {
-    let failed = state::with_state(|s| {
+    let failed = match state::with_state(|s| {
         if config.witness {
             write_aux_files(dir, config, s, end_of_program);
         }
         mode::analysis_destroy(config.mode, s);
         Ok(!s.result.ok)
-    })
-    .unwrap_or_else(|e| {
-        eprintln!("[map2check] error: {e}");
-        true
-    });
+    }) {
+        Ok(failed) => failed,
+        Err(e) => unknown_and_abort(dir, config, &e),
+    };
     if failed {
-        if config.witness {
-            report(
-                legacy_files::CHECKED_ERROR_FILE,
-                legacy_files::write_checked_error(dir),
-            );
-        }
+        write_checked_error(dir, config);
         std::process::abort();
     }
+}
+
+fn write_checked_error(dir: &Path, config: Config) {
+    if config.witness {
+        report(
+            legacy_files::CHECKED_ERROR_FILE,
+            legacy_files::write_checked_error(dir),
+        );
+    }
+}
+
+/// The analysis state cannot be read (its lock was poisoned by an earlier
+/// panic), so the verdict is not known. Ends the run the way develop ends
+/// an undecided one, `write_property_unknown` + `map2check_error`
+/// (`AnalysisModeMemtrack.c:305-311`): any property file already written
+/// (`NONE` from `map2check_success`) is removed, `map2check_property__unknown`
+/// is written, then `map2check_checked_error` with witness on, and the
+/// process aborts. The frontend reads UNKNOWN because `map2check_property`
+/// is missing (`tools.cpp:98-103`). No log files: their data is unreadable.
+fn unknown_and_abort(dir: &Path, config: Config, error: &crate::error::Map2CheckError) -> ! {
+    eprintln!("[map2check] error: {error}; the verdict is UNKNOWN");
+    legacy_files::remove_stale_property_files(dir);
+    let unknown = AnalysisResult {
+        ok: false,
+        property: crate::caller::ViolatedProperty::Unknown,
+        ..AnalysisResult::default()
+    };
+    write_properties(dir, &unknown);
+    write_checked_error(dir, config);
+    std::process::abort();
 }
 
 fn write_properties(dir: &Path, result: &AnalysisResult) {
@@ -131,7 +155,7 @@ pub(crate) fn on_violation(end_of_program: bool) {
     };
     match state::with_state(|s| Ok(s.result.clone())) {
         Ok(result) => write_properties(&dir, &result),
-        Err(e) => eprintln!("[map2check] error: {e}"),
+        Err(e) => unknown_and_abort(&dir, config, &e),
     }
     exit(&dir, config, end_of_program);
     // `exit` returns only without a violation, which a recorded violation
@@ -143,7 +167,7 @@ pub(crate) fn on_violation(end_of_program: bool) {
 /// mode set, writes `NONE`, runs the end-of-program verdict, ends the run,
 /// and returns when the program is correct. Returns whether the file
 /// channel handled the call.
-pub(crate) fn on_success(after_verdict: impl FnOnce(&AnalysisState)) -> bool {
+pub(crate) fn on_success() -> bool {
     let config = state::config();
     let Some(dir) = channel(config) else {
         return false;
@@ -156,7 +180,6 @@ pub(crate) fn on_success(after_verdict: impl FnOnce(&AnalysisState)) -> bool {
                 s.set_false(property, 0, "");
             }
         }
-        after_verdict(s);
         Ok((end_of_program, s.result.clone()))
     });
     let end_of_program = match verdict {
@@ -166,10 +189,7 @@ pub(crate) fn on_success(after_verdict: impl FnOnce(&AnalysisState)) -> bool {
             }
             end_of_program
         }
-        Err(e) => {
-            eprintln!("[map2check] error: {e}");
-            false
-        }
+        Err(e) => unknown_and_abort(&dir, config, &e),
     };
     exit(&dir, config, end_of_program);
     true

@@ -398,7 +398,8 @@ static void remove_results(const char *dir) {
 
 /* Runs `scenario` in a child. `aborts`: whether it must end with SIGABRT
  * (otherwise exit 0). `property`: expected map2check_property content.
- * `extra`/`extra_content`: one more file to check, or NULL. */
+ * `extra`: one more file to check, or NULL; `extra_content`: its expected
+ * content, or NULL when the file must not exist. */
 static int run_mode_scenario(scenario_fn scenario, int aborts,
                              const char *property, const char *extra,
                              const char *extra_content) {
@@ -428,7 +429,11 @@ static int run_mode_scenario(scenario_fn scenario, int aborts,
     char buf[256];
     read_result(dir, "map2check_property", buf, sizeof(buf));
     failed |= strcmp(buf, property) != 0;
-    if (extra != NULL) {
+    if (extra != NULL && extra_content == NULL) {
+        char path[512];
+        snprintf(path, sizeof(path), "%s/%s", dir, extra);
+        failed |= access(path, F_OK) == 0;
+    } else if (extra != NULL) {
         read_result(dir, extra, buf, sizeof(buf));
         failed |= strcmp(buf, extra_content) != 0;
     }
@@ -513,7 +518,7 @@ static int test_analysis_modes(void) {
     }
     if (run_mode_scenario(scenario_memtrack_deref, 1,
                           "FALSE-DEREF\nLine: 1\nFunction: main\n",
-                          "map2check_checked_error", "")) {
+                          "map2check_checked_error", NULL)) {
         return 2;
     }
     if (run_mode_scenario(scenario_memtrack_deref_witness, 1,

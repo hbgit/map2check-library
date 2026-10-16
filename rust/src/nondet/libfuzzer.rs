@@ -226,10 +226,12 @@ pub extern "C" fn __VERIFIER_error() {
                     0,
                     "__VERIFIER_error",
                 );
-                crate::output::print_json(s)
+                Ok(())
             }) {
                 eprintln!("[map2check] error: {e}");
             }
+            // Out of the lock, and only without a mode (#19 ruling).
+            crate::output::print_report_unless_mode_set();
         },
         (),
     );

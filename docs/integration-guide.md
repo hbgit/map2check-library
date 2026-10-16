@@ -88,7 +88,8 @@ place (SD-03). Only `map2check_init()`, `map2check_reset()` and
 ## JSON report
 
 `print_all_containers_as_json()` prints one pretty-printed JSON object on
-stdout. Whitespace is not part of the contract; parse it. The examples
+stdout when no analysis mode is set (with a mode set, a Map2Check run, it
+prints nothing; see below). Whitespace is not part of the contract; parse it. The examples
 below are checked against the real serializer by
 `tests/compat_docs.rs::integration_guide_json_examples_match_the_serializer`.
 

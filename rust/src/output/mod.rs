@@ -79,11 +79,33 @@ pub fn to_json(state: &AnalysisState) -> Result<String, Map2CheckError> {
     serde_json::to_string_pretty(&log).map_err(Map2CheckError::from)
 }
 
-/// Print the JSON report to stdout, as the C library did.
+/// Print the JSON report to stdout, as the C library did. A failed write
+/// (closed stdout, EPIPE) is reported on stderr instead of panicking.
 pub fn print_json(state: &AnalysisState) -> Result<(), Map2CheckError> {
-    let json = to_json(state)?;
-    println!("{json}");
+    write_report(&to_json(state)?);
     Ok(())
+}
+
+fn write_report(json: &str) {
+    use std::io::Write as _;
+    if let Err(e) = writeln!(std::io::stdout().lock(), "{json}") {
+        eprintln!("[map2check] cannot print the JSON report: {e}");
+    }
+}
+
+/// The JSON report channel of the exports (#14). Prints only when no
+/// analysis mode is set: a Map2Check run reports through the result files
+/// and keeps the analysed program's stdout clean, as develop does. The
+/// report is serialised under the state lock and written after the lock is
+/// released, so stdout can never affect the state or the verdict.
+pub fn print_report_unless_mode_set() {
+    if crate::state::config().mode.is_some() {
+        return;
+    }
+    match crate::state::with_state(|s| to_json(s)) {
+        Ok(json) => write_report(&json),
+        Err(e) => eprintln!("[map2check] error: {e}"),
+    }
 }
 
 #[cfg(test)]

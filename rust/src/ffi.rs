@@ -163,26 +163,20 @@ pub extern "C" fn map2check_reset() {
 
 // ── Result management ─────────────────────────────────────────────────────────
 
-/// End of the analysed program. Prints the JSON report. With an analysis
-/// mode set it is develop's `map2check_success()`
+/// End of the analysed program. With the mode unset, prints the JSON
+/// report. With an analysis mode set it prints nothing and is develop's
+/// `map2check_success()`
 /// (`Map2CheckFunctions.c:67-70`, `:89-102`): writes `NONE` to
 /// `map2check_property`, runs the end-of-program verdict of the mode, writes
 /// the witness files when `map2check_enable_witness()` was called, and
 /// returns; when the verdict is a violation it writes that property instead
-/// and aborts. The JSON is printed after the verdict.
+/// and aborts.
 #[no_mangle]
 pub extern "C" fn map2check_success() {
     ffi_guard(
         || {
-            let print = |s: &state::AnalysisState| {
-                if let Err(e) = output::print_json(s) {
-                    log_error(&e);
-                }
-            };
-            if !termination::on_success(print) {
-                if let Err(e) = state::with_state(|s| output::print_json(s)) {
-                    log_error(&e);
-                }
+            if !termination::on_success() {
+                output::print_report_unless_mode_set();
             }
         },
         (),
@@ -239,17 +233,12 @@ pub extern "C" fn get_next_step() -> u64 {
     ffi_guard(|| state::with_state(|s| Ok(s.next_step())).unwrap_or(0), 0)
 }
 
-/// Prints the full JSON report to stdout.
+/// Prints the full JSON report to stdout when no analysis mode is set. With
+/// a mode set (a Map2Check run) it prints nothing: the result goes to the
+/// files, and the analysed program's stdout stays clean.
 #[no_mangle]
 pub extern "C" fn print_all_containers_as_json() {
-    ffi_guard(
-        || {
-            if let Err(e) = state::with_state(|s| output::print_json(s)) {
-                log_error(&e);
-            }
-        },
-        (),
-    );
+    ffi_guard(output::print_report_unless_mode_set, ());
 }
 
 /// Resets violation metadata without clearing tracking containers.
@@ -951,16 +940,10 @@ pub unsafe extern "C" fn map2check_is_valid_assert(
             let checker = AssertChecker { expression };
             match checker.check(&ctx) {
                 Ok(crate::analysismode::VccOutcome::Violated { property }) => {
-                    match state::with_state(|s| {
-                        let first = s.result.ok;
-                        s.set_false(property, line_number as u32, fname);
-                        output::print_json(s)?;
-                        Ok(first)
-                    }) {
-                        Ok(true) => termination::on_violation(false),
-                        Ok(false) => {}
-                        Err(e) => log_error(&e),
-                    }
+                    // With a mode set the run ends inside; unset, the JSON
+                    // report follows the recorded violation.
+                    record_violation(property, line_number as u32, fname, false);
+                    output::print_report_unless_mode_set();
                 }
                 Ok(crate::analysismode::VccOutcome::Safe) => {}
                 Err(e) => log_error(&e),

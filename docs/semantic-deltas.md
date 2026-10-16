@@ -35,7 +35,7 @@ entry and its tests in the same change.
 ### SD-01 — JSON report shape
 
 **Classification:** intentional (#14)
-**Tests:** `tests/compat_docs.rs::integration_guide_json_examples_match_the_serializer`, `rust/src/output/mod.rs::output_is_valid_json`, `rust/src/output/mod.rs::json_report_snapshot`
+**Tests:** `tests/compat_docs.rs::integration_guide_json_examples_match_the_serializer`, `rust/src/output/mod.rs::output_is_valid_json`, `rust/src/output/mod.rs::json_report_snapshot`, `rust/src/ffi_golden_tests.rs::assert_violation_with_mode_set_writes_files_aborts_and_prints_no_json`
 
 **Rust:** `print_all_containers_as_json()`, `map2check_success()` and a
 failing `map2check_is_valid_assert()` print one pretty-printed JSON object
@@ -56,7 +56,8 @@ part of the schema. Whitespace alone is not a semantic difference.
 files that the library writes when an analysis mode is set (#19, see
 “Result files” in [`api-deltas.md`](api-deltas.md#result-files)). The JSON
 is an additional channel with its own schema, kept as it is and pinned by
-`json_report_snapshot`.
+`json_report_snapshot`. It is printed only when no analysis mode is set; a
+Map2Check run (mode set) prints nothing on stdout, as develop.
 
 **Reproduce:**
 
@@ -258,7 +259,8 @@ __VERIFIER_assume(0);   /* process exits with status 0 */
 **Tests:** `rust/src/nondet/libfuzzer.rs::verifier_error_aborts_and_reports_reachability`, `rust/src/nondet/libfuzzer.rs::verifier_assert_false_aborts_and_reports_reachability`
 
 **Rust:** `__VERIFIER_error()` and `__VERIFIER_assert(0)` record
-`REACHABILITY`, print the JSON report and call `abort()`. LibFuzzer treats
+`REACHABILITY`, print the JSON report (only when no analysis mode is
+set, SD-01) and call `abort()`. LibFuzzer treats
 the abort as a crash.
 
 **Legacy (embedded C library):** a violation ends in `abort()` through

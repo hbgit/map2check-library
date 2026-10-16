@@ -23,6 +23,7 @@ use crate::analysismode::mode::AnalysisMode;
 
 const CHILD_ENV: &str = "MAP2CHECK_GOLDEN_CHILD";
 const STARTED: &str = "map2check-golden-child-started";
+const RETURNED: &str = "map2check-golden-child-returned";
 
 /// Fixed addresses of `tests/legacy_golden/drivers/golden.h`.
 const ARENA: usize = 0x1000_0000;
@@ -67,6 +68,29 @@ fn files_in(dir: &Path) -> BTreeSet<String> {
         .collect()
 }
 
+/// With a mode set the library writes nothing to stdout (no JSON report):
+/// after the start marker the child prints nothing until it aborts, or
+/// until the `RETURNED` marker printed right after `map2check_success()`.
+fn assert_quiet_stdout(stdout: &str, aborted: bool) {
+    assert!(
+        !stdout.contains("map2check_log"),
+        "JSON no stdout:\n{stdout}"
+    );
+    let after = stdout
+        .split_once(STARTED)
+        .map(|(_, rest)| rest)
+        .expect("marcador de início");
+    let produced = if aborted {
+        after
+    } else {
+        after
+            .split_once(RETURNED)
+            .map(|(before, _)| before)
+            .expect("marcador de retorno")
+    };
+    assert_eq!(produced, "\n", "saída inesperada no stdout:\n{stdout}");
+}
+
 /// Runs the `<child>` scenario and compares its files and its end with
 /// `tests/legacy_golden/<tag>/`.
 fn assert_matches_golden(tag: &str, child: &str) {
@@ -92,6 +116,8 @@ fn assert_matches_golden(tag: &str, child: &str) {
         ),
         other => panic!("{tag}: .exit_status inesperado `{other}`"),
     }
+
+    assert_quiet_stdout(&stdout, status.trim() == "134");
 
     assert_eq!(
         files_in(dir.path()),
@@ -235,6 +261,7 @@ fn none_child() {
         memory();
         free_p();
         map2check_success();
+        println!("{RETURNED}");
     }
 }
 
@@ -344,7 +371,7 @@ fn success_without_witness_child() {
         memory();
         free_p();
         map2check_success();
-        println!("map2check-golden-child-returned");
+        println!("{RETURNED}");
     }
 }
 
@@ -353,7 +380,7 @@ fn without_witness_success_writes_none_and_returns() {
     let dir = tempfile::tempdir().unwrap();
     let output = run_child("success_without_witness_child", dir.path());
     assert_eq!(output.status.code(), Some(0));
-    assert!(String::from_utf8_lossy(&output.stdout).contains("map2check-golden-child-returned"));
+    assert!(String::from_utf8_lossy(&output.stdout).contains(RETURNED));
     assert_eq!(
         files_in(dir.path()),
         BTreeSet::from(["map2check_property".to_owned()])
@@ -403,7 +430,7 @@ fn unset_mode_records_without_files_or_abort_child() {
             crate::caller::ViolatedProperty::Overflow
         );
         map2check_success();
-        println!("map2check-golden-child-returned");
+        println!("{RETURNED}");
     }
 }
 
@@ -416,9 +443,78 @@ fn unset_mode_records_without_files_or_abort() {
         dir.path(),
     );
     assert_eq!(output.status.code(), Some(0));
-    assert!(String::from_utf8_lossy(&output.stdout).contains("map2check-golden-child-returned"));
+    assert!(String::from_utf8_lossy(&output.stdout).contains(RETURNED));
     assert_eq!(
         files_in(dir.path()),
         BTreeSet::from(["map2check_property_free".to_owned()])
+    );
+}
+
+// ── No JSON on stdout with a mode set; a poisoned state is UNKNOWN ─────────
+
+#[test]
+fn assert_violation_without_witness_child() {
+    if is_child() {
+        println!("{STARTED}");
+        map2check_set_mode(AnalysisMode::Assert as i32);
+        map2check_init();
+        print_all_containers_as_json();
+        // SAFETY: C-string literal is valid.
+        unsafe { map2check_is_valid_assert(21, c"main".as_ptr(), 0) };
+        println!("map2check-golden-child-survived");
+    }
+}
+
+#[test]
+fn assert_violation_with_mode_set_writes_files_aborts_and_prints_no_json() {
+    let dir = tempfile::tempdir().unwrap();
+    let output = run_child("assert_violation_without_witness_child", dir.path());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert_eq!(output.status.signal(), Some(6), "{stdout}");
+    assert_quiet_stdout(&stdout, true);
+    assert_eq!(
+        files_in(dir.path()),
+        BTreeSet::from([
+            "map2check_property".to_owned(),
+            "map2check_property_assert".to_owned()
+        ])
+    );
+    assert_eq!(
+        std::fs::read(dir.path().join("map2check_property_assert")).unwrap(),
+        b"ASSERT\nLine: 21\nFunction: main\n"
+    );
+}
+
+#[test]
+fn poisoned_state_at_success_child() {
+    if is_child() {
+        println!("{STARTED}");
+        map2check_set_mode(AnalysisMode::Memtrack as i32);
+        map2check_enable_witness();
+        map2check_init();
+        let _ = std::thread::spawn(|| {
+            let _held = crate::state::get().unwrap().lock().unwrap();
+            panic!("poison the analysis state on purpose");
+        })
+        .join();
+        map2check_success();
+        println!("map2check-golden-child-survived");
+    }
+}
+
+#[test]
+fn poisoned_state_at_success_reports_unknown_and_aborts() {
+    let dir = tempfile::tempdir().unwrap();
+    let output = run_child("poisoned_state_at_success_child", dir.path());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert_eq!(output.status.signal(), Some(6), "{stdout}");
+    assert!(!stdout.contains("survived"), "{stdout}");
+    // No NONE left behind: develop's UNKNOWN (SD-16) plus the confirmation.
+    assert_eq!(
+        files_in(dir.path()),
+        BTreeSet::from([
+            "map2check_property__unknown".to_owned(),
+            "map2check_checked_error".to_owned()
+        ])
     );
 }

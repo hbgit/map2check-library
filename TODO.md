@@ -163,8 +163,16 @@ e não repetem as tarefas já listadas.
   núcleo; incluir a matriz completa de símbolos e resolver/documentar a colisão
   de assinatura de `map2check_check_deref`. Excluir explicitamente símbolos
   wasm se permanecerem fora do escopo.
+  Ao passar o endereço da variável-ponteiro em `map2check_free`, fechar a
+  parte do SD-17 sobre `list_log.csv`: a linha FREE com a variável certa e a
+  linha que o develop acrescenta antes de um `free` inválido, com um golden
+  do caminho `map2check_free` que falha (hoje o golden FALSE-FREE usa
+  `free_resolved_address`; ver `tests/legacy_golden/README.md`).
 
-- [ ] **Compatibilizar o canal de resultado legado.** Além do JSON, implementar
+- [x] **Compatibilizar o canal de resultado legado.** Feito na Task 2.4
+  (#19): `rust/src/output/legacy_files.rs` e golden tests em
+  `tests/legacy_golden/`. Pendências em SD-17.
+  Texto original: Além do JSON, implementar
   a escrita dos arquivos-sentinela `map2check_property_*` nos nomes e formatos
   aceitos pelo parser atual do Map2Check. Adicionar golden tests para arquivos
   e JSON e validar propriedade, linha e função contra saídas da biblioteca C
