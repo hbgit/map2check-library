@@ -82,9 +82,9 @@ e não repetem as tarefas já listadas.
   [state.rs](rust/src/state.rs#L24) e
   [libfuzzer.rs](rust/src/nondet/libfuzzer.rs#L21).
 
-- [ ] **Validar os fluxos de build e testes C/KLEE/LibFuzzer.** A feature Cargo
-  `klee` não tem implementação específica (`Cargo.toml` a declara, mas não há
-  uso correspondente em `rust/src`); o Dockerfile tolera falhas ao emitir/linkar
+- [ ] **Validar os fluxos de build e testes C/KLEE/LibFuzzer.** A feature
+  `klee` está implementada (Task 2.7, [docs/klee-feasibility.md](docs/klee-feasibility.md));
+  o Dockerfile tolera falhas ao emitir/linkar
   bitcode (`|| true`), e os scripts de integração ainda pressupõem o layout C
   em `build/`. Decidir e registrar se KLEE terá suporte Rust ou uma contingência
   C; em ambos os casos, fazer os builds falharem quando o artefato esperado
@@ -135,13 +135,11 @@ e não repetem as tarefas já listadas.
   executem no CI; remover artefatos de build legados que não sejam mais usados.
   Falhas na geração ou no link de bitcode não devem ser mascaradas por `|| true`.
 
-- [ ] **Executar o gate de viabilidade de KLEE e registrar a decisão.**
-  Prototipar a feature `klee` com nondeterminismo via `klee_make_symbolic`,
-  estado compatível com execução simbólica e emissão/link de bitcode; testar o
-  programa KLEE de referência com uma versão LLVM compatível. Registrar
-  evidências, limitações e a decisão go/no-go em
-  `docs/klee-feasibility.md`; se Rust não for viável, formalizar a contingência
-  de manter a biblioteca C nesse fluxo.
+- [x] **Executar o gate de viabilidade de KLEE e registrar a decisão.**
+  Feito na Task 2.7 (#20): feature `klee` em `klee/Cargo.toml` (rustc 1.72.1,
+  bitcode LLVM 16, `scripts/build-klee-runtime.sh`), teste
+  `tests/klee_paths.sh` com KLEE 3.1, decisão **go** em
+  [docs/klee-feasibility.md](docs/klee-feasibility.md).
 
 - [ ] **Medir e controlar a regressão de desempenho.** Criar benchmarks
   reproduzíveis contra a biblioteca C, usando programas de referência e corpus
