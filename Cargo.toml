@@ -22,6 +22,7 @@ mockall = "0.13"
 
 [features]
 libfuzzer = []
+klee = []
 
 [profile.release]
 opt-level = 3
@@ -31,6 +32,13 @@ codegen-units = 1
 [profile.dev]
 opt-level = 0
 debug = true
+
+# Unwind e não abort: ffi_guard (rust/src/ffi.rs) recupera panics com
+# catch_unwind, e um abort sob AFL++ persistente pareceria crash do programa
+# analisado. O build KLEE usa panic = "abort" separadamente.
+[profile.runtime]
+inherits = "release"
+panic = "unwind"
 
 [build-dependencies]
 cbindgen = "0.26.0"
