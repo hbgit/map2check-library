@@ -12,6 +12,13 @@
 
 #include <stddef.h>
 
+/* SV-COMP primitives. With a mode set both runtimes treat them as no-ops
+ * (develop: Map2CheckFunctions.c:57-59, AnalysisModeAssert.c:25-27); the
+ * passes report through map2check_*. develop defines __VERIFIER_assert only
+ * in assert mode, so the programs call it only on the Rust runtime. */
+void __VERIFIER_error(void);
+void __VERIFIER_assert(int condition);
+
 #define M2C_MODE_MEMTRACK 1
 #define M2C_MODE_TARGET 5
 

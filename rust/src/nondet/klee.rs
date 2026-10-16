@@ -191,16 +191,19 @@ pub extern "C" fn __VERIFIER_assume(condition: i32) {
     );
 }
 
-/// SV-COMP reachability primitive, as in `libfuzzer.rs`: records a
-/// `Reachability` violation and aborts, which KLEE reports as an abort
-/// error.
+/// SV-COMP reachability primitive, as in `libfuzzer.rs`: with an analysis
+/// mode set it does nothing, as develop's (`Map2CheckFunctions.c:57-59`),
+/// so KLEE keeps exploring; with none it records `Reachability` and aborts
+/// (SD-08).
 #[no_mangle]
 pub extern "C" fn __VERIFIER_error() {
-    crate::ffi::ffi_guard(super::record_verifier_error, ());
-    std::process::abort();
+    if crate::ffi::ffi_guard(super::record_verifier_error, false) {
+        std::process::abort();
+    }
 }
 
-/// SV-COMP assert primitive: `__VERIFIER_error()` when `condition` is false.
+/// SV-COMP assert primitive: `__VERIFIER_error()` when `condition` is false
+/// (a no-op with a mode set, as develop's `AnalysisModeAssert.c:25-27`).
 #[no_mangle]
 pub extern "C" fn __VERIFIER_assert(condition: i32) {
     crate::ffi::ffi_guard(

@@ -314,17 +314,21 @@ pub extern "C-unwind" fn map2check_fuzzer_assume(condition: i32) {
     }
 }
 
-/// SV-COMP reachability primitive: records a `Reachability` violation and
-/// aborts the process. Reaching this function at runtime means the property
-/// being checked was violated; it never returns.
+/// SV-COMP reachability primitive. With an analysis mode set it does
+/// nothing, as in develop: the target pass reports reachability through
+/// `map2check_reach_target`. With the mode unset it records a
+/// `Reachability` violation, prints the JSON report and aborts (SD-08).
 #[no_mangle]
 pub extern "C" fn __VERIFIER_error() {
-    crate::ffi::ffi_guard(super::record_verifier_error, ());
-    std::process::abort();
+    if crate::ffi::ffi_guard(super::record_verifier_error, false) {
+        std::process::abort();
+    }
 }
 
-/// SV-COMP assert primitive: calls `__VERIFIER_error()` (and thus aborts)
-/// when `condition` is false; otherwise a no-op.
+/// SV-COMP assert primitive: calls `__VERIFIER_error()` when `condition`
+/// is false, which with an analysis mode set does nothing (develop's
+/// `__VERIFIER_assert` is empty; the assert pass emits
+/// `map2check_is_valid_assert`) and with none aborts (SD-08).
 #[no_mangle]
 pub extern "C" fn __VERIFIER_assert(condition: i32) {
     crate::ffi::ffi_guard(
@@ -893,5 +897,96 @@ mod tests {
     #[test]
     fn verifier_assert_false_aborts_and_reports_reachability() {
         assert_aborted_with_reachability(&run_child("verifier_assert_false_child"));
+    }
+
+    // With an analysis mode set (a Map2Check run), `__VERIFIER_error` and
+    // `__VERIFIER_assert` do nothing, as in develop (`Map2CheckFunctions.c:57-59`,
+    // `AnalysisModeAssert.c:25-27`): the passes carry the target and assert
+    // checks (`map2check_reach_target`, `map2check_is_valid_assert`).
+
+    /// Runs a child that must survive, and returns its stdout.
+    fn run_surviving_child(name: &str) -> String {
+        let exe = std::env::current_exe().unwrap();
+        let output = std::process::Command::new(exe)
+            .args(["--exact", &format!("nondet::libfuzzer::tests::{name}")])
+            .args(["--nocapture", "--test-threads=1"])
+            .env(CHILD_ENV, "1")
+            .output()
+            .unwrap();
+        let stdout = String::from_utf8_lossy(&output.stdout).into_owned();
+        assert!(
+            output.status.success(),
+            "`{name}` não terminou bem:\n{stdout}"
+        );
+        assert!(
+            stdout.contains(STARTED),
+            "o filho não rodou `{name}`:\n{stdout}"
+        );
+        assert!(
+            stdout.contains(SURVIVED),
+            "`{name}` encerrou o processo:\n{stdout}"
+        );
+        stdout
+    }
+
+    fn current_property() -> crate::caller::ViolatedProperty {
+        crate::ffi::get_current_property()
+    }
+
+    #[test]
+    fn verifier_error_with_memtrack_mode_child() {
+        if is_child() {
+            println!("{STARTED}");
+            crate::ffi::map2check_set_mode(1); // memtrack
+            crate::ffi::map2check_init();
+            __VERIFIER_error();
+            __VERIFIER_assert(0);
+            println!("after-error={:?}", current_property());
+            let block = [0_i32; 4];
+            let base = block.as_ptr().cast::<std::ffi::c_void>();
+            // SAFETY: only the address is recorded and checked; nothing is read.
+            unsafe {
+                crate::ffi::map2check_map_malloc(base, 16);
+                crate::ffi::map2check_check_load(
+                    block.as_ptr().wrapping_add(4).cast(),
+                    17,
+                    0,
+                    4,
+                    b"main\0".as_ptr().cast(),
+                );
+            }
+            println!("after-deref={:?}", current_property());
+            println!("{SURVIVED}");
+        }
+    }
+
+    #[test]
+    fn verifier_error_is_a_no_op_with_a_mode_and_the_deref_is_reported() {
+        let out = run_surviving_child("verifier_error_with_memtrack_mode_child");
+        assert!(out.contains("after-error=None"), "{out}");
+        assert!(out.contains("after-deref=MemsafetyDeref"), "{out}");
+    }
+
+    #[test]
+    fn verifier_error_with_target_mode_child() {
+        if is_child() {
+            println!("{STARTED}");
+            crate::ffi::map2check_set_mode(5); // target
+            crate::ffi::map2check_init();
+            __VERIFIER_error();
+            __VERIFIER_assert(0);
+            println!("after-error={:?}", current_property());
+            // SAFETY: NUL-terminated literal.
+            unsafe { crate::ffi::map2check_reach_target(b"reach_error\0".as_ptr().cast(), 0, 12) };
+            println!("after-target={:?}", current_property());
+            println!("{SURVIVED}");
+        }
+    }
+
+    #[test]
+    fn target_mode_reaches_only_through_map2check_reach_target() {
+        let out = run_surviving_child("verifier_error_with_target_mode_child");
+        assert!(out.contains("after-error=None"), "{out}");
+        assert!(out.contains("after-target=Reachability"), "{out}");
     }
 }

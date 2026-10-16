@@ -19,6 +19,10 @@
 #             (the spike's 2 -> 22 case, condition 7);
 #   deref.c   KLEE finds the off-by-one read and the property file says
 #             FALSE-DEREF;
+#   vererr_deref.c, vererr_target.c  __VERIFIER_error()/_assert(0) do
+#             nothing with a mode set, as in develop: memtrack still ends in
+#             FALSE-DEREF, target mode reports nothing without
+#             map2check_reach_target;
 #   layout.c  condition 9: the ktest of the error path, turned into a seed
 #             as the frontend's exportKleeVectorsAsSeeds does, replayed
 #             through the Rust libFuzzer reader (--features libfuzzer,
@@ -111,7 +115,7 @@ develop_runtime() { # <mode: target|memtrack> <out.bc>
 run_klee() {
   local prog="$1" rt="$2" kind="$3" dir="$W/$1-$2-$3" rtbc cflags=() mode=target
   mkdir -p "$dir"
-  [ "$prog" = deref ] && mode=memtrack
+  case "$prog" in deref | vererr_deref) mode=memtrack ;; esac
   if [ "$rt" = develop ]; then
     cflags=(-DM2C_DEVELOP)
     rtbc="$W/dev-$mode.bc"
@@ -248,6 +252,30 @@ else
   fail "deref.c: the abort's ktest does not have i = 4"
 fi
 
+# ── vererr_*.c: __VERIFIER_error/_assert are no-ops with a mode set ─────────
+echo "== vererr_deref.c"
+run_klee vererr_deref rust full
+count vererr_deref rust
+run_klee vererr_deref rust frontend
+d="$W/vererr_deref-rust-frontend"
+if [ "$(head -n 1 "$d/map2check_property" 2>/dev/null)" = FALSE-DEREF ] &&
+  k="$(abort_ktest "$d")" && [ -n "$k" ] &&
+  ktest_objects "$k" "$W/seed.tmp" | grep -qx 'non_det_int 4 04000000'; then
+  pass "vererr_deref.c: __VERIFIER_error is a no-op in memtrack mode; FALSE-DEREF with i = 4"
+else
+  fail "vererr_deref.c: property '$(cat "$d/map2check_property" 2>/dev/null)'"
+fi
+echo "== vererr_target.c"
+run_klee vererr_target rust full
+count vererr_target rust
+d="$W/vererr_target-rust-full"
+if [ "$PATHS_COMPLETED" = 2 ] && [ "$PATHS_PARTIAL" = 0 ] && [ -z "$(abort_ktest "$d")" ] &&
+  [ "$(head -n 1 "$d/map2check_property" 2>/dev/null)" = NONE ]; then
+  pass "vererr_target.c: __VERIFIER_error alone reports nothing (2 paths, no abort, NONE)"
+else
+  fail "vererr_target.c: $PATHS_COMPLETED+$PATHS_PARTIAL paths, property '$(cat "$d/map2check_property" 2>/dev/null)'"
+fi
+
 # ── layout.c: ktest -> seed -> Rust libFuzzer reader (condition 9) ────────────
 echo "== layout.c"
 run_klee layout rust full
@@ -303,7 +331,7 @@ fi
 # ── develop's C runtime, same programs ────────────────────────────────────────
 if [ -n "${DEVELOP_SRC:-}" ]; then
   echo "== develop C runtime ($DEVELOP_SRC)"
-  for prog in prog reach range deref layout; do
+  for prog in prog reach range deref vererr_deref vererr_target layout; do
     run_klee "$prog" develop full
     count "$prog" develop
     run_klee "$prog" develop frontend
@@ -315,7 +343,7 @@ fi
 table="$(
   echo "| program | Rust runtime (completed+partial) | develop C runtime (completed+partial) |"
   echo "|---|---|---|"
-  for prog in prog reach range json deref layout; do
+  for prog in prog reach range json deref vererr_deref vererr_target layout; do
     echo "| $prog.c | ${COUNT[$prog/rust]:-?} | ${COUNT[$prog/develop]:-not run} |"
   done
 )"

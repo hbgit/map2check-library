@@ -273,24 +273,46 @@ int __map2check_main__(void) {
 /* LLVMFuzzerTestOneInput returns 0 for every input; the process goes on */
 ```
 
-### SD-08 — `__VERIFIER_error()` reports REACHABILITY, then aborts
+### SD-08 — `__VERIFIER_error()` / `__VERIFIER_assert(0)` without an analysis mode
 
-**Classification:** intentional
-**Tests:** `rust/src/nondet/libfuzzer.rs::verifier_error_aborts_and_reports_reachability`, `rust/src/nondet/libfuzzer.rs::verifier_assert_false_aborts_and_reports_reachability`
+**Classification:** fixed (#20)
+**Tests:** `rust/src/nondet/libfuzzer.rs::verifier_error_is_a_no_op_with_a_mode_and_the_deref_is_reported`, `rust/src/nondet/libfuzzer.rs::target_mode_reaches_only_through_map2check_reach_target`, `rust/src/nondet/libfuzzer.rs::verifier_error_aborts_and_reports_reachability`, `rust/src/nondet/libfuzzer.rs::verifier_assert_false_aborts_and_reports_reachability`
 
-**Rust:** `__VERIFIER_error()` and `__VERIFIER_assert(0)` record
-`REACHABILITY`, print the JSON report (only when no analysis mode is
-set, SD-01) and call `abort()`. LibFuzzer treats
-the abort as a crash.
+**Legacy (develop):** both are empty. `__VERIFIER_error()` is
+`// DO NOTHING` (`Map2CheckFunctions.c:57-59`) and `__VERIFIER_assert` is
+`// DO NOTHING` (`AnalysisModeAssert.c:25-27`, defined only in the assert
+mode). The passes carry the checks: the target pass emits
+`map2check_target_function` (reachability), the assert pass emits
+`map2check_assert`. The earlier text of this entry, "a violation ends in
+`abort()` through `map2check_error()`", described `map2check_error`, not
+`__VERIFIER_error`.
 
-**Legacy (embedded C library):** a violation ends in `abort()` through
-`map2check_error()` (`lib_old/Map2CheckFunctions.c:72-102`).
+**Rust, mode set (a Map2Check run):** the same as develop: both return and
+record nothing, in the libFuzzer and the KLEE generators. Reachability is
+reported only by `map2check_reach_target`, an assert failure only by
+`map2check_is_valid_assert`. Before this fix both recorded `REACHABILITY`
+and aborted with no property file. Under KLEE's
+`--exit-on-error-type=Abort` that stopped the exploration before the real
+violation of a memory or overflow task.
+
+Under KLEE the same is checked by `tests/klee_paths.sh` with
+`tests/klee/vererr_deref.c` and `tests/klee/vererr_target.c`. Fixed for the
+mode-set path in the Task 2.7 review; the mode-unset path below stays as
+an intentional delta.
+
+**Rust, mode unset (direct API users):** `__VERIFIER_error()` and
+`__VERIFIER_assert(0)` record `REACHABILITY`, print the JSON report
+(SD-01) and call `abort()`; LibFuzzer treats the abort as a crash.
 
 **Reproduce (link with `--features libfuzzer`):**
 
 ```c
 map2check_init();
-__VERIFIER_error();   /* prints "REACHABILITY", then SIGABRT */
+__VERIFIER_error();   /* no mode: prints "REACHABILITY", then SIGABRT */
+
+map2check_set_mode(1);  /* memtrack */
+map2check_init();
+__VERIFIER_error();   /* returns; nothing recorded */
 ```
 
 ### SD-09 — Invalid arguments are ignored instead of causing undefined behaviour
