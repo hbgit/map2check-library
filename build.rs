@@ -102,6 +102,12 @@ void map2check_binop_shr_unsigned(uint32_t param1, uint32_t param2, uint32_t lin
         "struct bbtrack_log_t *map2check_save_basic_block_log",
         "bbtrack_log_t *map2check_save_basic_block_log",
     );
+    // cbindgen 0.28 writes two spaces after the closing `#endif`; 0.26 wrote
+    // one. Keep the header byte-identical across the bump.
+    header = header.replace(
+        "#endif  /* __MAP2CHECK_H_INCLUDED__ */",
+        "#endif /* __MAP2CHECK_H_INCLUDED__ */",
+    );
     let include_guard_end = "#endif /* __MAP2CHECK_H_INCLUDED__ */";
     let Some(guard_index) = header.find(include_guard_end) else {
         panic!("O header gerado não contém o include guard esperado");
