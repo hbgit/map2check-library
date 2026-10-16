@@ -16,6 +16,7 @@ map2check-library-<version>-<target>/
 ├── include/map2check.h      # C header; MAP2CHECK_VERSION == <version>
 ├── lib/libmap2check.a            # plain C programs (no features)
 ├── lib/libmap2check_libfuzzer.a  # LibFuzzer targets (feature libfuzzer)
+├── lib/libmap2check_runtime.a    # runtime profile, features libfuzzer,wasm
 ├── docs/integration-guide.md
 ├── docs/api-deltas.md
 ├── docs/semantic-deltas.md
@@ -32,6 +33,21 @@ Without a release archive, run this from the repository root:
 ```sh
 cargo build --release                       # plain C programs
 cargo build --release --features libfuzzer  # LibFuzzer targets (overwrites the same .a)
+```
+
+The build Map2Check links is the `runtime` profile (release optimisations
+with `panic = "unwind"`, so the FFI guard can recover panics):
+
+```sh
+cargo build --profile runtime --features libfuzzer,wasm   # target/runtime/libmap2check.a
+```
+
+The runtime of Map2Check's KLEE (`symex`) generator is one LLVM 16 bitcode
+module built from `klee/Cargo.toml` with rustc 1.72.1 and the LLVM 16 tools
+(`opt-16`, `llvm-dis-16`, ...). It is not part of the release archive:
+
+```sh
+scripts/build-klee-runtime.sh out/map2check_klee.bc
 ```
 
 `build.rs` regenerates `include/map2check.h` on every build. The header is
@@ -56,12 +72,12 @@ cc -I include my_program.c lib/libmap2check.a -ldl -lpthread -lm -o my_program
   `undefined reference to '__map2check_main__'`.
 - The header and the library must come from the same build. The header
   carries the version as a string, `MAP2CHECK_VERSION` (for example
-  `"1.0.0-rc1"`), so you can log it or check it in your build:
+  `"1.1.0-rc1"`), so you can log it or check it in your build:
 
   ```c
   #include "map2check.h"
   #ifndef MAP2CHECK_VERSION
-  #error "map2check.h is older than 1.0.0-rc1"
+  #error "map2check.h is older than 1.1.0-rc1"
   #endif
   ```
 

@@ -22,7 +22,7 @@
 #     sed -i 's/^version = 4/version = 3/' klee/Cargo.lock
 [package]
 name = "map2check-klee-runtime"
-version = "1.0.0-rc1"
+version = "1.1.0-rc1"
 edition = "2021"
 rust-version = "1.72"
 build = false

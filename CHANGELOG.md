@@ -15,7 +15,48 @@ the C ABI or the JSON report must update them.
 
 ## [Unreleased]
 
+## [1.1.0-rc1] - Unreleased
+
+Release candidate of the cutover work: the library becomes the runtime of
+Map2Check (Tasks 1.2, 2.1-2.5, 2.7 and 2.8 of the cutover plan). Read the
+breaking changes first.
+
+### Breaking changes
+
+- `map2check_check_free` and `map2check_map_free` take one more argument, the
+  address of the pointer variable (the pointer slot), so the free is logged
+  like the C runtime does. Passes built against 1.0.0-rc1 must be rebuilt
+  (`docs/api-deltas.md`).
+- `map2check_set_mode` takes an `int32_t`. Invalid modes are rejected.
+- Default verdicts changed: the end-of-program leak check (memcleanup) is no
+  longer opt-in, and the first violation is final; a later passing check does
+  not clear it (#36). See `docs/semantic-deltas.md`.
+- With an analysis mode set, the library prints no JSON, and an unreadable
+  fuzzer input ends the run instead of continuing.
+
 ### Added
+
+- Runtime profile `runtime` (`cargo build --profile runtime --features
+  libfuzzer,wasm`): release optimisations with `panic = "unwind"`, so the FFI
+  guard can recover panics. This is the build Map2Check links.
+- Lifecycle: `map2check_init` and every fuzzer iteration reset the analysis
+  state (#9); every export is guarded against panics and works before
+  `map2check_init` (#8).
+- Runtime analysis modes: `map2check_set_mode` and `map2check_reach_target`
+  select assert, overflow, memory or reachability checking at run time.
+- Legacy result files consumed by Map2Check (property, log and witness files)
+  and abort on the first violation (#19, #14).
+- Core API completion: signed binary operations checked at the operation's
+  width with `DivByZero`, `posix_memalign` tracking through the `void **` it
+  wrote (#13), the full `__VERIFIER_nondet_*` family logged as develop writes
+  it (#6), AFL++-style fuzzer input reading, and rejection of
+  `__VERIFIER_assume` inside loops.
+- KLEE runtime (#20): `klee/Cargo.toml`, a second manifest built with rustc
+  1.72.1 (LLVM 16) into one bitcode module by
+  `scripts/build-klee-runtime.sh`, with CI. The bitcode is built separately
+  and is not in the release archive.
+- `lib/libmap2check_runtime.a` in the release archive: the `runtime` profile
+  with features `libfuzzer,wasm`.
 
 - Feature `wasm`: the runtime of Map2Check's `--wasm` mode (D2) ported from the
   C runtime: the `wasm_rt_*` stubs, `w2c_wasi__snapshot__preview1_proc_exit` and
@@ -28,6 +69,17 @@ the C ABI or the JSON report must update them.
 - `docs/integration-guide.md` and `docs/release.md`;
   `scripts/package-release.sh` builds the release archive with the C
   header, both static libraries and the docs (#5).
+
+### Fixed
+
+- Memory tracking: addresses are validated by their latest alloc/free event
+  (#11), an untracked resolved free is reported as invalid (#37), a passing
+  resolved free records the release (#11, #37), and a VLA is a static slot
+  sized in elements (#38).
+- Option semantics: `memcleanup` and null-is-valid are honoured by the memory
+  checks, and runtime options are separate from the analysis configuration
+  (#10).
+- The memcleanup verdict matches develop's.
 
 ### Changed
 
