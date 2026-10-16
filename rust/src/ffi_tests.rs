@@ -300,6 +300,109 @@ fn save_nondet_log_double_records_value() {
     assert_nondet(record, NonDetValue::Double(-2.25));
 }
 
+/// One test per family added for the Map2Check passes (#6): the value is
+/// read through the pointer in the family's C type, and the record keeps
+/// the `type_var` the pass passed.
+macro_rules! save_nondet_test {
+    ($test:ident, $c_ty:ty, $value:expr, $expected:expr, |$p:ident| $call:expr) => {
+        #[test]
+        fn $test() {
+            let _guard = fresh();
+            let mut value: $c_ty = $value;
+            let $p: *mut $c_ty = &mut value;
+            // SAFETY: value and the C-string literal outlive the call.
+            let record = unsafe { $call };
+            assert_nondet(record, $expected);
+            // SAFETY: the record is owned by the global state (see above).
+            assert_eq!(unsafe { (*record).type_var }, 9);
+            // A null value is accepted and records the family's zero.
+            state::reset();
+            let $p: *mut $c_ty = std::ptr::null_mut();
+            // SAFETY: as above.
+            let record = unsafe { $call };
+            assert!(!record.is_null());
+        }
+    };
+}
+
+save_nondet_test!(
+    save_nondet_log_unsigned_records_value,
+    std::os::raw::c_uint,
+    4_000_000_000,
+    NonDetValue::Unsigned(4_000_000_000),
+    |p| map2check_save_nondet_log_unsigned(10, 2, 9, p, c"f".as_ptr())
+);
+save_nondet_test!(
+    save_nondet_log_ulong_records_value,
+    std::os::raw::c_ulong,
+    u64::MAX as std::os::raw::c_ulong,
+    NonDetValue::ULong(u64::MAX),
+    |p| map2check_save_nondet_log_ulong(10, 2, 9, p, c"f".as_ptr())
+);
+save_nondet_test!(
+    save_nondet_log_uchar_records_value,
+    u8,
+    200,
+    NonDetValue::UChar(200),
+    |p| map2check_save_nondet_log_uchar(10, 2, 9, p, c"f".as_ptr())
+);
+save_nondet_test!(
+    save_nondet_log_short_records_value,
+    i16,
+    -2,
+    NonDetValue::Short(-2),
+    |p| map2check_save_nondet_log_short(10, 2, 9, p, c"f".as_ptr())
+);
+save_nondet_test!(
+    save_nondet_log_ushort_records_value,
+    u16,
+    65535,
+    NonDetValue::UShort(65535),
+    |p| map2check_save_nondet_log_ushort(10, 2, 9, p, c"f".as_ptr())
+);
+save_nondet_test!(
+    save_nondet_log_bool_records_value,
+    i32,
+    1,
+    NonDetValue::Bool(1),
+    |p| map2check_save_nondet_log_bool(10, 2, 9, p, c"f".as_ptr())
+);
+save_nondet_test!(
+    save_nondet_log_size_t_records_value,
+    usize,
+    5_000_000_000,
+    NonDetValue::SizeT(5_000_000_000),
+    |p| map2check_save_nondet_log_size_t(10, 2, 9, p, c"f".as_ptr())
+);
+save_nondet_test!(
+    save_nondet_log_loff_t_records_value,
+    std::os::raw::c_longlong,
+    -1,
+    NonDetValue::LoffT(-1),
+    |p| map2check_save_nondet_log_loff_t(10, 2, 9, p, c"f".as_ptr())
+);
+save_nondet_test!(
+    save_nondet_log_sector_t_records_value,
+    std::os::raw::c_ulong,
+    0x1_0000_0009,
+    NonDetValue::SectorT(0x1_0000_0009),
+    |p| map2check_save_nondet_log_sector_t(10, 2, 9, p, c"f".as_ptr())
+);
+save_nondet_test!(
+    save_nondet_log_pointer_records_address,
+    *mut c_void,
+    0x1_2345_6789_usize as *mut c_void,
+    NonDetValue::Pointer(0x1_2345_6789),
+    |p| map2check_save_nondet_log_pointer(10, 2, 9, p, c"f".as_ptr())
+);
+save_nondet_test!(
+    save_nondet_log_pchar_records_address,
+    *mut std::os::raw::c_char,
+    0x7fff_1234_5678_usize as *mut std::os::raw::c_char,
+    NonDetValue::PChar(0x7fff_1234_5678),
+    |p| map2check_save_nondet_log_pchar(10, 2, 9, p, c"f".as_ptr())
+);
+
 // ── Basic-block tracking ────────────────────────────────────────────────────
 
 #[test]
@@ -1648,6 +1751,18 @@ fn macro_generated_exports_match_the_hand_written_header_declarations() {
     let _: NonDet<c_char> = map2check_save_nondet_log_char; // char *value
     let _: NonDet<f32> = map2check_save_nondet_log_float; // float *value
     let _: NonDet<f64> = map2check_save_nondet_log_double; // double *value
+    use std::os::raw::{c_longlong, c_uint, c_ulong};
+    let _: NonDet<c_uint> = map2check_save_nondet_log_unsigned; // unsigned int *value
+    let _: NonDet<c_ulong> = map2check_save_nondet_log_ulong; // unsigned long *value
+    let _: NonDet<u8> = map2check_save_nondet_log_uchar; // unsigned char *value
+    let _: NonDet<i16> = map2check_save_nondet_log_short; // short *value
+    let _: NonDet<u16> = map2check_save_nondet_log_ushort; // unsigned short *value
+    let _: NonDet<i32> = map2check_save_nondet_log_bool; // int *value
+    let _: NonDet<usize> = map2check_save_nondet_log_size_t; // size_t *value
+    let _: NonDet<c_longlong> = map2check_save_nondet_log_loff_t; // long long *value
+    let _: NonDet<c_ulong> = map2check_save_nondet_log_sector_t; // unsigned long *value
+    let _: NonDet<*mut c_void> = map2check_save_nondet_log_pointer; // void **value
+    let _: NonDet<*mut c_char> = map2check_save_nondet_log_pchar; // char **value
     let _: BinOp<i32> = map2check_binop_add_int;
     let _: BinOp<i32> = map2check_binop_sub_int;
     let _: BinOp<i32> = map2check_binop_mul_int;

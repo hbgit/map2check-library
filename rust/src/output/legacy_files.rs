@@ -170,17 +170,40 @@ pub fn write_trackbb_log(dir: &Path, rows: &[BasicBlockEntry]) -> io::Result<()>
 }
 
 /// The value column and the `enum NONDET_TYPE` number
-/// (`Map2CheckTypes.h:41-58`) of a nondet row, as `nondet_log_to_file`
-/// prints them (`NonDetLog.c:45-54`). The `map2check_nondet_*` wrappers take
-/// the value as a C `int` (`NonDetLog.c:105-113`), so every integer kind is
-/// printed as its low 32 bits with `%d`; a double is printed with `%lf`.
-/// `float` has no develop counterpart and is logged as a double.
+/// (`Map2CheckTypes.h:41-58`) of a nondet row, as develop writes them.
+///
+/// `NonDetPass.cpp` hands each value to its `map2check_nondet_<t>` wrapper as
+/// a C `int` (`NonDetLog.c:96-130`): `int`, `unsigned`, `uint` as they are
+/// (`NONDET_IMPL_HELPER`, `:260-280`); the other integer kinds through
+/// `CreateIntegerCast(v, i32, isSigned = false)` (`:240-258`, `:281-290`),
+/// which zero-extends the narrow ones (`char` -3 arrives as 253) and
+/// truncates the wide ones to their low 32 bits; `pointer` and `pchar`
+/// through `CreatePtrToInt(v, i32)` (`:224-238`, `:291-292`), the low 32
+/// bits of the address. `nondet_log_to_file` then prints `UNSIGNED` with
+/// `%u`, `DOUBLE` with `%lf` and every other type with `%d`
+/// (`NonDetLog.c:45-54`). `float` has no develop counterpart and is logged as
+/// a double.
 pub fn nondet_value_and_type(value: &NonDetValue) -> (String, i32) {
+    /// `trunc` to `i32`, as `CreateIntegerCast` narrows a wide integer.
+    fn low32(v: u64) -> String {
+        (v as u32 as i32).to_string()
+    }
     match *value {
         NonDetValue::Int(v) => (v.to_string(), 0),
-        NonDetValue::Char(v) => ((v as i32).to_string(), 1),
-        NonDetValue::Long(v) => ((v as i32).to_string(), 4),
+        NonDetValue::Char(v) => ((v as u8).to_string(), 1),
+        NonDetValue::Pointer(v) => (low32(v as u64), 2),
+        NonDetValue::UShort(v) => (v.to_string(), 3),
+        NonDetValue::Long(v) => (low32(v as u64), 4),
+        NonDetValue::Unsigned(v) => (v.to_string(), 5),
+        NonDetValue::ULong(v) => (low32(v), 6),
+        NonDetValue::Bool(v) => (v.to_string(), 7),
+        NonDetValue::UChar(v) => (v.to_string(), 8),
+        NonDetValue::PChar(v) => (low32(v as u64), 9),
+        NonDetValue::SizeT(v) => (low32(v as u64), 10),
+        NonDetValue::LoffT(v) => (low32(v as u64), 11),
+        NonDetValue::SectorT(v) => (low32(v), 12),
         NonDetValue::UInt(v) => ((v as i32).to_string(), 13),
+        NonDetValue::Short(v) => ((v as u16).to_string(), 14),
         NonDetValue::Float(v) => (c_double(f64::from(v)), 15),
         NonDetValue::Double(v) => (c_double(v), 15),
     }
@@ -768,7 +791,16 @@ mod tests {
         assert_eq!(nondet_value_and_type(&V::Int(-1)), ("-1".into(), 0));
         assert_eq!(nondet_value_and_type(&V::UInt(u32::MAX)), ("-1".into(), 13));
         assert_eq!(nondet_value_and_type(&V::Long(1 << 32)), ("0".into(), 4));
-        assert_eq!(nondet_value_and_type(&V::Char(-3)), ("-3".into(), 1));
+        assert_eq!(nondet_value_and_type(&V::Char(-3)), ("253".into(), 1));
+        assert_eq!(nondet_value_and_type(&V::Short(-2)), ("65534".into(), 14));
+        assert_eq!(
+            nondet_value_and_type(&V::Unsigned(u32::MAX)),
+            ("4294967295".into(), 5)
+        );
+        assert_eq!(
+            nondet_value_and_type(&V::Pointer(0x1_2345_6789)),
+            ("591751049".into(), 2)
+        );
         assert_eq!(
             nondet_value_and_type(&V::Float(0.5)),
             ("0.500000".into(), 15)

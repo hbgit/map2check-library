@@ -5,6 +5,12 @@ use serde::Serialize;
 
 /// Typed nondeterministic value — replaces `union Data` + `enum var_type_t`.
 /// Each variant carries the actual value, eliminating unsafe type-punning.
+///
+/// One variant per `enum NONDET_TYPE` of Map2Check `develop`
+/// (`Map2CheckTypes.h:41-58`), with the C type `NonDetGenerator.h` gives it
+/// (`bool` is `typedef int bool`, `sector_t` is `unsigned long`, `loff_t` is
+/// glibc's `long long`, `pointer` and `pchar` are addresses), plus `Float`,
+/// which develop does not instrument.
 #[derive(Debug, Clone, Serialize, PartialEq)]
 #[serde(tag = "type", content = "value")]
 pub enum NonDetValue {
@@ -20,6 +26,28 @@ pub enum NonDetValue {
     Float(f32),
     #[serde(rename = "DOUBLE")]
     Double(f64),
+    #[serde(rename = "UNSIGNED")]
+    Unsigned(u32),
+    #[serde(rename = "POINTER")]
+    Pointer(usize),
+    #[serde(rename = "USHORT")]
+    UShort(u16),
+    #[serde(rename = "SHORT")]
+    Short(i16),
+    #[serde(rename = "ULONG")]
+    ULong(u64),
+    #[serde(rename = "BOOL")]
+    Bool(i32),
+    #[serde(rename = "UCHAR")]
+    UChar(u8),
+    #[serde(rename = "PCHAR")]
+    PChar(usize),
+    #[serde(rename = "SIZE_T")]
+    SizeT(usize),
+    #[serde(rename = "LOFF_T")]
+    LoffT(i64),
+    #[serde(rename = "SECTOR_T")]
+    SectorT(u64),
 }
 
 impl NonDetValue {
@@ -31,6 +59,17 @@ impl NonDetValue {
             Self::Char(_) => "CHAR",
             Self::Float(_) => "FLOAT",
             Self::Double(_) => "DOUBLE",
+            Self::Unsigned(_) => "UNSIGNED",
+            Self::Pointer(_) => "POINTER",
+            Self::UShort(_) => "USHORT",
+            Self::Short(_) => "SHORT",
+            Self::ULong(_) => "ULONG",
+            Self::Bool(_) => "BOOL",
+            Self::UChar(_) => "UCHAR",
+            Self::PChar(_) => "PCHAR",
+            Self::SizeT(_) => "SIZE_T",
+            Self::LoffT(_) => "LOFF_T",
+            Self::SectorT(_) => "SECTOR_T",
         }
     }
 }
@@ -103,6 +142,17 @@ mod tests {
             (NonDetValue::Char(-1), "CHAR"),
             (NonDetValue::Float(0.5), "FLOAT"),
             (NonDetValue::Double(0.5), "DOUBLE"),
+            (NonDetValue::Unsigned(1), "UNSIGNED"),
+            (NonDetValue::Pointer(1), "POINTER"),
+            (NonDetValue::UShort(1), "USHORT"),
+            (NonDetValue::Short(-1), "SHORT"),
+            (NonDetValue::ULong(1), "ULONG"),
+            (NonDetValue::Bool(1), "BOOL"),
+            (NonDetValue::UChar(1), "UCHAR"),
+            (NonDetValue::PChar(1), "PCHAR"),
+            (NonDetValue::SizeT(1), "SIZE_T"),
+            (NonDetValue::LoffT(-1), "LOFF_T"),
+            (NonDetValue::SectorT(1), "SECTOR_T"),
         ];
         for (value, name) in cases {
             assert_eq!(value.type_name(), name);

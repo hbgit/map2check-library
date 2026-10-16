@@ -94,7 +94,9 @@ static void golden_tracking(void) {
   map2check_track_bb(3, "main");
   map2check_nondet_int(5, 0, 42, "main");
   map2check_nondet_uint(6, 0, (int)4000000000u, "main");
-  map2check_nondet_char(7, 0, -3, "main");
+  /* NonDetPass.cpp:240-258,281 widens a char with CreateIntegerCast(..., false),
+   * a zero extension: the wrapper receives (unsigned char)-3. */
+  map2check_nondet_char(7, 0, (int)(unsigned char)(char)-3, "main");
   map2check_nondet_long(8, 0, -7, "main");
   map2check_nondet_double(9, 0, 2.5, "main");
 }

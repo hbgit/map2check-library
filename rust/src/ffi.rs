@@ -411,6 +411,8 @@ pub union LegacyNonDetData {
     pub str: [std::os::raw::c_char; 20],
     pub f: *mut f32,
     pub d: *mut f64,
+    /// The `value` pointer of the families with no typed member above.
+    pub p: *mut std::os::raw::c_void,
 }
 
 impl std::fmt::Debug for LegacyNonDetData {
@@ -424,10 +426,13 @@ impl std::fmt::Debug for LegacyNonDetData {
 unsafe impl Send for non_det_log_t {}
 
 macro_rules! nondet_ffi {
-    ($fn_name:ident, $variant:ident, $rust_ty:ty, $c_ty:ty, $field:ident) => {
+    ($fn_name:ident, $c_ty:ty, $field:ident, $zero:expr, $to_value:expr) => {
         /// # Safety
         /// `value` must be null or point to a valid value of the expected type.
         /// `function_name` must be null or a valid null-terminated C string.
+        // `c_long` and friends are `i64`/`u64` on LP64 only: the widening
+        // conversions in `$to_value` are no-ops there and real elsewhere.
+        #[allow(clippy::useless_conversion)]
         #[no_mangle]
         pub unsafe extern "C" fn $fn_name(
             line: i32,
@@ -440,12 +445,13 @@ macro_rules! nondet_ffi {
                 || {
                     // SAFETY: caller guarantees function_name is a valid C string or null.
                     let fname = unsafe { c_str(function_name) };
-                    let raw_value = if value.is_null() {
-                        <$c_ty>::default()
+                    let raw_value: $c_ty = if value.is_null() {
+                        $zero
                     } else {
                         // SAFETY: caller guarantees value points to a valid value.
                         unsafe { *value }
                     };
+                    let to_value: fn($c_ty) -> NonDetValue = $to_value;
                     match state::with_state(|s| {
                         let step = s.next_step();
                         s.nondets.push(NonDetEntry::new(
@@ -453,7 +459,7 @@ macro_rules! nondet_ffi {
                             line as u32,
                             scope as u32,
                             fname,
-                            NonDetValue::$variant(raw_value as $rust_ty),
+                            to_value(raw_value),
                         ));
                         let entry = Box::new(non_det_log_t {
                             tqe_next: std::ptr::null_mut(),
@@ -462,7 +468,7 @@ macro_rules! nondet_ffi {
                             line,
                             scope,
                             type_var,
-                            value: LegacyNonDetData { $field: value },
+                            value: LegacyNonDetData { $field: value as _ },
                             function_name,
                         });
                         let pointer = (&*entry) as *const non_det_log_t as *mut non_det_log_t;
@@ -482,24 +488,114 @@ macro_rules! nondet_ffi {
     };
 }
 
-nondet_ffi!(map2check_save_nondet_log_int, Int, i32, i32, i);
-nondet_ffi!(map2check_save_nondet_log_uint, UInt, u32, u32, u);
+// One export per `map2check_nondet_<t>` of develop (`NonDetLog.c:96-130`),
+// each taking a pointer to the value in the C type `NonDetGenerator.h` gives
+// that family. The `type_var` argument is only kept in the returned record:
+// the `enum NONDET_TYPE` of the row comes from the export, as in develop.
+nondet_ffi!(map2check_save_nondet_log_int, i32, i, 0, NonDetValue::Int);
+nondet_ffi!(map2check_save_nondet_log_uint, u32, u, 0, NonDetValue::UInt);
+nondet_ffi!(
+    map2check_save_nondet_log_unsigned,
+    std::os::raw::c_uint,
+    u,
+    0,
+    NonDetValue::Unsigned
+);
 nondet_ffi!(
     map2check_save_nondet_log_long,
-    Long,
-    i64,
     std::os::raw::c_long,
-    l
+    l,
+    0,
+    |v| NonDetValue::Long(i64::from(v))
+);
+nondet_ffi!(
+    map2check_save_nondet_log_ulong,
+    std::os::raw::c_ulong,
+    p,
+    0,
+    |v| NonDetValue::ULong(u64::from(v))
 );
 nondet_ffi!(
     map2check_save_nondet_log_char,
-    Char,
-    i8,
     std::os::raw::c_char,
-    c
+    c,
+    0,
+    |v| NonDetValue::Char(i8::from_ne_bytes([v as u8]))
 );
-nondet_ffi!(map2check_save_nondet_log_float, Float, f32, f32, f);
-nondet_ffi!(map2check_save_nondet_log_double, Double, f64, f64, d);
+nondet_ffi!(
+    map2check_save_nondet_log_uchar,
+    u8,
+    p,
+    0,
+    NonDetValue::UChar
+);
+nondet_ffi!(
+    map2check_save_nondet_log_short,
+    i16,
+    p,
+    0,
+    NonDetValue::Short
+);
+nondet_ffi!(
+    map2check_save_nondet_log_ushort,
+    u16,
+    p,
+    0,
+    NonDetValue::UShort
+);
+// develop: `typedef int bool` (NonDetGenerator.h:74).
+nondet_ffi!(map2check_save_nondet_log_bool, i32, p, 0, NonDetValue::Bool);
+nondet_ffi!(
+    map2check_save_nondet_log_size_t,
+    usize,
+    p,
+    0,
+    NonDetValue::SizeT
+);
+// glibc: `typedef long long loff_t`.
+nondet_ffi!(
+    map2check_save_nondet_log_loff_t,
+    std::os::raw::c_longlong,
+    p,
+    0,
+    |v| NonDetValue::LoffT(i64::from(v))
+);
+// develop: `#define sector_t unsigned long` (NonDetGenerator.h:112).
+nondet_ffi!(
+    map2check_save_nondet_log_sector_t,
+    std::os::raw::c_ulong,
+    p,
+    0,
+    |v| NonDetValue::SectorT(u64::from(v))
+);
+nondet_ffi!(
+    map2check_save_nondet_log_pointer,
+    *mut std::os::raw::c_void,
+    p,
+    std::ptr::null_mut(),
+    |v| NonDetValue::Pointer(v as usize)
+);
+nondet_ffi!(
+    map2check_save_nondet_log_pchar,
+    *mut std::os::raw::c_char,
+    p,
+    std::ptr::null_mut(),
+    |v| NonDetValue::PChar(v as usize)
+);
+nondet_ffi!(
+    map2check_save_nondet_log_float,
+    f32,
+    f,
+    0.0,
+    NonDetValue::Float
+);
+nondet_ffi!(
+    map2check_save_nondet_log_double,
+    f64,
+    d,
+    0.0,
+    NonDetValue::Double
+);
 
 // ── Basic-block tracking ──────────────────────────────────────────────────────
 

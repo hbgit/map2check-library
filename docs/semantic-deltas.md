@@ -517,7 +517,7 @@ map2check_map_malloc(NULL, 4);   /* writes map2check_property__unknown, aborts *
 ### SD-17 — The memory and nondet logs are rebuilt from this library's records
 
 **Classification:** accepted limitation
-**Tests:** `rust/src/ffi_golden_tests.rs::false_free_matches_c_runtime`, `rust/src/ffi_golden_tests.rs::false_free_resolved_matches_c_runtime`, `rust/src/ffi_golden_tests.rs::none_matches_c_runtime`, `rust/src/ffi_golden_tests.rs::false_memtrack_matches_c_runtime`, `rust/src/ffi_tests.rs::list_log_free_row_names_the_variable_passed_to_free`, `rust/src/ffi_tests.rs::failing_free_keeps_its_list_log_row_like_develop`, `rust/src/output/legacy_files.rs::nondet_rows_use_develop_types_and_value_formats`
+**Tests:** `rust/src/ffi_golden_tests.rs::false_free_matches_c_runtime`, `rust/src/ffi_golden_tests.rs::false_free_resolved_matches_c_runtime`, `rust/src/ffi_golden_tests.rs::none_matches_c_runtime`, `rust/src/ffi_golden_tests.rs::false_memtrack_matches_c_runtime`, `rust/src/ffi_tests.rs::list_log_free_row_names_the_variable_passed_to_free`, `rust/src/ffi_tests.rs::failing_free_keeps_its_list_log_row_like_develop`, `rust/src/output/legacy_files.rs::nondet_rows_use_develop_types_and_value_formats`, `rust/src/ffi_golden_tests.rs::nondet_types_match_c_runtime`
 
 **Rust:** `heap_log.csv`, `allocation_log.csv`, `list_log.csv` and
 `klee_log.csv` are rebuilt at the end of the run by replaying the memory
@@ -533,7 +533,11 @@ appends before it checks (`AnalysisModeMemtrack.c:346-358`); the golden
 - **`klee_log.csv`.** Written on every violating witness run. Develop
   writes it only with the AFL++ or KLEE generator; `NonDetGeneratorNone.c`
   writes none (`:42`). A `float` value, which develop has no logger for, is
-  logged as a double (type 15).
+  logged as a double (type 15). Every other type matches develop byte for
+  byte, value format and type number included: the value is the one
+  `NonDetPass.cpp` hands to develop's `int` wrapper (narrow types
+  zero-extended, so a `char` -3 is `253`; wide types and addresses
+  truncated to 32 bits), as the golden `NONDET-TYPES` checks.
 - **Long function names.** Develop copies names into `char[35]` with
   `strncpy` (`FUNCTION_MAX_LENGTH_NAME`), which leaves names of 35 or more
   characters unterminated; this library writes the whole name.

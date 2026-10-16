@@ -433,6 +433,60 @@ fn target_reached_matches_c_runtime() {
     assert_matches_golden("TARGET-REACHED", "target_reached_child");
 }
 
+/// `drivers/NONDET-TYPES.c`: one nondet value of every develop type, each
+/// handed to its `map2check_save_nondet_log_<t>` in its own C type, then a
+/// failed assert, so the witness writes `klee_log.csv`.
+#[test]
+fn nondet_types_child() {
+    if is_child() {
+        start(AnalysisMode::Assert);
+        let f = c"f".as_ptr();
+        let mut int_v: i32 = -5;
+        let mut unsigned_v: u32 = 4_000_000_000;
+        let mut char_v: c_char = -3;
+        let mut pointer_v: *mut c_void = 0x1_2345_6789_usize as *mut c_void;
+        let mut long_v: c_long = -7;
+        let mut ushort_v: u16 = 65535;
+        let mut short_v: i16 = -2;
+        let mut ulong_v: std::os::raw::c_ulong = 0xFFFF_FFFF_8000_0000;
+        let mut bool_v: i32 = 1;
+        let mut uchar_v: u8 = 200;
+        let mut pchar_v: *mut c_char = 0x7fff_1234_5678_usize as *mut c_char;
+        let mut size_t_v: usize = 5_000_000_000;
+        let mut loff_t_v: i64 = -1;
+        let mut sector_t_v: std::os::raw::c_ulong = 0x1_0000_0009;
+        let mut uint_v: u32 = 4_000_000_000;
+        let mut double_v: f64 = -0.125;
+        // SAFETY: every value outlives its call; the pointers are only
+        // recorded, never dereferenced; `f` is a C-string literal.
+        unsafe {
+            map2check_save_nondet_log_int(30, 1, 0, &mut int_v, f);
+            map2check_save_nondet_log_unsigned(31, 1, 5, &mut unsigned_v, f);
+            map2check_save_nondet_log_char(32, 1, 1, &mut char_v, f);
+            map2check_save_nondet_log_pointer(33, 1, 2, &mut pointer_v, f);
+            map2check_save_nondet_log_long(34, 1, 4, &mut long_v, f);
+            map2check_save_nondet_log_ushort(35, 1, 3, &mut ushort_v, f);
+            map2check_save_nondet_log_short(36, 1, 14, &mut short_v, f);
+            map2check_save_nondet_log_ulong(37, 1, 6, &mut ulong_v, f);
+            map2check_save_nondet_log_bool(38, 1, 7, &mut bool_v, f);
+            map2check_save_nondet_log_uchar(39, 1, 8, &mut uchar_v, f);
+            map2check_save_nondet_log_pchar(40, 1, 9, &mut pchar_v, f);
+            map2check_save_nondet_log_size_t(41, 1, 10, &mut size_t_v, f);
+            map2check_save_nondet_log_loff_t(42, 1, 11, &mut loff_t_v, f);
+            map2check_save_nondet_log_sector_t(43, 1, 12, &mut sector_t_v, f);
+            map2check_save_nondet_log_uint(44, 1, 13, &mut uint_v, f);
+            map2check_save_nondet_log_double(45, 1, 15, &mut double_v, f);
+            map2check_is_valid_assert(46, f, 0);
+        }
+        map2check_success();
+    }
+}
+
+#[test]
+fn nondet_types_match_c_runtime() {
+    assert_matches_golden("NONDET-TYPES", "nondet_types_child");
+}
+
 // ── Without witness: property files only (WitnessGenerationNone.c) ──────────
 
 #[test]
