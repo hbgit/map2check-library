@@ -23,6 +23,9 @@ tempfile = "3"
 
 [features]
 libfuzzer = []
+# The wasm2c runtime of Map2Check's `--wasm` mode (D2): the `wasm_rt_*` stubs,
+# `w2c_wasi__snapshot__preview1_proc_exit` and the `map2check_wasm_*` checks.
+wasm = []
 # The `klee` feature (the KLEE runtime) lives in klee/Cargo.toml, the
 # manifest of the rustc 1.72.1 bitcode build (D1, route A'). It is not a
 # feature here: `--all-features` would link it with `libfuzzer` (both define

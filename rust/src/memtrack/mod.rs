@@ -13,6 +13,76 @@ use std::hash::BuildHasherDefault;
 /// questions, so the hash seed changes nothing in their results.
 pub(crate) type FixedHashSet<T> = HashSet<T, BuildHasherDefault<DefaultHasher>>;
 
+/// One row of develop's allocation log as the wasm2c runtime uses it
+/// (`MEMORY_ALLOCATIONS_ROW`, `Map2CheckTypes.h:113-121`): the linear-memory
+/// offset the lifted `malloc` returned, the block size and whether it was
+/// freed. Offsets are wasm linear-memory offsets, not host addresses.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct WasmAlloc {
+    pub offset: u64,
+    /// `unsigned` in develop: the size is truncated to 32 bits.
+    pub size: u32,
+    pub is_free: bool,
+}
+
+/// `map2check_wasm_malloc` (`AnalysisModeMemtrack.c:385-397`): offset 0 and
+/// `(uint64_t)-1` are no block; a known offset (newest row first,
+/// `find_row_with_address`, `AllocationLog.c:103-118`) is resized and revived
+/// in place; any other offset gets a new row.
+pub fn wasm_register_malloc(table: &mut Vec<WasmAlloc>, offset: u64, size: u64) {
+    if offset == 0 || offset == u64::MAX {
+        return;
+    }
+    let size = size as u32;
+    match table.iter_mut().rev().find(|row| row.offset == offset) {
+        Some(row) => {
+            row.size = size;
+            row.is_free = false;
+        }
+        None => table.push(WasmAlloc {
+            offset,
+            size,
+            is_free: false,
+        }),
+    }
+}
+
+/// `map2check_wasm_free` (`AnalysisModeMemtrack.c:399-407`): marks the block
+/// at `offset` free with size 0 and returns true; false when no row has that
+/// offset. A row that is already free is found again, so a double free is not
+/// an error, as in develop.
+pub fn wasm_register_free(table: &mut [WasmAlloc], offset: u64) -> bool {
+    match table.iter_mut().rev().find(|row| row.offset == offset) {
+        Some(row) => {
+            row.is_free = true;
+            row.size = 0;
+            true
+        }
+        None => false,
+    }
+}
+
+/// `is_valid_allocation_address` (`AllocationLog.c:127-148`) for
+/// `map2check_wasm_check_access`: the newest row whose range
+/// `[offset, offset + size - access + 1)` holds `offset` decides, and it is
+/// valid only if the block is live. The arithmetic is develop's: the access
+/// size is cut to `int` (`(int)access_size`) and sign-extended, and the sum
+/// wraps at 64 bits.
+pub fn wasm_is_valid_access(table: &[WasmAlloc], address: u64, access_size: u64) -> bool {
+    let access = i64::from(access_size as i32) as u64;
+    for row in table.iter().rev() {
+        let top = row
+            .offset
+            .wrapping_add(u64::from(row.size))
+            .wrapping_sub(access)
+            .wrapping_add(1);
+        if row.offset <= address && address < top {
+            return !row.is_free;
+        }
+    }
+    false
+}
+
 /// Single memory tracking record — analogous to `memtrack_log_t` in C.
 /// Addresses are `usize` (platform pointer width) instead of `long`.
 #[derive(Debug, Clone, Serialize)]

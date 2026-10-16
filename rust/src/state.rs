@@ -80,6 +80,9 @@ pub struct AnalysisState {
     pub result: AnalysisResult,
     pub nondets: Vec<NonDetEntry>,
     pub memtrack: Vec<MemTrackEntry>,
+    /// The offset-keyed allocation table of the wasm2c runtime
+    /// (`map2check_wasm_*`, Task 2.8).
+    pub wasm_allocs: Vec<crate::memtrack::WasmAlloc>,
     pub bbtrack: Vec<BasicBlockEntry>,
     pub legacy_nondet_logs: Vec<Box<crate::ffi::non_det_log_t>>,
     pub legacy_bbtrack_logs: Vec<Box<crate::ffi::bbtrack_log_t>>,

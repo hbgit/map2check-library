@@ -307,6 +307,13 @@ plain!(not_an_export);
 /// bitcode, não pelo header.
 const KLEE_RUNTIME: &str = "rust/src/nondet/klee.rs";
 
+/// Os `wasm_rt_*` e o `w2c_wasi__*` de `rust/src/wasm.rs` (feature `wasm`)
+/// implementam funções que o `wasm-rt.h` do wabt declara: ficam fora do
+/// header (`cbindgen:ignore`), e `core_api_coverage` os confere no staticlib.
+fn is_wasm_rt_export(name: &str) -> bool {
+    name.starts_with("wasm_rt_") || name.starts_with("w2c_wasi__")
+}
+
 #[test]
 fn todo_export_do_codigo_esta_no_header() {
     let rust_src: String = rust_sources()
@@ -315,7 +322,10 @@ fn todo_export_do_codigo_esta_no_header() {
         .map(|p| read(p))
         .collect::<Vec<_>>()
         .join("\n");
-    let in_source = source_exports(&rust_src);
+    let in_source: BTreeSet<String> = source_exports(&rust_src)
+        .into_iter()
+        .filter(|n| !is_wasm_rt_export(n))
+        .collect();
     let in_header = header_functions(&read("include/map2check.h"));
     let not_in_header: Vec<_> = in_source.difference(&in_header).collect();
     let not_in_source: Vec<_> = in_header.difference(&in_source).collect();

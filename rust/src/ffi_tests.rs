@@ -2391,3 +2391,341 @@ fn memtrack_mode_reports_any_leak_reachable_or_not() {
     store(0x10, 0);
     assert_eq!(memcleanup_endprog(), P::MemsafetyMemtrack);
 }
+
+// ── wasm2c runtime (feature `wasm`, Task 2.8) ───────────────────────────────
+//
+// The three `map2check_wasm_*` exports follow `AnalysisModeMemtrack.c:385-430`
+// of Map2Check `develop`; the `wasm_rt_*` stubs follow `WasmRuntimeStubs.c`.
+
+#[cfg(feature = "wasm")]
+mod wasm {
+    use super::*;
+    use crate::wasm::{
+        map2check_wasm_check_access, map2check_wasm_free, map2check_wasm_malloc,
+        w2c_wasi__snapshot__preview1_proc_exit, wasm_rt_allocate_funcref_table,
+        wasm_rt_allocate_memory, wasm_rt_free, wasm_rt_free_funcref_table, wasm_rt_free_memory,
+        wasm_rt_funcref_table_t, wasm_rt_grow_memory, wasm_rt_init, wasm_rt_is_initialized,
+        wasm_rt_memory_t,
+    };
+
+    fn started(mode: Option<AnalysisMode>) {
+        map2check_reset();
+        state::reset_config();
+        if let Some(m) = mode {
+            map2check_set_mode(m as i32);
+        }
+        map2check_init();
+    }
+
+    fn mem() -> wasm_rt_memory_t {
+        // SAFETY: an all-zero memory descriptor is what wasm2c hands the
+        // allocator (null pointers, zero counters).
+        unsafe { std::mem::zeroed() }
+    }
+
+    // ── map2check_wasm_malloc ───────────────────────────────────────────────
+
+    #[test]
+    fn wasm_malloc_registers_a_block_whose_accesses_are_valid() {
+        let _guard = fresh();
+        started(Some(AnalysisMode::Memtrack));
+        map2check_wasm_malloc(0x1000, 16);
+        map2check_wasm_check_access(0x1000, 4);
+        map2check_wasm_check_access(0x100c, 4);
+        map2check_wasm_check_access(0x100f, 1);
+        assert_ok();
+    }
+
+    #[test]
+    fn wasm_malloc_ignores_null_and_failed_allocations() {
+        // AnalysisModeMemtrack.c:386: offset 0 and (uint64_t)-1 are no block.
+        let _guard = fresh();
+        started(Some(AnalysisMode::Memtrack));
+        map2check_wasm_malloc(0, 16);
+        map2check_wasm_malloc(u64::MAX, 16);
+        assert!(snapshot(|s| s.wasm_allocs.is_empty()));
+    }
+
+    #[test]
+    fn wasm_malloc_of_a_known_offset_resizes_and_revives_it() {
+        // AnalysisModeMemtrack.c:387-391: same offset -> size and is_free
+        // updated in place, no second row.
+        let _guard = fresh();
+        started(Some(AnalysisMode::Memtrack));
+        map2check_wasm_malloc(0x1000, 8);
+        map2check_wasm_free(0x1000, 3);
+        map2check_wasm_malloc(0x1000, 32);
+        assert_eq!(snapshot(|s| s.wasm_allocs.len()), 1);
+        map2check_wasm_check_access(0x101c, 4);
+        assert_ok();
+    }
+
+    #[test]
+    fn wasm_malloc_truncates_the_size_to_unsigned_as_develop() {
+        // `row->size = (unsigned)size` (AnalysisModeMemtrack.c:389).
+        let _guard = fresh();
+        started(Some(AnalysisMode::Memtrack));
+        map2check_wasm_malloc(0x1000, (1u64 << 32) | 8);
+        assert_eq!(snapshot(|s| s.wasm_allocs[0].size), 8);
+    }
+
+    // ── map2check_wasm_free ─────────────────────────────────────────────────
+
+    #[test]
+    fn wasm_free_of_a_tracked_block_marks_it_free_with_size_zero() {
+        let _guard = fresh();
+        started(Some(AnalysisMode::Memtrack));
+        map2check_wasm_malloc(0x1000, 16);
+        map2check_wasm_free(0x1000, 7);
+        assert_ok();
+        snapshot(|s| {
+            assert!(s.wasm_allocs[0].is_free);
+            assert_eq!(s.wasm_allocs[0].size, 0);
+        });
+    }
+
+    #[test]
+    fn wasm_free_of_an_untracked_offset_is_a_false_free_at_the_line() {
+        // AnalysisModeMemtrack.c:401: write_property(FALSE_FREE, line, "").
+        let _guard = fresh();
+        started(Some(AnalysisMode::Memtrack));
+        map2check_wasm_free(0x2000, 41);
+        assert_violated(ViolatedProperty::MemsafetyFree, 41, "");
+    }
+
+    #[test]
+    fn wasm_double_free_is_not_reported_as_develop() {
+        // develop only looks the row up; a freed row is still a row.
+        let _guard = fresh();
+        started(Some(AnalysisMode::Memtrack));
+        map2check_wasm_malloc(0x1000, 16);
+        map2check_wasm_free(0x1000, 7);
+        map2check_wasm_free(0x1000, 8);
+        assert_ok();
+    }
+
+    // ── map2check_wasm_check_access ─────────────────────────────────────────
+
+    #[test]
+    fn wasm_access_past_the_block_is_reported_as_develop_does() {
+        // AnalysisModeMemtrack.c:420-423: FALSE_OVERFLOW, line 0, no function
+        // (the report tag is OVERFLOW; see SD-wasm-access in semantic-deltas).
+        let _guard = fresh();
+        started(Some(AnalysisMode::Memtrack));
+        map2check_wasm_malloc(0x1000, 16);
+        map2check_wasm_check_access(0x1010, 4);
+        assert_violated(ViolatedProperty::Overflow, 0, "");
+    }
+
+    #[test]
+    fn wasm_access_straddling_the_end_is_invalid() {
+        let _guard = fresh();
+        started(Some(AnalysisMode::Memtrack));
+        map2check_wasm_malloc(0x1000, 16);
+        map2check_wasm_check_access(0x100d, 4);
+        assert_violated(ViolatedProperty::Overflow, 0, "");
+    }
+
+    #[test]
+    fn wasm_access_below_the_block_is_invalid() {
+        let _guard = fresh();
+        started(Some(AnalysisMode::Memtrack));
+        map2check_wasm_malloc(0x1000, 16);
+        map2check_wasm_check_access(0xfff, 1);
+        assert_violated(ViolatedProperty::Overflow, 0, "");
+    }
+
+    #[test]
+    fn wasm_access_after_free_is_invalid() {
+        let _guard = fresh();
+        started(Some(AnalysisMode::Memtrack));
+        map2check_wasm_malloc(0x1000, 16);
+        map2check_wasm_free(0x1000, 5);
+        map2check_wasm_check_access(0x1000, 4);
+        assert_violated(ViolatedProperty::Overflow, 0, "");
+    }
+
+    #[test]
+    fn wasm_access_with_no_block_is_invalid() {
+        let _guard = fresh();
+        started(Some(AnalysisMode::Memtrack));
+        map2check_wasm_check_access(0x1000, 1);
+        assert_violated(ViolatedProperty::Overflow, 0, "");
+    }
+
+    #[test]
+    fn wasm_access_inside_a_freed_inner_block_is_covered_by_the_older_block() {
+        // A freed row keeps size 0, so its range
+        // `[offset, offset + 0 - access + 1)` is empty and the scan goes on
+        // to the older row that still covers the address
+        // (AllocationLog.c:127-148). Develop's behaviour, kept as is.
+        let _guard = fresh();
+        started(Some(AnalysisMode::Memtrack));
+        map2check_wasm_malloc(0x1000, 64);
+        map2check_wasm_malloc(0x1010, 16);
+        map2check_wasm_free(0x1010, 5);
+        map2check_wasm_check_access(0x1014, 4);
+        assert_ok();
+    }
+
+    #[test]
+    fn wasm_first_violation_is_final() {
+        let _guard = fresh();
+        started(Some(AnalysisMode::Memtrack));
+        map2check_wasm_free(0x2000, 41);
+        map2check_wasm_check_access(0x1000, 1);
+        assert_violated(ViolatedProperty::MemsafetyFree, 41, "");
+    }
+
+    // ── mode gating ─────────────────────────────────────────────────────────
+
+    #[test]
+    fn wasm_checks_are_active_with_the_mode_unset() {
+        let _guard = fresh();
+        started(None);
+        map2check_wasm_check_access(0x1000, 1);
+        assert_violated(ViolatedProperty::Overflow, 0, "");
+    }
+
+    #[test]
+    fn wasm_checks_are_inactive_in_modes_without_memory_checks() {
+        for mode in [
+            AnalysisMode::None,
+            AnalysisMode::Memcleanup,
+            AnalysisMode::Overflow,
+            AnalysisMode::Assert,
+            AnalysisMode::Target,
+        ] {
+            let _guard = fresh();
+            started(Some(mode));
+            map2check_wasm_free(0x2000, 41);
+            map2check_wasm_check_access(0x1000, 1);
+            assert_ok();
+        }
+    }
+
+    #[test]
+    fn wasm_tracking_records_in_every_mode() {
+        let _guard = fresh();
+        started(Some(AnalysisMode::Memcleanup));
+        map2check_wasm_malloc(0x1000, 16);
+        assert_eq!(snapshot(|s| s.wasm_allocs.len()), 1);
+    }
+
+    #[test]
+    fn wasm_table_is_cleared_by_reset_and_init() {
+        let _guard = fresh();
+        started(Some(AnalysisMode::Memtrack));
+        map2check_wasm_malloc(0x1000, 16);
+        map2check_init();
+        assert!(snapshot(|s| s.wasm_allocs.is_empty()));
+        map2check_wasm_malloc(0x1000, 16);
+        map2check_reset();
+        assert!(snapshot(|s| s.wasm_allocs.is_empty()));
+    }
+
+    // ── wasm_rt_* stubs (WasmRuntimeStubs.c) ────────────────────────────────
+
+    #[test]
+    fn rt_allocate_memory_zeroes_and_sets_every_field() {
+        let mut m = mem();
+        // SAFETY: `m` is a valid descriptor; freed below.
+        unsafe { wasm_rt_allocate_memory(&mut m, 2, 5, false, 65536) };
+        assert!(!m.data.is_null());
+        assert_eq!(m.size, 2 * 65536);
+        assert_eq!(m.pages, 2);
+        assert_eq!(m.max_pages, 5);
+        assert_eq!(m.page_size, 65536);
+        // SAFETY: data_end points one past the allocation that data starts.
+        assert_eq!(unsafe { m.data.add(m.size as usize) }, m.data_end);
+        // SAFETY: the block is `size` bytes long and calloc'd.
+        let all_zero = (0..m.size as usize).all(|i| unsafe { *m.data.add(i) } == 0);
+        assert!(all_zero);
+        // SAFETY: `m` was allocated above.
+        unsafe { wasm_rt_free_memory(&mut m) };
+        assert!(m.data.is_null());
+        assert_eq!(m.size, 0);
+    }
+
+    #[test]
+    fn rt_grow_memory_returns_old_pages_and_zero_fills() {
+        let mut m = mem();
+        // SAFETY: valid descriptor, freed below.
+        unsafe {
+            wasm_rt_allocate_memory(&mut m, 1, 3, false, 65536);
+            *m.data = 0xAA;
+            assert_eq!(wasm_rt_grow_memory(&mut m, 0), 1);
+            assert_eq!(wasm_rt_grow_memory(&mut m, 1), 1);
+        }
+        assert_eq!(m.pages, 2);
+        assert_eq!(m.size, 2 * 65536);
+        // SAFETY: the block now has 2 pages.
+        unsafe {
+            assert_eq!(*m.data, 0xAA, "old contents are kept");
+            assert_eq!(*m.data.add(65536), 0, "new pages are zeroed");
+            assert_eq!(*m.data.add(2 * 65536 - 1), 0);
+            assert_eq!(m.data.add(m.size as usize), m.data_end);
+            wasm_rt_free_memory(&mut m);
+        }
+    }
+
+    #[test]
+    fn rt_grow_memory_past_the_maximum_fails_with_uint32_max() {
+        let mut m = mem();
+        // SAFETY: valid descriptor, freed below.
+        unsafe {
+            wasm_rt_allocate_memory(&mut m, 1, 2, false, 65536);
+            assert_eq!(wasm_rt_grow_memory(&mut m, 2), u64::from(u32::MAX));
+            assert_eq!(wasm_rt_grow_memory(&mut m, u64::MAX), u64::from(u32::MAX));
+            wasm_rt_free_memory(&mut m);
+        }
+        assert_eq!(m.pages, 1);
+    }
+
+    #[test]
+    fn rt_grow_memory_defaults_a_zero_page_size_to_64k() {
+        let mut m = mem();
+        // SAFETY: valid descriptor, freed below.
+        unsafe {
+            wasm_rt_allocate_memory(&mut m, 1, 4, false, 65536);
+            m.page_size = 0;
+            assert_eq!(wasm_rt_grow_memory(&mut m, 1), 1);
+            assert_eq!(m.size, 2 * 65536);
+            wasm_rt_free_memory(&mut m);
+        }
+    }
+
+    #[test]
+    fn rt_funcref_table_allocates_zeroed_elements() {
+        // SAFETY: an all-zero table descriptor is valid.
+        let mut t: wasm_rt_funcref_table_t = unsafe { std::mem::zeroed() };
+        // SAFETY: valid descriptor, freed below.
+        unsafe { wasm_rt_allocate_funcref_table(&mut t, 4, 10) };
+        assert!(!t.data.is_null());
+        assert_eq!(t.size, 4);
+        // SAFETY: 4 funcref elements, calloc'd, so the last field of the last
+        // one is addressable.
+        unsafe {
+            assert!((*t.data.add(3)).module_instance.is_null());
+            wasm_rt_free_funcref_table(&mut t);
+        }
+        assert!(t.data.is_null());
+    }
+
+    #[test]
+    fn rt_init_free_and_is_initialized_follow_the_stub() {
+        // The stub is "always initialised for KLEE": true from the start,
+        // false after wasm_rt_free, true again after wasm_rt_init.
+        assert!(wasm_rt_is_initialized());
+        wasm_rt_free();
+        assert!(!wasm_rt_is_initialized());
+        wasm_rt_init();
+        assert!(wasm_rt_is_initialized());
+    }
+
+    #[test]
+    fn rt_proc_exit_is_a_no_op() {
+        // SAFETY: the instance is unused.
+        unsafe { w2c_wasi__snapshot__preview1_proc_exit(std::ptr::null_mut(), 7) };
+    }
+}
