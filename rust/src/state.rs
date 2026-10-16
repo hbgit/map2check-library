@@ -54,8 +54,11 @@ fn ensure_state() -> &'static Mutex<AnalysisState> {
     &ANALYSIS_STATE
 }
 
+/// Starts a fresh analysis: forces the singleton into existence and clears
+/// every counter, container, result and flag, so a second `map2check_init()`
+/// in the same process never sees data from an earlier analysis.
 pub fn init() {
-    let _ = ensure_state();
+    reset();
 }
 
 pub fn reset() {

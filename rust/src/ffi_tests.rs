@@ -56,6 +56,38 @@ fn init_leaves_state_empty_and_ok() {
 }
 
 #[test]
+fn second_init_starts_from_clean_state() {
+    let _guard = fresh();
+    map2check_init();
+    // SAFETY: fake addresses are only stored, never dereferenced.
+    unsafe { map2check_map_malloc(addr(0x1000), 8) };
+    // SAFETY: C-string literal is valid and null-terminated.
+    unsafe { set_false_result(5, 7, c"main".as_ptr()) };
+    map2check_set_memcleanup();
+    map2check_set_null_is_valid();
+    let mut value: i32 = 3;
+    // SAFETY: `value` outlives the call; the name is a valid C string.
+    unsafe { map2check_save_nondet_log_int(1, 0, 0, &mut value, c"main".as_ptr()) };
+    let _ = get_next_step();
+    assert!(snapshot(|s| s.current_step() > 0 && !s.nondets.is_empty()));
+
+    map2check_init();
+
+    assert_ok();
+    snapshot(|s| {
+        assert_eq!(s.current_step(), 0);
+        assert!(s.memtrack.is_empty());
+        assert!(s.nondets.is_empty());
+        assert!(s.bbtrack.is_empty());
+        assert!(s.legacy_nondet_logs.is_empty());
+        assert!(!s.memcleanup_enabled);
+        assert!(!s.null_is_valid);
+        assert_eq!(s.result.line, 0);
+        assert!(s.result.function_name.is_empty());
+    });
+}
+
+#[test]
 fn reset_clears_records_result_step_and_flags() {
     let _guard = fresh();
     // SAFETY: null pointer is a valid malloc result.

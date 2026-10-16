@@ -255,8 +255,20 @@ pub extern "C" fn __VERIFIER_assert(condition: i32) {
 #[cfg(test)]
 #[no_mangle]
 pub extern "C" fn __map2check_main__() -> i32 {
-    0 // Retorna 0 (sucesso) e não faz nada
+    // Runs the per-test hook (if any); otherwise succeeds and does nothing.
+    let hook = *TEST_MAIN_HOOK
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    if let Some(hook) = hook {
+        hook();
+    }
+    0
 }
+
+/// Body of the fake `__map2check_main__`, installed by a test while it holds
+/// the global test lock.
+#[cfg(test)]
+static TEST_MAIN_HOOK: std::sync::Mutex<Option<fn()>> = std::sync::Mutex::new(None);
 
 #[cfg(test)]
 mod tests {
@@ -373,6 +385,67 @@ mod tests {
         assert!(crate::state::with_state(|s| Ok(s.result.ok)).unwrap());
         assert!(FUZZER_DATA.load(Ordering::SeqCst).is_null());
         assert_eq!(FUZZER_SIZE.load(Ordering::SeqCst), 0);
+        assert_eq!(FUZZER_CURSOR.load(Ordering::SeqCst), 0);
+    }
+
+    /// Fake program body: tracks one allocation and one nondet value, and
+    /// records the first byte of its input.
+    fn iteration_body() {
+        // SAFETY: fake addresses are only stored, never dereferenced.
+        unsafe { crate::ffi::map2check_map_malloc(0x1000 as *const _, 8) };
+        let _ = __VERIFIER_nondet_uchar();
+        let first = crate::state::with_state(|s| {
+            s.nondets.push(crate::nondet::NonDetEntry::new(
+                1,
+                1,
+                0,
+                "main",
+                crate::nondet::NonDetValue::Int(7),
+            ));
+            Ok(s.current_step())
+        })
+        .unwrap();
+        ITERATION_STEPS.fetch_add(first as usize, Ordering::SeqCst);
+    }
+
+    static ITERATION_STEPS: AtomicUsize = AtomicUsize::new(0);
+
+    fn set_hook(hook: Option<fn()>) {
+        *TEST_MAIN_HOOK.lock().unwrap() = hook;
+    }
+
+    #[test]
+    fn two_fuzzer_iterations_yield_independent_results() {
+        let _guard = crate::state::test_lock();
+        set_hook(Some(iteration_body));
+        ITERATION_STEPS.store(0, Ordering::SeqCst);
+
+        let first = [0xAA_u8, 1, 2];
+        // SAFETY: buffers are valid for their lengths for the whole call.
+        unsafe { LLVMFuzzerTestOneInput(first.as_ptr(), first.len()) };
+        // Dirty the state between iterations as a crashed/violating run would.
+        crate::state::with_state(|s| {
+            s.set_false(crate::caller::ViolatedProperty::Overflow, 9, "first");
+            s.next_step();
+            Ok(())
+        })
+        .unwrap();
+        let second = [0xBB_u8];
+        // SAFETY: as above.
+        unsafe { LLVMFuzzerTestOneInput(second.as_ptr(), second.len()) };
+        set_hook(None);
+
+        crate::state::with_state(|s| {
+            assert!(s.result.ok, "first-run violation leaked into the second");
+            assert_eq!(s.result.line, 0);
+            assert!(s.result.function_name.is_empty());
+            // The second body ran one step-counting call (nondet_uchar) itself.
+            assert_eq!(s.current_step(), 1, "step counter leaked");
+            assert_eq!(s.memtrack.len(), 1, "first-run allocation leaked");
+            assert_eq!(s.nondets.len(), 1, "first-run nondet log leaked");
+            Ok(())
+        })
+        .unwrap();
         assert_eq!(FUZZER_CURSOR.load(Ordering::SeqCst), 0);
     }
 
