@@ -388,43 +388,60 @@ fn map_alloca_ignores_negative_size() {
 }
 
 #[test]
-fn map_non_static_alloca_records_dynamic_slot() {
+fn map_non_static_alloca_records_static_slot_of_elements_times_primitive() {
+    // develop: `map2check_non_static_alloca` calls `map2check_alloca` with
+    // `size * size_of_primitive` (AnalysisModeMemtrack.c:368-372).
     let _guard = fresh();
     // SAFETY: C-string literal is valid; fake address is never dereferenced.
-    unsafe { map2check_map_non_static_alloca(c"vla".as_ptr(), addr(0x2000), 40, 4, 5, 2) };
+    unsafe { map2check_map_non_static_alloca(c"vla".as_ptr(), addr(0x2000), 10, 4, 5, 2) };
     let e = only_memtrack();
-    assert_eq!((e.line, e.scope, e.size_destiny), (5, 2, 40));
+    assert_eq!((e.line, e.scope), (5, 2));
+    assert_eq!((e.size_destiny, e.size_primitive), (40, 4));
+    assert_eq!((e.var_addr, e.points_to), (0x2000, 0x2000));
     assert_eq!(e.ptr_name, "vla");
-    assert!(e.is_dynamic && !e.is_free);
+    assert!(!e.is_dynamic && !e.is_free);
 }
 
 #[test]
-fn non_static_alloca_is_reported_as_leak_at_end_of_program() {
-    // Fixa o comportamento atual descrito em SD-12 (docs/semantic-deltas.md);
-    // o legado registra o VLA como slot estático e não acusa vazamento.
-    let _guard = fresh();
-    // SAFETY: C-string literal is valid; fake address is never dereferenced.
-    unsafe { map2check_map_non_static_alloca(c"vla".as_ptr(), addr(0x2000), 16, 4, 3, 0) };
-    map2check_set_memcleanup();
-    map2check_check_mem_endprog();
-    assert_violated(ViolatedProperty::MemsafetyMemcleanup, 0, "end_of_program");
-}
-
-#[test]
-fn non_static_alloca_size_is_bytes_not_element_count() {
-    // Fixa SD-12: o legado multiplica `size` por `size_primitive`; aqui `size`
-    // já é o tamanho em bytes, então passar a contagem de elementos (4 ints)
-    // registra só 4 bytes e o acesso a vla[2] é acusado.
+fn sd12_vla_is_not_a_leak_and_size_is_elements() {
+    // SD-12 / #38: a VLA is a static slot (never a leak) and `size` is an
+    // element count multiplied by `size_primitive`.
     let _guard = fresh();
     // SAFETY: C-string literals are valid; fake addresses are never dereferenced.
+    unsafe { map2check_map_non_static_alloca(c"vla".as_ptr(), addr(0x2000), 4, 4, 3, 0) };
+    map2check_set_memcleanup();
+    map2check_check_mem_endprog();
+    assert_ok();
+
+    state::reset();
+    // SAFETY: as above.
     unsafe {
         map2check_map_non_static_alloca(c"vla".as_ptr(), addr(0x2000), 4, 4, 3, 0);
-        map2check_check_load(addr(0x2000), 4, 0, 4, c"main".as_ptr());
+        map2check_check_load(addr(0x2008), 4, 0, 4, c"main".as_ptr());
+        map2check_check_load(addr(0x200c), 4, 0, 4, c"main".as_ptr());
     }
     assert_ok();
     // SAFETY: as above.
-    unsafe { map2check_check_load(addr(0x2008), 4, 0, 4, c"main".as_ptr()) };
-    assert_violated(ViolatedProperty::MemsafetyDeref, 4, "main");
+    unsafe { map2check_check_load(addr(0x2010), 5, 0, 4, c"main".as_ptr()) };
+    assert_violated(ViolatedProperty::MemsafetyDeref, 5, "main");
+}
+
+#[test]
+fn map_non_static_alloca_ignores_negative_or_overflowing_size() {
+    let _guard = fresh();
+    // SAFETY: C-string literals are valid; fake address is never dereferenced.
+    unsafe {
+        map2check_map_non_static_alloca(c"vla".as_ptr(), addr(0x2000), -1, 4, 3, 0);
+        map2check_map_non_static_alloca(c"vla".as_ptr(), addr(0x2000), 4, -4, 3, 0);
+    }
+    assert!(snapshot(|s| s.memtrack.is_empty()));
+    if usize::BITS == 32 {
+        // SAFETY: as above.
+        unsafe {
+            map2check_map_non_static_alloca(c"vla".as_ptr(), addr(0x2000), i32::MAX, 4, 3, 0)
+        };
+        assert!(snapshot(|s| s.memtrack.is_empty()));
+    }
 }
 
 #[test]

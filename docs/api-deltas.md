@@ -63,7 +63,7 @@ build with `--features libfuzzer`.
 | `map2check_save_basic_block_log` | `bbtrack_log_t *map2check_save_basic_block_log(int32_t line, const char *function_name)` | returns `bbtrack_log_t *` | same | Returned record is not linked into a list (SD-10). |
 | `map2check_is_in_trackbb_container` | `int32_t map2check_is_in_trackbb_container(int32_t line)` | `map2check_is_in_trackbb_container` | same |  |
 | `map2check_map_alloca` | `void map2check_map_alloca(const char *var_name, const void *ptr_address, int32_t size, int32_t size_primitive, int32_t line_number, int32_t scope)` | `container_memtracklog.h:41` | same |  |
-| `map2check_map_non_static_alloca` | `void map2check_map_non_static_alloca(const char *var_name, const void *ptr_address, int32_t size, int32_t size_primitive, int32_t line_number, int32_t scope)` | `container_memtracklog.h:44` | same | Signature and semantics reconstructed; see its section. Counted as a leak at end of program (SD-12). |
+| `map2check_map_non_static_alloca` | `void map2check_map_non_static_alloca(const char *var_name, const void *ptr_address, int32_t size, int32_t size_primitive, int32_t line_number, int32_t scope)` | `container_memtracklog.h:44` | same | `size` is an element count; static slot of `size * size_primitive` bytes, never a leak (SD-12, #38). |
 | `map2check_map_funct_address` | `void map2check_map_funct_address(const char *var_name, const void *ptr_address)` | `container_memtracklog.h:48` | same | Signature and semantics reconstructed; see its section. |
 | `map2check_map_malloc` | `void map2check_map_malloc(const void *ptr_address, int32_t size)` | `map2check_map_malloc` | same | Negative sizes are ignored (SD-09). |
 | `map2check_map_calloc` | `void map2check_map_calloc(const void *ptr_address, int32_t quantity, int32_t size)` | `map2check_map_calloc` | same | Negative sizes are ignored (SD-09). |
@@ -216,21 +216,19 @@ semantics were reconstructed from the paridade table and from the existing
 `map2check_map_alloca`/`map2check_map_malloc` patterns in
 `rust/src/ffi.rs`, not from the original C source:
 
-- `map2check_map_non_static_alloca` — same shape as `map2check_map_alloca`,
-  but the resulting entry is marked dynamic (`entry.set_malloc()`), so
-  `map2check_check_mem_endprog` accounts for it like a heap allocation
-  instead of a plain stack slot.
+- `map2check_map_non_static_alloca` — same shape as `map2check_map_alloca`.
+  The M3 reconstruction marked the entry dynamic and took `size` in bytes;
+  #38 replaced that with the `develop` semantics below.
 - `map2check_map_funct_address` — registers a function's address as an
   always-valid load target (pointer-width `size_destiny`), so that reading a
   function pointer through `map2check_check_load`/`map2check_check_deref`
   does not get flagged as an invalid address.
 
-The embedded C library of Map2Check (`lib_old/AnalysisModeMemtrack.c:366-377`
-on `origin/refactory_memory_log`) does the opposite for
-`map2check_non_static_alloca`: it registers a static slot of
-`size * size_of_primitive` bytes, so its `size` is an element count. The
-Rust export takes `size` in bytes, like `map2check_map_alloca`, and its
-choice makes an unfreed VLA show up as a leak at end of program; see SD-12.
+Since #38 `map2check_map_non_static_alloca` follows the C runtime of
+Map2Check `develop` (`modules/backend/library/lib/AnalysisModeMemtrack.c:368-372`):
+`size` is an element count and the export registers a static slot of
+`size * size_primitive` bytes, so a VLA never shows up as a leak at end of
+program; see SD-12.
 
 **Risk:** if the M5 compatibility layer (`ffi_compat.rs`, consuming the exact
 signatures the Map2Check LLVM passes insert) reveals a different expected

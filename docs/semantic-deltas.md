@@ -299,38 +299,38 @@ the next.
 **Reproduce:** run any LibFuzzer target linked with `--features libfuzzer`
 for two inputs; the second report has no records from the first.
 
-### SD-12 — `map2check_map_non_static_alloca`: a VLA counts as a leak, and `size` is in bytes
+### SD-12 — `map2check_map_non_static_alloca`: a VLA is a static slot, and `size` is an element count
 
-**Classification:** suspected regression (#38; differential check in #15)
-**Tests:** `rust/src/ffi_tests.rs::map_non_static_alloca_records_dynamic_slot`, `rust/src/ffi_tests.rs::non_static_alloca_is_reported_as_leak_at_end_of_program`, `rust/src/ffi_tests.rs::non_static_alloca_size_is_bytes_not_element_count`
+**Classification:** fixed (#38)
+**Tests:** `rust/src/ffi_tests.rs::sd12_vla_is_not_a_leak_and_size_is_elements`, `rust/src/ffi_tests.rs::map_non_static_alloca_records_static_slot_of_elements_times_primitive`, `rust/src/ffi_tests.rs::map_non_static_alloca_ignores_negative_or_overflowing_size`
 
-**Rust:** `map2check_map_non_static_alloca` differs from the legacy call in
-two ways:
+**Rust:** `map2check_map_non_static_alloca(name, ptr, size, size_primitive,
+line, scope)` registers a static slot of `size * size_primitive` bytes,
+like `map2check_map_alloca` with that size. A VLA never counts as a leak at
+end of program, and loads anywhere inside its `size` elements are valid. A
+negative argument, or a byte size that overflows `usize`, drops the record
+(SD-09). The signature is unchanged.
 
-- It marks its record dynamic, as the reconstructed semantics in
-  `api-deltas.md` describe. With `map2check_set_memcleanup()` on, a VLA
-  that goes out of scope without a matching free reports
-  `MEMSAFETY_MEMCLEANUP`.
-- It stores `size` as the allocation size in bytes, like
-  `map2check_map_alloca`. A caller that passes the element count, as the
-  legacy contract expects, registers a block that is too small. Loads past
-  the first `size` bytes then report `MEMSAFETY_DEREF`.
+Before #38 the record was marked dynamic (a VLA reported
+`MEMSAFETY_MEMCLEANUP` with `map2check_set_memcleanup()` on) and `size` was
+taken in bytes, so a caller passing the element count registered a block
+that was too small.
 
-**Legacy (embedded C library):** `map2check_non_static_alloca` treats
-`size` as an element count and registers a static slot of
-`size * size_of_primitive` bytes (`lib_old/AnalysisModeMemtrack.c:366-377`).
-So a VLA never counts as a leak.
+**C runtime of Map2Check `develop`:** `map2check_non_static_alloca`
+(`modules/backend/library/lib/AnalysisModeMemtrack.c:368-372`) calls
+`map2check_alloca(name, ptr, size * size_of_primitive, size_of_primitive,
+line, scope)`, which appends a `heap_log` row (`:374-379`). `heap_log` rows
+are stack/static slots: `map2check_load` accepts them
+(`HeapLog.c:37-52`) and the leak check only walks `allocation_log`
+(`AllocationLog.c:69-101`). `develop` matches `lib_old` here.
 
 **Reproduce:**
 
 ```c
 map2check_init();
 int n = 4; int vla[n];
-map2check_map_non_static_alloca("vla", vla, sizeof(vla), sizeof(int), 3, 0);
+map2check_map_non_static_alloca("vla", vla, n, sizeof(int), 3, 0);  /* element count */
 map2check_set_memcleanup();
-map2check_check_mem_endprog();   /* MemsafetyMemcleanup */
-
-map2check_reset();
-map2check_map_non_static_alloca("vla", vla, n, sizeof(int), 3, 0);  /* legacy: element count */
-map2check_check_load(&vla[2], 4, 0, sizeof(int), "main");          /* MemsafetyDeref; legacy: valid */
+map2check_check_mem_endprog();                                     /* None (before #38: MemsafetyMemcleanup) */
+map2check_check_load(&vla[2], 4, 0, sizeof(int), "main");          /* None (before #38: MemsafetyDeref) */
 ```

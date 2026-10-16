@@ -497,9 +497,12 @@ pub unsafe extern "C" fn map2check_map_alloca(
 }
 
 /// Registers a non-static (dynamically-sized) stack allocation, e.g. a
-/// variable-length array whose size is only known at runtime. Unlike
-/// `map2check_map_alloca`, the resulting entry is marked dynamic so that
-/// `map2check_check_mem_endprog` accounts for it like a heap allocation.
+/// variable-length array whose size is only known at runtime. `size` is the
+/// element count: the slot covers `size * size_primitive` bytes. Like
+/// `map2check_map_alloca`, the slot is static, so it is never a leak at end of
+/// program. This matches `map2check_non_static_alloca` of the Map2Check
+/// `develop` C runtime (`AnalysisModeMemtrack.c:368-372`; #38, SD-12). A
+/// negative argument or a byte size that overflows drops the record (SD-09).
 ///
 /// # Safety
 /// `var_name` must be null or a valid null-terminated C string; `ptr_address` may be null.
@@ -517,12 +520,15 @@ pub unsafe extern "C" fn map2check_map_non_static_alloca(
             if size < 0 || size_primitive < 0 {
                 return;
             }
+            let Some(bytes) = (size as usize).checked_mul(size_primitive as usize) else {
+                return;
+            };
             // SAFETY: caller guarantees var_name is a valid C string or null.
             let name = unsafe { c_str(var_name) };
             let addr = ptr_address as usize;
             if let Err(e) = state::with_state(|s| {
                 let step = s.next_step();
-                let mut entry = MemTrackEntry::new(
+                s.memtrack.push(MemTrackEntry::new(
                     step,
                     line_number as u32,
                     scope as u32,
@@ -532,12 +538,10 @@ pub unsafe extern "C" fn map2check_map_non_static_alloca(
                     false,
                     name,
                     "",
-                    size as usize,
+                    bytes,
                     size_primitive as usize,
                     false,
-                );
-                entry.set_malloc();
-                s.memtrack.push(entry);
+                ));
                 Ok(())
             }) {
                 log_error(&e);
