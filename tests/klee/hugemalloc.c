@@ -20,7 +20,9 @@ int __map2check_main__(void) {
     CHECK_LOAD(&best[0], (int)sizeof(int), 15);
     v = best[0];
   }
+  TRACK_FREE(best, 18);
   free(best);
+  TRACK_FREE(prev, 20);
   free(prev);
   map2check_success();
   return v;

@@ -291,11 +291,20 @@ fi
 echo "== hugemalloc.c"
 run_klee hugemalloc rust frontend
 d="$W/hugemalloc-rust-frontend"
-if [ -n "$(abort_ktest "$d")" ] && [ -e "$d/map2check_property__unknown" ] &&
-  [ ! -e "$d/map2check_property" ]; then
-  pass "hugemalloc.c: the NULL block of a huge malloc aborts as UNKNOWN"
+k="$(abort_ktest "$d")"
+n=
+if [ -n "$k" ]; then
+  hex="$(ktest_objects "$k" "$W/seed.tmp" | sed -n 's/^non_det_int 4 \(........\)$/\1/p')"
+  # little-endian int32
+  [ -n "$hex" ] && n=$((0x${hex:6:2}${hex:4:2}${hex:2:2}${hex:0:2}))
+  [ -n "$n" ] && [ "$n" -ge $((1 << 31)) ] && n=$((n - (1 << 32)))
+fi
+# The abort is the huge malloc's: 4 * n is negative or over 2^31.
+if [ -n "$n" ] && { [ "$n" -lt 0 ] || [ "$n" -gt $((1 << 29)) ]; } &&
+  [ -e "$d/map2check_property__unknown" ]; then
+  pass "hugemalloc.c: the NULL block of a huge malloc (n = $n) aborts as UNKNOWN"
 else
-  fail "hugemalloc.c: abort '$(abort_ktest "$d")', files: $(ls "$d" | tr '\n' ' ')"
+  fail "hugemalloc.c: abort '$k' with n = '$n', files: $(ls "$d" | tr '\n' ' ')"
 fi
 if grep -q 'Large alloc\|over memory cap' "$d/klee.log"; then
   fail "hugemalloc.c: KLEE: $(grep 'Large alloc\|over memory cap' "$d/klee.log" | head -n 1)"
