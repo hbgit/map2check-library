@@ -13,12 +13,12 @@
 //   generators, :76-99): little-endian on x86-64, the layout KLEE writes
 //   into a `.ktest` for `klee_make_symbolic(&v, sizeof v)`;
 // - past the end of the input the reader rewinds (`get_next_input_from_afl`,
-//   :56-63): the read that finds the index at the end returns `data[0]`
+//   :55-62): the read that finds the index at the end returns `data[0]`
 //   without advancing, so after every wrap `data[0]` is read twice;
 // - `pchar` reads an `unsigned` length, returns NULL for 0, caps it at 4096,
-//   and fills `length - 1` chars plus a NUL (:101-117);
+//   and fills `length - 1` chars plus a NUL (:101-118);
 // - a failed `__VERIFIER_assume` abandons the current input and the loop
-//   moves on to the next one (`nondet_cancel`/`setjmp`, :31-37, :184-196).
+//   moves on to the next one (`nondet_cancel`/`setjmp`, :31-37, :171-184).
 
 use std::sync::atomic::{AtomicBool, AtomicPtr, AtomicUsize, Ordering};
 
@@ -210,7 +210,7 @@ pub extern "C" fn __VERIFIER_nondet_pointer() -> *mut std::ffi::c_void {
 const MAX_FUZZED_STRING: u32 = 4096;
 
 /// A NUL-terminated string from the input, allocated with the C `malloc` so
-/// the program can `free` it (`NonDetGeneratorAFL.c:103-117`): an
+/// the program can `free` it (`NonDetGeneratorAFL.c:103-118`): an
 /// `unsigned` length, NULL when it is 0 (or when `malloc` fails), capped at
 /// 4096, then `length - 1` chars, each read like `__VERIFIER_nondet_char`.
 #[no_mangle]
@@ -246,7 +246,7 @@ pub extern "C" fn __VERIFIER_nondet_pchar() -> *mut std::os::raw::c_char {
 //
 // `__VERIFIER_assume(0)` inside a fuzzer iteration abandons that input, as
 // develop's `nondet_assume` → `nondet_cancel` → `longjmp` back to the
-// `__AFL_LOOP` does (NonDetGeneratorAFL.c:31-37, :184-196): no exit, no
+// `__AFL_LOOP` does (NonDetGeneratorAFL.c:31-37, :171-184): no exit, no
 // abort, and the next input runs in the same process.
 //
 // Mechanism (design note): a `longjmp` from Rust back to a `setjmp` would
@@ -407,7 +407,7 @@ mod tests {
     // memory order, into the value (`get_bytes_from_afl`, :67-74; the
     // generators, :76-99), so a value is the little-endian reading of its
     // bytes on x86-64. Past the end of the input `get_next_input_from_afl`
-    // (:56-63) rewinds: the read that finds the index at the end returns
+    // (:55-62) rewinds: the read that finds the index at the end returns
     // data[0] WITHOUT advancing, so data[0] is read twice after every wrap.
 
     /// develop's `get_next_input_from_afl`, transcribed: the bytes `count`
@@ -429,7 +429,7 @@ mod tests {
 
     #[test]
     fn develop_stream_model_rewinds_and_repeats_the_first_byte() {
-        // Hand-checked against NonDetGeneratorAFL.c:56-63.
+        // Hand-checked against NonDetGeneratorAFL.c:55-62.
         assert_eq!(develop_stream(&[1, 2], 7), [1, 2, 1, 1, 2, 1, 1]);
         assert_eq!(develop_stream(&[0x41], 4), [0x41; 4]);
     }
@@ -578,7 +578,7 @@ mod tests {
         assert!(__VERIFIER_nondet_pchar().is_null());
     }
 
-    // ── pchar (NonDetGeneratorAFL.c:101-117) ─────────────────────────────────
+    // ── pchar (NonDetGeneratorAFL.c:101-118) ─────────────────────────────────
 
     extern "C" {
         fn free(ptr: *mut std::ffi::c_void);

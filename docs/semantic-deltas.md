@@ -252,7 +252,7 @@ running (a program linked without a fuzzer driver), or in a
 
 **Legacy (Map2Check `develop`):** `nondet_assume` calls `nondet_cancel`,
 which `longjmp`s back to the `setjmp` in the `__AFL_LOOP` of `main`, and the
-loop moves on to the next input (`NonDetGeneratorAFL.c:31-37`, `:184-196`).
+loop moves on to the next input (`NonDetGeneratorAFL.c:31-37`, `:171-184`).
 The Rust library does the same with an unwind instead of `longjmp`: Rust
 cannot call `setjmp`, and a `longjmp` over Rust frames is undefined when
 one of them has a destructor. Outside the `__AFL_LOOP` develop has no
@@ -577,10 +577,10 @@ map2check_binop_add_signed(INT64_MAX, 1, 64, 1, "main");
 develop's `NonDetGeneratorAFL.c` does: `sizeof(type)` bytes per value, in
 order, copied in memory order (little-endian on x86-64; `:67-99`), and past
 the end of the input the reader rewinds, returning `data[0]` once without
-advancing (`get_next_input_from_afl`, `:56-63`). With the 1-byte seed `A`
+advancing (`get_next_input_from_afl`, `:55-62`). With the 1-byte seed `A`
 an `int` is `0x41414141`, as in develop. `pchar` reads an `unsigned`
 length, returns NULL for 0, caps it at 4096 and reads `length - 1` chars
-(`:101-117`); the string comes from the C `malloc`. The
+(`:101-118`); the string comes from the C `malloc`. The
 `map2check_save_nondet_log_<t>` exports write the `klee_log.csv` row
 develop writes for the same program: the type number of `enum NONDET_TYPE`
 and the value as `NonDetPass.cpp` hands it to the C wrapper (zero-extended

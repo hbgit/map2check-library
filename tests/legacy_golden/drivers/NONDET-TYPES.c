@@ -2,7 +2,7 @@
  * Assert mode: one nondet value of every NONDET_TYPE (Map2CheckTypes.h:41-58),
  * then a failed assert, so the witness writes klee_log.csv.
  *
- * Each value reaches its map2check_nondet_<t> wrapper (NonDetLog.c:96-130)
+ * Each value reaches its map2check_nondet_<t> wrapper (NonDetLog.c:105-150)
  * as NonDetPass.cpp passes it:
  *  - int, unsigned, uint, double: the call result itself (NONDET_IMPL_HELPER,
  *    :260-275, used at :277-280);

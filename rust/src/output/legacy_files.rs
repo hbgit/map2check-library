@@ -173,7 +173,7 @@ pub fn write_trackbb_log(dir: &Path, rows: &[BasicBlockEntry]) -> io::Result<()>
 /// (`Map2CheckTypes.h:41-58`) of a nondet row, as develop writes them.
 ///
 /// `NonDetPass.cpp` hands each value to its `map2check_nondet_<t>` wrapper as
-/// a C `int` (`NonDetLog.c:96-130`): `int`, `unsigned`, `uint` as they are
+/// a C `int` (`NonDetLog.c:105-150`): `int`, `unsigned`, `uint` as they are
 /// (`NONDET_IMPL_HELPER`, `:260-280`); the other integer kinds through
 /// `CreateIntegerCast(v, i32, isSigned = false)` (`:240-258`, `:281-290`),
 /// which zero-extends the narrow ones (`char` -3 arrives as 253) and

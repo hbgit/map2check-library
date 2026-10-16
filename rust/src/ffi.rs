@@ -488,7 +488,7 @@ macro_rules! nondet_ffi {
     };
 }
 
-// One export per `map2check_nondet_<t>` of develop (`NonDetLog.c:96-130`),
+// One export per `map2check_nondet_<t>` of develop (`NonDetLog.c:105-150`),
 // each taking a pointer to the value in the C type `NonDetGenerator.h` gives
 // that family. The `type_var` argument is only kept in the returned record:
 // the `enum NONDET_TYPE` of the row comes from the export, as in develop.
