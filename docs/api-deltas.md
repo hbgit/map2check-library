@@ -206,7 +206,7 @@ layout_matches_wasm_rt_h` compares size and field offsets with the real
 `wasm-rt.h` when `WASM_RT_INCLUDE` names its directory (CI sets it); without
 the variable the test says it is skipped. Link the lifted code against the
 wasm-rt.h of wabt 1.0.41; another wabt version may change the layout.
-Differences from develop: SD-19.
+Differences from develop: SD-19. The KLEE bitcode (`klee/Cargo.toml`) is built with `--features klee,wasm`, so the stubs and the three exports are in it too (`tests/klee/wasm.c`).
 
 ## Analysis modes
 

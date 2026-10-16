@@ -55,6 +55,7 @@ breaking changes first.
   1.72.1 (LLVM 16) into one bitcode module by
   `scripts/build-klee-runtime.sh`, with CI. The bitcode is built separately
   and is not in the release archive.
+- The KLEE bitcode now includes the `wasm` feature (`--features klee,wasm`): the `wasm_rt_*` stubs and the `map2check_wasm_*` exports, so Map2Check's `--wasm` mode with the `symex` generator no longer stops with "failed external call: wasm_rt_is_initialized". `tests/klee_paths.sh` runs a wasm2c-lifted module (`tests/klee/wasm.c`) and expects OVERFLOW at line 0, as develop's C runtime gives (SD-19).
 - `lib/libmap2check_runtime.a` in the release archive: the `runtime` profile
   with features `libfuzzer,wasm`.
 

@@ -5,7 +5,7 @@
 # bitcode module (D1, route A', docs/cutover/decisoes.md):
 #
 #   rustc 1.72.1 (LLVM 16) on klee/Cargo.toml with its own Cargo.lock,
-#   feature `klee`, panic = abort, fat LTO, codegen-units = 1,
+#   features `klee,wasm`, panic = abort, fat LTO, codegen-units = 1,
 #   --emit=llvm-bc, then `opt-16 --strip-debug` (condition 6), then the
 #   vector intrinsics KLEE cannot run lowered to scalar code
 #   (scripts/klee-lower-intrinsics.py), then a read-back with `llvm-dis-16`.
@@ -76,7 +76,7 @@ log="$work/cargo.log"
 # a fresh resolution. The profile (klee/Cargo.toml) sets panic = abort,
 # lto = fat and codegen-units = 1; the check below proves rustc got them.
 if ! RUSTUP_TOOLCHAIN="$TOOLCHAIN" CARGO_TARGET_DIR="$TARGET_DIR" \
-  cargo rustc --locked --release --features klee --lib -v \
+  cargo rustc --locked --release --features klee,wasm --lib -v \
   --manifest-path "$ROOT/klee/Cargo.toml" -- --emit=llvm-bc >"$log" 2>&1; then
   cat "$log" >&2
   die "cargo rustc failed"

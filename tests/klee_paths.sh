@@ -60,6 +60,7 @@ fi
 T="$ROOT/tests/klee"
 mkdir -p "$ROOT/target"
 W="$(mktemp -d "$ROOT/target/klee-paths.XXXXXX")"
+WABT="${WABT:-/opt/wabt-1.0.41}"
 failures=0
 pass() { echo "PASS: $*"; }
 fail() {
@@ -99,12 +100,12 @@ develop_runtime() { # <mode: target|memtrack> <out.bc>
     ContainerRealloc NonDetGeneratorKlee WitnessGeneration)
   case "$1" in
     target) files+=(AnalysisModeNone) ;;
-    memtrack) files+=(AnalysisModeMemtrack AllocationLog ListLog HeapLog) ;;
+    memtrack) files+=(AnalysisModeMemtrack AllocationLog ListLog HeapLog WasmRuntimeStubs) ;;
   esac
   mkdir -p "$W/dev"
   local bcs=()
   for f in "${files[@]}"; do
-    [ -f "$W/dev/$f.bc" ] || clang-16 -c -emit-llvm "$lib/$f.c" -o "$W/dev/$f.bc" 2>/dev/null
+    [ -f "$W/dev/$f.bc" ] || clang-16 -c -emit-llvm -I"$WABT/include" "$lib/$f.c" -o "$W/dev/$f.bc" 2>/dev/null
     bcs+=("$W/dev/$f.bc")
   done
   llvm-link-16 "${bcs[@]}" -o "$2"
@@ -120,7 +121,7 @@ develop_runtime() { # <mode: target|memtrack> <out.bc>
 run_klee() {
   local prog="$1" rt="$2" kind="$3" dir="$W/$1-$2-$3" rtbc cflags=() mode=target
   mkdir -p "$dir"
-  case "$prog" in deref | vererr_deref) mode=memtrack ;; esac
+  case "$prog" in deref | vererr_deref | wasm) mode=memtrack ;; esac
   if [ "$rt" = develop ]; then
     cflags=(-DM2C_DEVELOP)
     rtbc="$W/dev-$mode.bc"
@@ -128,8 +129,14 @@ run_klee() {
   else
     rtbc="$W/rust-rt.bc"
   fi
-  clang-16 -g -emit-llvm -c "${cflags[@]}" -I"$T" "$T/$prog.c" -o "$dir/prog.bc"
-  llvm-link-16 "$dir/prog.bc" "$rtbc" -o "$dir/linked.bc"
+  clang-16 -g -emit-llvm -c "${cflags[@]}" -I"$T" -I"$W/wasm" -I"$WABT/include" \
+    "$T/$prog.c" -o "$dir/prog.bc"
+  local progs=("$dir/prog.bc")
+  if [ "$prog" = wasm ]; then # the lifted module, as caller.cpp compiles it
+    clang-16 -c -emit-llvm -I"$WABT/include" -I"$W/wasm" "$W/wasm/t.c" -o "$dir/lifted.bc"
+    progs+=("$dir/lifted.bc")
+  fi
+  llvm-link-16 "${progs[@]}" "$rtbc" -o "$dir/linked.bc"
   local extra=()
   [ "$kind" = frontend ] && extra=(--exit-on-error-type=Abort)
   (cd "$dir" && klee "${KLEE_FLAGS[@]}" "${extra[@]}" --output-dir=klee-out linked.bc \
@@ -281,6 +288,28 @@ else
   fail "vererr_target.c: $PATHS_COMPLETED+$PATHS_PARTIAL paths, property '$(cat "$d/map2check_property" 2>/dev/null)'"
 fi
 
+# ── wasm.c: the --wasm mode, wasm2c-lifted code against the wasm stubs ────────
+echo "== wasm.c"
+mkdir -p "$W/wasm"
+"$WABT/bin/wat2wasm" "$T/wasm.wat" -o "$W/wasm/t.wasm"
+"$WABT/bin/wasm2c" "$W/wasm/t.wasm" -o "$W/wasm/t.c"
+run_klee wasm rust full
+count wasm rust
+run_klee wasm rust frontend
+d="$W/wasm-rust-frontend"
+if grep -q 'failed external call' "$d/klee.log"; then
+  fail "wasm.c: KLEE: $(grep 'failed external call' "$d/klee.log" | head -n 1)"
+fi
+# SD-19: a bad access is OVERFLOW at line 0, with no function (develop:
+# write_property(FALSE_OVERFLOW, 0, "")); the same file from both runtimes.
+if [ -n "$(abort_ktest "$d")" ] &&
+  [ "$(head -n 1 "$d/map2check_property" 2>/dev/null)" = OVERFLOW ] &&
+  [ "$(sed -n 2p "$d/map2check_property" 2>/dev/null)" = "Line: 0" ]; then
+  pass "wasm.c: KLEE aborts on the access past the block; property OVERFLOW at line 0"
+else
+  fail "wasm.c: property '$(tr '\n' ' ' <"$d/map2check_property" 2>/dev/null)', abort: '$(abort_ktest "$d")'"
+fi
+
 # ── layout.c: ktest -> seed -> Rust libFuzzer reader (condition 9) ────────────
 echo "== layout.c"
 run_klee layout rust full
@@ -336,7 +365,7 @@ fi
 # ── develop's C runtime, same programs ────────────────────────────────────────
 if [ -n "${DEVELOP_SRC:-}" ]; then
   echo "== develop C runtime ($DEVELOP_SRC)"
-  for prog in prog reach range deref vererr_deref vererr_target layout; do
+  for prog in prog reach range deref vererr_deref vererr_target wasm layout; do
     run_klee "$prog" develop full
     count "$prog" develop
     run_klee "$prog" develop frontend
@@ -348,7 +377,7 @@ fi
 table="$(
   echo "| program | Rust runtime (completed+partial) | develop C runtime (completed+partial) |"
   echo "|---|---|---|"
-  for prog in prog reach range json deref vererr_deref vererr_target layout; do
+  for prog in prog reach range json deref vererr_deref vererr_target wasm layout; do
     echo "| $prog.c | ${COUNT[$prog/rust]:-?} | ${COUNT[$prog/develop]:-not run} |"
   done
 )"

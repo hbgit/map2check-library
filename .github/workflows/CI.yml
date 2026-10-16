@@ -190,7 +190,7 @@ jobs:
       # O clippy em 1.82 do job acima não compila nondet/klee.rs (feature
       # `klee` só existe em klee/Cargo.toml); este é o lint dele.
       - name: Clippy do build KLEE (rustc 1.72.1, feature klee)
-        run: RUSTUP_TOOLCHAIN=1.72.1 cargo clippy --locked --manifest-path klee/Cargo.toml --features klee -- -D warnings
+        run: RUSTUP_TOOLCHAIN=1.72.1 cargo clippy --locked --manifest-path klee/Cargo.toml --features klee,wasm -- -D warnings
 
       # O script roda os autotestes da troca de intrínsecos antes de usá-la:
       # equivalência por lli-16 em tests/klee/lower-intrinsics.ll e recusa
