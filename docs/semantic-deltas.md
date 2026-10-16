@@ -129,10 +129,12 @@ map2check_check_load((void *)0x1000, 2, 0, 4, "main");
 **Rust:** `map2check_check_mem_endprog()` always runs the leak check. A
 dynamic allocation that was never freed reports `MEMSAFETY_MEMCLEANUP` after
 `map2check_set_memcleanup()` and `MEMSAFETY_MEMTRACK` otherwise. The option
-is configuration: `map2check_init()` and `map2check_reset()` keep it. Until
-the analysis mode is configurable (Task 2.3) the memcleanup option picks
-between the memtrack and memcleanup verdicts. A violation recorded earlier
-stays final (SD-03).
+is configuration: `map2check_init()` and `map2check_reset()` keep it. Since
+Task 2.3 the check runs `analysis_is_program_correct` of the analysis mode
+(SD-14): with the mode unset or memtrack the option picks between the
+memtrack and memcleanup verdicts, memcleanup mode always reports memcleanup,
+and the other modes report no leak. A violation recorded earlier stays final
+(SD-03).
 
 **Before #10:** the Rust function did nothing until
 `map2check_set_memcleanup()` had been called, so a leak in memtrack mode went
@@ -386,4 +388,67 @@ This is a false positive in `develop`.
 map2check_init();
 map2check_map_malloc((void *)0x1000, 8);
 map2check_check_free_resolved_address((void *)0x1000, 3, "main", 0);  /* None; develop: FALSE_FREE */
+```
+
+### SD-14 — The analysis mode is chosen at run time; unset keeps every check
+
+**Classification:** intentional
+**Tests:** `rust/src/ffi_tests.rs::unset_mode_keeps_every_check_active`, `rust/src/ffi_tests.rs::mode_none_reports_nothing`, `rust/src/ffi_tests.rs::mode_memtrack_reports_memory_errors_only`, `rust/src/ffi_tests.rs::mode_memcleanup_reports_only_the_leak_as_memcleanup`, `rust/src/ffi_tests.rs::mode_overflow_reports_overflow_only`, `rust/src/ffi_tests.rs::mode_assert_reports_assert_only`, `rust/src/ffi_tests.rs::mode_target_reports_nothing_from_checks`, `rust/src/ffi_tests.rs::memcleanup_option_is_an_alias_of_memcleanup_mode_for_the_leak`, `rust/src/ffi_tests.rs::is_valid_assert_false_reports_assert`, `rust/src/analysismode/mode.rs::program_correct_memcleanup_reports_leak_as_memcleanup`
+
+**Rust:** `map2check_set_mode()` selects the mode before `map2check_init()`;
+init and reset keep it. Each mode activates the checks that its
+`AnalysisMode*.c` defines in develop; a check of another mode records
+nothing. Tracking calls record in every mode, and an inactive
+`map2check_check_free_resolved_address` still records the release. When
+`map2check_set_mode()` is never called the mode is unset: every check is
+active and the leak tag follows the memcleanup option, as before Task 2.3.
+The memcleanup option is an alias of the memcleanup mode for the leak tag,
+so memtrack mode plus the option reports `MEMSAFETY_MEMCLEANUP`. A failed
+assert reports `ASSERT` instead of `REACHABILITY`. In memcleanup mode a leak
+is any live allocation by the Rust leak rule; develop also requires
+`is_memcleanup_error` (`ListLog.c:40-65`) to hold.
+
+**C runtime of Map2Check `develop`:** the mode is fixed at link time
+(`modules/frontend/caller.cpp:575-612`): one of `AnalysisModeNone.c`
+(cover-branches and reachability), `AnalysisModeMemtrack.c`,
+`AnalysisModeMemcleanup.c`, `AnalysisModeOverflow.c` or
+`AnalysisModeAssert.c` is linked, so calls of another mode are never emitted
+and there is no unset mode. `map2check_assert` writes `ASSERT`
+(`AnalysisModeAssert.c:18-23`, `PropertyGenerator.c:92-97`). The memcleanup
+mode never fails a load, deref or free (`AnalysisModeMemcleanup.c:158`,
+`:293`, `:166`, `:343`).
+
+**Reproduce:**
+
+```c
+map2check_set_mode(AnalysisMode_None);
+map2check_init();
+map2check_check_deref((void *)0xdead, 0, 1, "main");   /* None */
+map2check_set_mode(AnalysisMode_Memtrack);
+map2check_init();
+map2check_check_deref((void *)0xdead, 0, 1, "main");   /* MemsafetyDeref */
+```
+
+### SD-15 — Reaching the target records the violation and returns
+
+**Classification:** accepted limitation
+**Tests:** `rust/src/ffi_tests.rs::map2check_reach_target_records_and_returns`, `rust/src/ffi_tests.rs::reach_target_keeps_the_first_violation`, `rust/src/ffi_tests.rs::reach_target_works_in_every_mode_and_accepts_null_name`
+
+**Rust:** `map2check_reach_target(func, scope, line)` records
+`REACHABILITY` at `line` in `func` and returns. The first violation stays
+final (SD-03). It works in every mode and ignores `scope`. Ending the run
+with the result files belongs to Task 2.4 of the cutover plan; until then
+the program keeps running after the target.
+
+**C runtime of Map2Check `develop`:** `map2check_target_function` writes
+`TARGET-REACHED` and calls `map2check_error()`, which ends the process
+(`Map2CheckFunctions.c:61-65`, `:72-75`, `:89-102`). It is part of
+`Map2CheckFunctions.c`, linked in every mode.
+
+**Reproduce:**
+
+```c
+map2check_set_mode(AnalysisMode_Target);
+map2check_init();
+map2check_reach_target("reach_error", 0, 12);   /* Reachability, line 12; returns */
 ```

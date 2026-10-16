@@ -55,6 +55,9 @@ static void run_pre_init_boundary(void) {
     vcc_reset_meta_data();
     map2check_set_memcleanup();
     map2check_set_null_is_valid();
+    /* map2check_set_mode is configuration that no API unsets, so it is
+     * exercised last, in test_analysis_modes(). */
+    map2check_reach_target("main", 0, 1);
 
     map2check_map_alloca("", &stack_obj, 0, 0, 1, 0);
     map2check_map_non_static_alloca("", &stack_obj, 0, 0, 1, 0);
@@ -151,6 +154,7 @@ static void run_bad_inputs(void) {
     map2check_check_free(NULL, NULL, 0, 3, NULL);
     map2check_check_free_resolved_address(NULL, 3, NULL, 1);
     map2check_check_mem_endprog();
+    map2check_reach_target(NULL, -1, -1);
 
     /* memtrack with null/empty strings */
     map2check_map_alloca(NULL, NULL, 4, 4, 4, 1);
@@ -348,6 +352,40 @@ static int test_result_and_control_flags(void) {
     return 0;
 }
 
+/* Task 2.3: the mode selected at run time gates the checks. Runs last
+ * because no API returns the mode to unset. */
+static int test_analysis_modes(void) {
+    map2check_set_mode(AnalysisMode_None);
+    map2check_init();
+    map2check_check_deref((void *)0xdead, 0, 1, "main");
+    if (get_current_property() != None) {
+        return 1;
+    }
+
+    map2check_set_mode(AnalysisMode_Memtrack);
+    map2check_init();
+    map2check_check_deref((void *)0xdead, 0, 1, "main");
+    if (get_current_property() != MemsafetyDeref) {
+        return 2;
+    }
+
+    map2check_set_mode(AnalysisMode_Assert);
+    map2check_init();
+    map2check_binop_add_int(2147483647, 1, 2, 0, "main");
+    if (get_current_property() != None) {
+        return 3;
+    }
+
+    map2check_set_mode(AnalysisMode_Target);
+    map2check_init();
+    map2check_reach_target("reach_error", 0, 12);
+    if (get_current_property() != Reachability) {
+        return 4;
+    }
+    map2check_reset();
+    return 0;
+}
+
 int main(void) {
     if (MAP2CHECK_VERSION[0] == '\0') {
         return 1;
@@ -382,6 +420,10 @@ int main(void) {
             LLVMFuzzerTestOneInput(second_input, sizeof(second_input)) != 0) {
             return 1;
         }
+    }
+
+    if (test_analysis_modes() != 0) {
+        return 1;
     }
 
     map2check_success();

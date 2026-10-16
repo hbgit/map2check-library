@@ -12,7 +12,9 @@ use crate::analysismode::memory::DerefChecker;
 use crate::analysismode::memory::FreeChecker;
 use crate::analysismode::memory::FreeResolvedChecker;
 use crate::analysismode::memory::LoadChecker;
-use crate::analysismode::memory::MemCleanupChecker;
+use crate::analysismode::mode;
+use crate::analysismode::mode::AnalysisMode;
+use crate::analysismode::mode::Check;
 use crate::analysismode::overflow::AddI32;
 use crate::analysismode::overflow::AddU32;
 use crate::analysismode::overflow::DivI32;
@@ -77,6 +79,11 @@ fn run_vcc_check(checker: impl VccChecker, ctx: &VccContext, line: u32, fname: &
     }
 }
 
+/// Whether `check` reports violations in the selected analysis mode.
+fn check_active(check: Check) -> bool {
+    mode::check_enabled(state::config().mode, check)
+}
+
 fn violated_property_from_raw(raw: i32) -> Option<ViolatedProperty> {
     match raw {
         0 => Some(ViolatedProperty::Overflow),
@@ -87,6 +94,8 @@ fn violated_property_from_raw(raw: i32) -> Option<ViolatedProperty> {
         5 => Some(ViolatedProperty::Reachability),
         6 => Some(ViolatedProperty::Concurrency),
         7 => Some(ViolatedProperty::None),
+        8 => Some(ViolatedProperty::Assert),
+        9 => Some(ViolatedProperty::Unknown),
         _ => None,
     }
 }
@@ -256,6 +265,69 @@ pub extern "C" fn map2check_set_null_is_valid() {
     ffi_guard(
         || {
             state::update_config(|c| c.null_is_valid = true);
+        },
+        (),
+    );
+}
+
+/// Selects the analysis mode, as the frontend of Map2Check `develop` does by
+/// linking one `AnalysisMode*.c` per run (`caller.cpp:575-612`). The
+/// instrumented program calls it before `map2check_init()`. The mode is
+/// configuration: `map2check_init()` and `map2check_reset()` keep it. Until
+/// it is called the mode is unset and every check is active. Per-mode effects
+/// are in `rust/src/analysismode/mode.rs`.
+///
+/// `mode` must be one of the `AnalysisMode` values (0 to 5); any other value
+/// is undefined behaviour, as for any C enum passed to Rust.
+#[no_mangle]
+pub extern "C" fn map2check_set_mode(mode: AnalysisMode) {
+    ffi_guard(
+        || {
+            state::update_config(|c| c.mode = Some(mode));
+        },
+        (),
+    );
+}
+
+/// Records that the target function was reached, without ending the process.
+/// Same property as `map2check_target_function` of the `develop` C runtime
+/// (`TARGET_REACHED`, `Map2CheckFunctions.c:61-65`), which then ends the run;
+/// here the first violation stays final (SD-03) and the caller keeps running.
+///
+/// # Safety
+/// `func` must be null or a valid null-terminated C string.
+pub(crate) unsafe fn mark_target_reached(
+    func: *const std::os::raw::c_char,
+    _scope: i32,
+    line: i32,
+) {
+    // SAFETY: caller guarantees func is a valid C string or null.
+    let fname = unsafe { c_str(func) };
+    if let Err(e) = state::with_state(|s| {
+        s.set_false(ViolatedProperty::Reachability, line as u32, fname);
+        Ok(())
+    }) {
+        log_error(&e);
+    }
+}
+
+/// Called by the target pass when the target function (e.g. `reach_error`)
+/// is reached. Records `Reachability` (develop's `TARGET-REACHED`) at `line`
+/// in `func`, in every mode, and returns: ending the run is Task 2.4 (SD-15).
+/// `scope` is accepted for ABI compatibility and ignored, as in develop.
+///
+/// # Safety
+/// `func` must be null or a valid null-terminated C string.
+#[no_mangle]
+pub unsafe extern "C" fn map2check_reach_target(
+    func: *const std::os::raw::c_char,
+    scope: i32,
+    line: i32,
+) {
+    ffi_guard(
+        || {
+            // SAFETY: caller guarantees func is a valid C string or null.
+            unsafe { mark_target_reached(func, scope, line) }
         },
         (),
     );
@@ -768,6 +840,9 @@ pub unsafe extern "C" fn map2check_is_valid_assert(
 ) {
     ffi_guard(
         || {
+            if !check_active(Check::Assert) {
+                return;
+            }
             // SAFETY: caller guarantees function_name is a valid C string or null.
             let fname = unsafe { c_str(function_name) };
             let ctx = VccContext::new(line_number as u32, 0, fname);
@@ -805,6 +880,9 @@ macro_rules! overflow_ffi_binop {
         ) {
             ffi_guard(
                 || {
+                    if !check_active(Check::Overflow) {
+                        return;
+                    }
                     // SAFETY: caller guarantees function_name is valid or null.
                     let fname = unsafe { c_str(function_name) };
                     let ctx = VccContext::new(line, scope, fname);
@@ -838,6 +916,9 @@ macro_rules! overflow_ffi_shift {
         ) {
             ffi_guard(
                 || {
+                    if !check_active(Check::Overflow) {
+                        return;
+                    }
                     // SAFETY: caller guarantees function_name is valid or null.
                     let fname = unsafe { c_str(function_name) };
                     let ctx = VccContext::new(line, scope, fname);
@@ -869,6 +950,9 @@ pub unsafe extern "C" fn map2check_binop_neg_int(
 ) {
     ffi_guard(
         || {
+            if !check_active(Check::Overflow) {
+                return;
+            }
             // SAFETY: caller guarantees function_name is valid or null.
             let fname = unsafe { c_str(function_name) };
             let ctx = VccContext::new(line, scope, fname);
@@ -906,6 +990,9 @@ pub unsafe extern "C" fn map2check_check_load(
 ) {
     ffi_guard(
         || {
+            if !check_active(Check::Load) {
+                return;
+            }
             // SAFETY: caller guarantees function_name is valid or null.
             let fname = unsafe { c_str(function_name) };
             if size < 0 {
@@ -948,6 +1035,9 @@ pub unsafe extern "C" fn map2check_check_free(
 ) {
     ffi_guard(
         || {
+            if !check_active(Check::Free) {
+                return;
+            }
             // SAFETY: caller guarantees function_name is valid or null.
             let fname = unsafe { c_str(function_name) };
             let ctx = VccContext::new(line, 0, fname);
@@ -993,14 +1083,17 @@ pub unsafe extern "C" fn map2check_check_free_resolved_address(
                 return;
             }
             let ctx = VccContext::new(line, 0, fname);
-            let passed = run_vcc_check(
-                FreeResolvedChecker {
-                    address: ptr as usize,
-                },
-                &ctx,
-                line,
-                fname,
-            );
+            // An inactive check passes: the memcleanup mode never fails a
+            // free but still records the release (AnalysisModeMemcleanup.c:160-179).
+            let passed = !check_active(Check::FreeResolved)
+                || run_vcc_check(
+                    FreeResolvedChecker {
+                        address: ptr as usize,
+                    },
+                    &ctx,
+                    line,
+                    fname,
+                );
             if !passed || ptr.is_null() {
                 return;
             }
@@ -1034,6 +1127,9 @@ pub unsafe extern "C" fn map2check_check_deref(
 ) {
     ffi_guard(
         || {
+            if !check_active(Check::Deref) {
+                return;
+            }
             // SAFETY: caller guarantees function_name is valid or null.
             let fname = unsafe { c_str(function_name) };
             let ctx = VccContext::new(line, scope, fname);
@@ -1050,22 +1146,25 @@ pub unsafe extern "C" fn map2check_check_deref(
     );
 }
 
-/// Checks for memory leaks at end of program, in both modes (SD-04). A leak is
-/// `MemsafetyMemcleanup` after `map2check_set_memcleanup()`, otherwise
-/// `MemsafetyMemtrack`, as in the `develop` C runtime.
+/// End-of-program verdict: runs `analysis_is_program_correct` of the selected
+/// mode (`rust/src/analysismode/mode.rs`). Unset mode and memtrack report a
+/// leak as `MemsafetyMemtrack`, or `MemsafetyMemcleanup` after
+/// `map2check_set_memcleanup()`; memcleanup mode reports it as
+/// `MemsafetyMemcleanup`; the other modes report nothing (SD-04). A violation
+/// recorded earlier stays final (SD-03).
 #[no_mangle]
 pub extern "C" fn map2check_check_mem_endprog() {
     ffi_guard(
         || {
-            let ctx = VccContext::new(0, 0, "end_of_program");
-            run_vcc_check(
-                MemCleanupChecker {
-                    memcleanup: state::config().memcleanup,
-                },
-                &ctx,
-                0,
-                "end_of_program",
-            );
+            let config = state::config();
+            if let Err(e) = state::with_state(|s| {
+                if let Some(property) = mode::analysis_is_program_correct(config, s) {
+                    s.set_false(property, 0, "end_of_program");
+                }
+                Ok(())
+            }) {
+                log_error(&e);
+            }
         },
         (),
     );

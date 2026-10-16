@@ -181,8 +181,8 @@ print:
 ```
 
 `property` takes one of `OVERFLOW`, `MEMSAFETY_FREE`, `MEMSAFETY_DEREF`,
-`MEMSAFETY_MEMTRACK`, `MEMSAFETY_MEMCLEANUP`, `REACHABILITY` and
-`CONCURRENCY`. Nondet `type` takes one of `INT`, `UINT`, `LONG`, `CHAR`,
+`MEMSAFETY_MEMTRACK`, `MEMSAFETY_MEMCLEANUP`, `REACHABILITY`,
+`CONCURRENCY`, `ASSERT` and `UNKNOWN`. Nondet `type` takes one of `INT`, `UINT`, `LONG`, `CHAR`,
 `FLOAT` and `DOUBLE`. The schema is not final: container and field names
 are still being reconciled with the existing consumer in #14 (SD-01).
 

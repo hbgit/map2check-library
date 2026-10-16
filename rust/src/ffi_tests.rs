@@ -548,11 +548,13 @@ fn is_valid_assert_true_keeps_result_ok() {
 }
 
 #[test]
-fn is_valid_assert_false_reports_reachability() {
+fn is_valid_assert_false_reports_assert() {
+    // develop: map2check_assert writes ASSERT (AnalysisModeAssert.c:18-23),
+    // not TARGET-REACHED (Task 2.3).
     let _guard = fresh();
     // SAFETY: C-string literal is valid and null-terminated.
     unsafe { map2check_is_valid_assert(5, c"main".as_ptr(), 0) };
-    assert_violated(ViolatedProperty::Reachability, 5, "main");
+    assert_violated(ViolatedProperty::Assert, 5, "main");
 }
 
 // ── Analysis mode: overflow ─────────────────────────────────────────────────
@@ -1242,4 +1244,271 @@ fn options_default_off() {
         observed_options(),
         (ViolatedProperty::MemsafetyMemtrack, false)
     );
+}
+
+// ── Analysis mode selection and target reachability (Task 2.3) ─────────────
+
+const MODES: [AnalysisMode; 6] = [
+    AnalysisMode::None,
+    AnalysisMode::Memtrack,
+    AnalysisMode::Memcleanup,
+    AnalysisMode::Overflow,
+    AnalysisMode::Assert,
+    AnalysisMode::Target,
+];
+
+/// Starts an analysis in `mode`, as the instrumented program will.
+fn start(mode: AnalysisMode) {
+    state::reset();
+    map2check_set_mode(mode);
+    map2check_init();
+}
+
+/// Runs one violating call of each check family on a fresh analysis in
+/// `mode` and returns the property each one recorded (`None` = no report).
+fn reports_in(mode: AnalysisMode) -> [ViolatedProperty; 7] {
+    let mut out = [ViolatedProperty::None; 7];
+    let runs: [&dyn Fn(); 7] = [
+        // SAFETY (all closures): C-string literals are valid; fake addresses
+        // are never dereferenced.
+        &|| unsafe { map2check_check_load(addr(0xdead), 1, 0, 4, c"main".as_ptr()) },
+        &|| unsafe { map2check_check_deref(addr(0xdead), 0, 1, c"main".as_ptr()) },
+        &|| unsafe { map2check_check_free(c"p".as_ptr(), addr(0xdead), 0, 1, c"main".as_ptr()) },
+        &|| unsafe { map2check_check_free_resolved_address(addr(0xdead), 1, c"main".as_ptr(), 0) },
+        &|| unsafe { map2check_binop_add_int(i32::MAX, 1, 1, 0, c"main".as_ptr()) },
+        &|| unsafe { map2check_is_valid_assert(1, c"main".as_ptr(), 0) },
+        &|| {
+            // SAFETY: fake address is never dereferenced.
+            unsafe { map2check_map_malloc(addr(0x3000), 8) };
+            map2check_check_mem_endprog();
+        },
+    ];
+    for (slot, run) in out.iter_mut().zip(runs) {
+        start(mode);
+        run();
+        *slot = snapshot(|s| s.result.property);
+    }
+    out
+}
+
+use ViolatedProperty as P;
+
+#[test]
+fn mode_none_never_reports_memory_errors() {
+    let _guard = fresh();
+    map2check_set_mode(AnalysisMode::None);
+    map2check_init();
+    // SAFETY: C-string literal is valid; fake address is never dereferenced.
+    unsafe { map2check_check_deref(addr(0xdead), 0, 1, c"main".as_ptr()) };
+    assert_ok();
+}
+
+#[test]
+fn mode_memtrack_reports_invalid_deref() {
+    let _guard = fresh();
+    map2check_set_mode(AnalysisMode::Memtrack);
+    map2check_init();
+    // SAFETY: C-string literal is valid; fake address is never dereferenced.
+    unsafe { map2check_check_deref(addr(0xdead), 0, 1, c"main".as_ptr()) };
+    assert_violated(ViolatedProperty::MemsafetyDeref, 1, "main");
+}
+
+#[test]
+fn mode_none_reports_nothing() {
+    let _guard = fresh();
+    assert_eq!(reports_in(AnalysisMode::None), [P::None; 7]);
+}
+
+#[test]
+fn mode_target_reports_nothing_from_checks() {
+    let _guard = fresh();
+    assert_eq!(reports_in(AnalysisMode::Target), [P::None; 7]);
+}
+
+#[test]
+fn mode_memtrack_reports_memory_errors_only() {
+    let _guard = fresh();
+    assert_eq!(
+        reports_in(AnalysisMode::Memtrack),
+        [
+            P::MemsafetyDeref,
+            P::MemsafetyDeref,
+            P::MemsafetyFree,
+            P::MemsafetyFree,
+            P::None,
+            P::None,
+            P::MemsafetyMemtrack,
+        ]
+    );
+}
+
+#[test]
+fn mode_memcleanup_reports_only_the_leak_as_memcleanup() {
+    let _guard = fresh();
+    let mut expected = [P::None; 7];
+    expected[6] = P::MemsafetyMemcleanup;
+    assert_eq!(reports_in(AnalysisMode::Memcleanup), expected);
+}
+
+#[test]
+fn mode_overflow_reports_overflow_only() {
+    let _guard = fresh();
+    let mut expected = [P::None; 7];
+    expected[4] = P::Overflow;
+    assert_eq!(reports_in(AnalysisMode::Overflow), expected);
+}
+
+#[test]
+fn mode_assert_reports_assert_only() {
+    let _guard = fresh();
+    let mut expected = [P::None; 7];
+    expected[5] = P::Assert;
+    assert_eq!(reports_in(AnalysisMode::Assert), expected);
+}
+
+#[test]
+fn unset_mode_keeps_every_check_active() {
+    let _guard = fresh();
+    let mut out = [P::None; 7];
+    // Same calls as `reports_in`, without `map2check_set_mode`.
+    let runs: [&dyn Fn(); 7] = [
+        // SAFETY (all closures): as in `reports_in`.
+        &|| unsafe { map2check_check_load(addr(0xdead), 1, 0, 4, c"main".as_ptr()) },
+        &|| unsafe { map2check_check_deref(addr(0xdead), 0, 1, c"main".as_ptr()) },
+        &|| unsafe { map2check_check_free(c"p".as_ptr(), addr(0xdead), 0, 1, c"main".as_ptr()) },
+        &|| unsafe { map2check_check_free_resolved_address(addr(0xdead), 1, c"main".as_ptr(), 0) },
+        &|| unsafe { map2check_binop_add_int(i32::MAX, 1, 1, 0, c"main".as_ptr()) },
+        &|| unsafe { map2check_is_valid_assert(1, c"main".as_ptr(), 0) },
+        &|| {
+            // SAFETY: fake address is never dereferenced.
+            unsafe { map2check_map_malloc(addr(0x3000), 8) };
+            map2check_check_mem_endprog();
+        },
+    ];
+    for (slot, run) in out.iter_mut().zip(runs) {
+        state::reset();
+        map2check_init();
+        run();
+        *slot = snapshot(|s| s.result.property);
+    }
+    assert_eq!(state::config().mode, None);
+    assert_eq!(
+        out,
+        [
+            P::MemsafetyDeref,
+            P::MemsafetyDeref,
+            P::MemsafetyFree,
+            P::MemsafetyFree,
+            P::Overflow,
+            P::Assert,
+            P::MemsafetyMemtrack,
+        ]
+    );
+}
+
+#[test]
+fn memcleanup_option_is_an_alias_of_memcleanup_mode_for_the_leak() {
+    let _guard = fresh();
+    map2check_set_memcleanup();
+    start(AnalysisMode::Memtrack);
+    // SAFETY: fake address is never dereferenced.
+    unsafe { map2check_map_malloc(addr(0x3000), 8) };
+    map2check_check_mem_endprog();
+    assert_violated(P::MemsafetyMemcleanup, 0, "end_of_program");
+}
+
+#[test]
+fn memcleanup_mode_records_release_on_resolved_free() {
+    // develop: the memcleanup free never fails but still marks the block
+    // free (AnalysisModeMemcleanup.c:160-179), so it is no leak at exit.
+    let _guard = fresh();
+    start(AnalysisMode::Memcleanup);
+    // SAFETY: C-string literal is valid; fake address is never dereferenced.
+    unsafe {
+        map2check_map_malloc(addr(0x3000), 8);
+        map2check_check_free_resolved_address(addr(0x3000), 2, c"main".as_ptr(), 0);
+    }
+    map2check_check_mem_endprog();
+    assert_ok();
+}
+
+#[test]
+fn set_mode_is_configuration_kept_by_init_and_reset() {
+    let _guard = fresh();
+    for mode in MODES {
+        map2check_set_mode(mode);
+        map2check_init();
+        assert_eq!(state::config().mode, Some(mode));
+        map2check_reset();
+        assert_eq!(state::config().mode, Some(mode));
+    }
+}
+
+#[test]
+fn reset_keeps_selected_mode() {
+    let _guard = fresh();
+    map2check_set_mode(AnalysisMode::Overflow);
+    map2check_init();
+    map2check_reset();
+    assert_eq!(state::config().mode, Some(AnalysisMode::Overflow));
+}
+
+#[test]
+fn reach_target_sets_target_reached() {
+    let _guard = fresh();
+    map2check_set_mode(AnalysisMode::Target);
+    map2check_init();
+    // SAFETY: C-string literal is valid and null-terminated.
+    unsafe { mark_target_reached(c"reach_error".as_ptr(), 0, 12) };
+    assert_violated(ViolatedProperty::Reachability, 12, "reach_error");
+}
+
+#[test]
+fn map2check_reach_target_records_and_returns() {
+    // develop: map2check_target_function writes TARGET_REACHED and exits
+    // (Map2CheckFunctions.c:61-65). Here it records and returns; ending the
+    // process belongs to Task 2.4.
+    let _guard = fresh();
+    start(AnalysisMode::Target);
+    // SAFETY: C-string literal is valid and null-terminated.
+    unsafe { map2check_reach_target(c"reach_error".as_ptr(), 0, 12) };
+    assert_violated(ViolatedProperty::Reachability, 12, "reach_error");
+    assert_eq!(get_current_property(), ViolatedProperty::Reachability);
+}
+
+#[test]
+fn reach_target_keeps_the_first_violation() {
+    let _guard = fresh();
+    start(AnalysisMode::Target);
+    // SAFETY: C-string literals are valid and null-terminated.
+    unsafe {
+        set_false_result(0, 3, c"f".as_ptr());
+        map2check_reach_target(c"reach_error".as_ptr(), 0, 12);
+    }
+    assert_violated(ViolatedProperty::Overflow, 3, "f");
+}
+
+#[test]
+fn reach_target_works_in_every_mode_and_accepts_null_name() {
+    // map2check_target_function lives in Map2CheckFunctions.c, linked in
+    // every mode, so it is not gated by the mode.
+    let _guard = fresh();
+    for mode in MODES {
+        start(mode);
+        // SAFETY: null is an accepted name.
+        unsafe { map2check_reach_target(std::ptr::null(), 0, 7) };
+        assert_violated(ViolatedProperty::Reachability, 7, "");
+    }
+}
+
+#[test]
+fn set_false_result_accepts_the_appended_properties() {
+    let _guard = fresh();
+    // SAFETY: C-string literal is valid and null-terminated.
+    unsafe { set_false_result(8, 4, c"main".as_ptr()) };
+    assert_violated(ViolatedProperty::Assert, 4, "main");
+    state::reset();
+    // SAFETY: as above.
+    unsafe { set_false_result(9, 0, c"main".as_ptr()) };
+    assert_violated(ViolatedProperty::Unknown, 0, "main");
 }

@@ -7,6 +7,7 @@ use crate::error::Map2CheckError;
 
 pub mod assert;
 pub mod memory;
+pub mod mode;
 pub mod overflow;
 
 /// Context passed to every VCC checker — carries the source location.

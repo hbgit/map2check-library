@@ -43,17 +43,19 @@ build with `--features libfuzzer`.
 
 | Symbol | Rust declaration (`include/map2check.h`) | Legacy C library | Status | Notes |
 |---|---|---|---|---|
-| `map2check_init` | `void map2check_init(void)` | `map2check_init` | same | Starts a fresh analysis (same as reset) and keeps the options (#10). Map2Check passes call `map2check_init(int)`; see the pass matrix. |
-| `map2check_reset` | `void map2check_reset(void)` | — | new | Clears containers, result and step counter (#9). Keeps the options set by `map2check_set_memcleanup()` and `map2check_set_null_is_valid()`: they are configuration, not analysis state (#10). |
+| `map2check_init` | `void map2check_init(void)` | `map2check_init` | same | Starts a fresh analysis through the `analysis_init` of the selected mode and keeps the options and the mode (#10, SD-14). Map2Check passes call `map2check_init(int)`; see the pass matrix. |
+| `map2check_reset` | `void map2check_reset(void)` | — | new | Clears containers, result and step counter (#9). Keeps the options set by `map2check_set_memcleanup()` and `map2check_set_null_is_valid()` and the mode set by `map2check_set_mode()`: they are configuration, not analysis state (#10, SD-14). |
 | `map2check_success` | `void map2check_success(void)` | `map2check_success` | same | Prints the JSON report (SD-01). |
-| `set_false_result` | `void set_false_result(int32_t prp, int32_t line_number, const char *function_name)` | `set_false_result` | same | `ViolatedProperty` keeps the C variant order (`caller_lib_result.h:22-31`); unknown values are ignored (SD-09). Ignored when a violation is already recorded (SD-03). |
+| `set_false_result` | `void set_false_result(int32_t prp, int32_t line_number, const char *function_name)` | `set_false_result` | same | `ViolatedProperty` keeps the C variant order (`caller_lib_result.h:22-31`); the appended `Assert` (8) and `Unknown` (9) are accepted; unknown values are ignored (SD-09). Ignored when a violation is already recorded (SD-03). |
 | `get_current_property` | `enum ViolatedProperty get_current_property(void)` | `get_current_property` | same |  |
 | `get_current_step` | `uint64_t get_current_step(void)` | `long get_current_step(void)` | changed | Returns `uint64_t` instead of `long`. |
 | `get_next_step` | `uint64_t get_next_step(void)` | `get_next_step()` / `next_current_step()` | same | Advances and returns the step counter. `next_current_step` is not exported; see its row. |
 | `print_all_containers_as_json` | `void print_all_containers_as_json(void)` | `print_all_containers_as_json` | changed | Report shape and whitespace differ (SD-01, SD-02; schema decision in #14). |
 | `vcc_reset_meta_data` | `void vcc_reset_meta_data(void)` | `vcc_reset_meta_data` | same | Host/test-only: the Map2Check passes never call it. It clears a recorded violation by design, bypassing the first-violation rule (SD-03). |
-| `map2check_set_memcleanup` | `void map2check_set_memcleanup(void)` | `map2check_set_memcleanup` | same | Selects `MEMSAFETY_MEMCLEANUP` instead of `MEMSAFETY_MEMTRACK` for the end-of-program leak (SD-04). Kept by `map2check_init()` and `map2check_reset()`. |
+| `map2check_set_memcleanup` | `void map2check_set_memcleanup(void)` | `map2check_set_memcleanup` | same | Selects `MEMSAFETY_MEMCLEANUP` instead of `MEMSAFETY_MEMTRACK` for the end-of-program leak (SD-04): an alias of the memcleanup mode for the leak tag, in every mode that checks leaks (SD-14). Kept by `map2check_init()` and `map2check_reset()`. |
 | `map2check_set_null_is_valid` | `void map2check_set_null_is_valid(void)` | `map2check_set_null_is_valid` | same | Makes a NULL load safe (SD-05). Kept by `map2check_init()` and `map2check_reset()`. |
+| `map2check_set_mode` | `void map2check_set_mode(enum AnalysisMode mode)` | — | new | Selects the analysis mode at run time (`AnalysisMode_None` 0, `_Memtrack` 1, `_Memcleanup` 2, `_Overflow` 3, `_Assert` 4, `_Target` 5); develop selects it at link time. Called before `map2check_init()`; kept by `map2check_init()` and `map2check_reset()`. Never called: mode unset, every check active. See “Analysis modes” (SD-14). A value outside 0–5 is undefined behaviour. |
+| `map2check_reach_target` | `void map2check_reach_target(const char *func, int32_t scope, int32_t line)` | — | new | Replaces the pass symbol `map2check_target_function`. Records `REACHABILITY` (develop `TARGET-REACHED`) at `line` in `func`, in every mode; `scope` is ignored. Does not end the process (SD-15). |
 | `map2check_save_nondet_log_int` | `non_det_log_t *map2check_save_nondet_log_int(int line, int scope, enum var_type_t type_var, int *value, const char *function_name)` | returns `non_det_log_t *` | same | Returned record is not linked into a list (SD-10). |
 | `map2check_save_nondet_log_uint` | `non_det_log_t *map2check_save_nondet_log_uint(int line, int scope, enum var_type_t type_var, unsigned int *value, const char *function_name)` | returns `non_det_log_t *` | same | Returned record is not linked into a list (SD-10). |
 | `map2check_save_nondet_log_long` | `non_det_log_t *map2check_save_nondet_log_long(int line, int scope, enum var_type_t type_var, long *value, const char *function_name)` | returns `non_det_log_t *` | same | Returned record is not linked into a list (SD-10). |
@@ -69,24 +71,24 @@ build with `--features libfuzzer`.
 | `map2check_map_calloc` | `void map2check_map_calloc(const void *ptr_address, int32_t quantity, int32_t size)` | `map2check_map_calloc` | same | Negative sizes are ignored (SD-09). |
 | `map2check_map_free` | `void map2check_map_free(const char *var_name, const void *ptr_address, uint32_t scope, uint32_t line_number, const char *function_name)` | `map2check_map_free` | same |  |
 | `map2check_map_store_pointer` | `void map2check_map_store_pointer(const void *var_address, const void *value, uint32_t scope, const char *var_name, int32_t line_number, const char *funct_name)` | `map2check_map_store_pointer` | same |  |
-| `map2check_is_valid_assert` | `void map2check_is_valid_assert(int32_t line_number, const char *function_name, int32_t expression)` | `map2check_is_valid_assert` | same | Prints the JSON report when the assertion fails. |
-| `map2check_binop_add_int` | `void map2check_binop_add_int(int32_t param1, int32_t param2, uint32_t line, uint32_t scope, const char *function_name)` | `map2check_binop_add_int` | same | `int`/`unsigned` (32-bit) only, as in C. |
-| `map2check_binop_sub_int` | `void map2check_binop_sub_int(int32_t param1, int32_t param2, uint32_t line, uint32_t scope, const char *function_name)` | `map2check_binop_sub_int` | same | `int`/`unsigned` (32-bit) only, as in C. |
-| `map2check_binop_mul_int` | `void map2check_binop_mul_int(int32_t param1, int32_t param2, uint32_t line, uint32_t scope, const char *function_name)` | `map2check_binop_mul_int` | same | `int`/`unsigned` (32-bit) only, as in C. |
-| `map2check_binop_div_int` | `void map2check_binop_div_int(int32_t param1, int32_t param2, uint32_t line, uint32_t scope, const char *function_name)` | `map2check_binop_div_int` | same | `int`/`unsigned` (32-bit) only, as in C. |
-| `map2check_binop_neg_int` | `void map2check_binop_neg_int(int32_t param1, int32_t _param2, uint32_t line, uint32_t scope, const char *function_name)` | `map2check_binop_neg_int` | same | `int`/`unsigned` (32-bit) only, as in C. |
-| `map2check_binop_shl_int` | `void map2check_binop_shl_int(int32_t param1, uint32_t param2, uint32_t line, uint32_t scope, const char *function_name)` | `map2check_binop_shl_int` | same | `int`/`unsigned` (32-bit) only, as in C. |
-| `map2check_binop_shr_int` | `void map2check_binop_shr_int(int32_t param1, uint32_t param2, uint32_t line, uint32_t scope, const char *function_name)` | `map2check_binop_shr_int` | same | `int`/`unsigned` (32-bit) only, as in C. |
-| `map2check_binop_add_unsigned` | `void map2check_binop_add_unsigned(uint32_t param1, uint32_t param2, uint32_t line, uint32_t scope, const char *function_name)` | `map2check_binop_add_unsigned` | same | `int`/`unsigned` (32-bit) only, as in C. |
-| `map2check_binop_sub_unsigned` | `void map2check_binop_sub_unsigned(uint32_t param1, uint32_t param2, uint32_t line, uint32_t scope, const char *function_name)` | `map2check_binop_sub_unsigned` | same | `int`/`unsigned` (32-bit) only, as in C. |
-| `map2check_binop_mul_unsigned` | `void map2check_binop_mul_unsigned(uint32_t param1, uint32_t param2, uint32_t line, uint32_t scope, const char *function_name)` | `map2check_binop_mul_unsigned` | same | `int`/`unsigned` (32-bit) only, as in C. |
-| `map2check_binop_div_unsigned` | `void map2check_binop_div_unsigned(uint32_t param1, uint32_t param2, uint32_t line, uint32_t scope, const char *function_name)` | `map2check_binop_div_unsigned` | same | `int`/`unsigned` (32-bit) only, as in C. |
-| `map2check_binop_shr_unsigned` | `void map2check_binop_shr_unsigned(uint32_t param1, uint32_t param2, uint32_t line, uint32_t scope, const char *function_name)` | `map2check_binop_shr_unsigned` | same | `int`/`unsigned` (32-bit) only, as in C. |
-| `map2check_check_load` | `void map2check_check_load(const void *ptr, int32_t line, uint32_t scope, int32_t size, const char *function_name)` | `map2check_check_load` | changed | Address-validity rule rewritten (plan R1; differential check in #15); since #11 a heap block is valid only while its latest alloc/free event is an allocation, as in `develop` (`AllocationLog.c:127-148`). The first violation is final; a later check never clears or replaces it (SD-03); NULL handling in SD-05. |
-| `map2check_check_free` | `void map2check_check_free(const char *_name, const void *ptr, uint32_t _scope, uint32_t line, const char *function_name)` | `map2check_check_free` | same | `_name` and `_scope` are ignored. Untracked address is a violation (SD-06). |
-| `map2check_check_free_resolved_address` | `void map2check_check_free_resolved_address(const void *ptr, uint32_t line, const char *function_name, int16_t is_null_valid)` | `analysis_memory.h:46` | same | Semantics in its section; records the release when the check passes, unlike `map2check_check_free`; untracked address is a violation (SD-06); see also SD-13. |
-| `map2check_check_deref` | `void map2check_check_deref(const void *ptr, uint32_t scope, uint32_t line, const char *function_name)` | `map2check_check_deref` | same | Name collides with the pass ABI `map2check_check_deref(i64, ptr)`; see the pass matrix (#21). |
-| `map2check_check_mem_endprog` | `void map2check_check_mem_endprog(void)` | `map2check_check_mem_endprog` | changed | Leak algorithm rewritten; always runs, reporting memtrack or memcleanup by option (SD-04). |
+| `map2check_is_valid_assert` | `void map2check_is_valid_assert(int32_t line_number, const char *function_name, int32_t expression)` | `map2check_is_valid_assert` | changed | A failed assertion reports `ASSERT` (before Task 2.3: `REACHABILITY`) and prints the JSON report. Active in unset and assert modes only (SD-14). |
+| `map2check_binop_add_int` | `void map2check_binop_add_int(int32_t param1, int32_t param2, uint32_t line, uint32_t scope, const char *function_name)` | `map2check_binop_add_int` | same | `int`/`unsigned` (32-bit) only, as in C. Active in unset and overflow modes only (SD-14). |
+| `map2check_binop_sub_int` | `void map2check_binop_sub_int(int32_t param1, int32_t param2, uint32_t line, uint32_t scope, const char *function_name)` | `map2check_binop_sub_int` | same | `int`/`unsigned` (32-bit) only, as in C. Active in unset and overflow modes only (SD-14). |
+| `map2check_binop_mul_int` | `void map2check_binop_mul_int(int32_t param1, int32_t param2, uint32_t line, uint32_t scope, const char *function_name)` | `map2check_binop_mul_int` | same | `int`/`unsigned` (32-bit) only, as in C. Active in unset and overflow modes only (SD-14). |
+| `map2check_binop_div_int` | `void map2check_binop_div_int(int32_t param1, int32_t param2, uint32_t line, uint32_t scope, const char *function_name)` | `map2check_binop_div_int` | same | `int`/`unsigned` (32-bit) only, as in C. Active in unset and overflow modes only (SD-14). |
+| `map2check_binop_neg_int` | `void map2check_binop_neg_int(int32_t param1, int32_t _param2, uint32_t line, uint32_t scope, const char *function_name)` | `map2check_binop_neg_int` | same | `int`/`unsigned` (32-bit) only, as in C. Active in unset and overflow modes only (SD-14). |
+| `map2check_binop_shl_int` | `void map2check_binop_shl_int(int32_t param1, uint32_t param2, uint32_t line, uint32_t scope, const char *function_name)` | `map2check_binop_shl_int` | same | `int`/`unsigned` (32-bit) only, as in C. Active in unset and overflow modes only (SD-14). |
+| `map2check_binop_shr_int` | `void map2check_binop_shr_int(int32_t param1, uint32_t param2, uint32_t line, uint32_t scope, const char *function_name)` | `map2check_binop_shr_int` | same | `int`/`unsigned` (32-bit) only, as in C. Active in unset and overflow modes only (SD-14). |
+| `map2check_binop_add_unsigned` | `void map2check_binop_add_unsigned(uint32_t param1, uint32_t param2, uint32_t line, uint32_t scope, const char *function_name)` | `map2check_binop_add_unsigned` | same | `int`/`unsigned` (32-bit) only, as in C. Active in unset and overflow modes only (SD-14). |
+| `map2check_binop_sub_unsigned` | `void map2check_binop_sub_unsigned(uint32_t param1, uint32_t param2, uint32_t line, uint32_t scope, const char *function_name)` | `map2check_binop_sub_unsigned` | same | `int`/`unsigned` (32-bit) only, as in C. Active in unset and overflow modes only (SD-14). |
+| `map2check_binop_mul_unsigned` | `void map2check_binop_mul_unsigned(uint32_t param1, uint32_t param2, uint32_t line, uint32_t scope, const char *function_name)` | `map2check_binop_mul_unsigned` | same | `int`/`unsigned` (32-bit) only, as in C. Active in unset and overflow modes only (SD-14). |
+| `map2check_binop_div_unsigned` | `void map2check_binop_div_unsigned(uint32_t param1, uint32_t param2, uint32_t line, uint32_t scope, const char *function_name)` | `map2check_binop_div_unsigned` | same | `int`/`unsigned` (32-bit) only, as in C. Active in unset and overflow modes only (SD-14). |
+| `map2check_binop_shr_unsigned` | `void map2check_binop_shr_unsigned(uint32_t param1, uint32_t param2, uint32_t line, uint32_t scope, const char *function_name)` | `map2check_binop_shr_unsigned` | same | `int`/`unsigned` (32-bit) only, as in C. Active in unset and overflow modes only (SD-14). |
+| `map2check_check_load` | `void map2check_check_load(const void *ptr, int32_t line, uint32_t scope, int32_t size, const char *function_name)` | `map2check_check_load` | changed | Address-validity rule rewritten (plan R1; differential check in #15); since #11 a heap block is valid only while its latest alloc/free event is an allocation, as in `develop` (`AllocationLog.c:127-148`). The first violation is final; a later check never clears or replaces it (SD-03); NULL handling in SD-05. Active in unset and memtrack modes only (SD-14). |
+| `map2check_check_free` | `void map2check_check_free(const char *_name, const void *ptr, uint32_t _scope, uint32_t line, const char *function_name)` | `map2check_check_free` | same | `_name` and `_scope` are ignored. Untracked address is a violation (SD-06). Active in unset and memtrack modes only (SD-14). |
+| `map2check_check_free_resolved_address` | `void map2check_check_free_resolved_address(const void *ptr, uint32_t line, const char *function_name, int16_t is_null_valid)` | `analysis_memory.h:46` | same | Semantics in its section; records the release when the check passes, unlike `map2check_check_free`; untracked address is a violation (SD-06); see also SD-13. The check is active in unset and memtrack modes only; when inactive the release is still recorded (SD-14). |
+| `map2check_check_deref` | `void map2check_check_deref(const void *ptr, uint32_t scope, uint32_t line, const char *function_name)` | `map2check_check_deref` | same | Name collides with the pass ABI `map2check_check_deref(i64, ptr)`; see the pass matrix (#21). Active in unset and memtrack modes only (SD-14). |
+| `map2check_check_mem_endprog` | `void map2check_check_mem_endprog(void)` | `map2check_check_mem_endprog` | changed | Leak algorithm rewritten. Runs `analysis_is_program_correct` of the mode: unset and memtrack report memtrack or memcleanup by option, memcleanup mode reports memcleanup, the other modes nothing (SD-04, SD-14). |
 | `LLVMFuzzerTestOneInput` | `int32_t LLVMFuzzerTestOneInput(const uint8_t *data, uintptr_t size)` | `LLVMFuzzerTestOneInput` | same | Feature `libfuzzer`. Resets the analysis state on every iteration (SD-11). |
 | `__VERIFIER_nondet_bool` | `bool __VERIFIER_nondet_bool(void)` | — | new | Feature `libfuzzer`; replaces `map2check_gen_data_fuzzer_*`. |
 | `__VERIFIER_nondet_char` | `int8_t __VERIFIER_nondet_char(void)` | — | new | Feature `libfuzzer`; replaces `map2check_gen_data_fuzzer_*`. |
@@ -122,7 +124,7 @@ Map2Check.
 
 | Symbol | Signature expected by the passes | Status | Notes |
 |---|---|---|---|
-| `map2check_init` | `map2check_init(int)` | changed | Core export takes `void`. |
+| `map2check_init` | `map2check_init(int)` | changed | Core export takes `void`; the mode the frontend chose at link time comes from `map2check_set_mode()` (Task 2.3, SD-14). |
 | `map2check_check_deref` | `map2check_check_deref(i64, ptr)` | changed | Same name, incompatible core signature `(ptr, u32, u32, ptr)`. The plan (§2.1, D1) proposes renaming the core export to `map2check_check_deref_v2` inside the compat layer; decision in #21. |
 | `map2check_track_bb` | `(u32, ptr)` | pending | Core equivalent: `map2check_save_basic_block_log` (#21). |
 | `map2check_alloca` | `(ptr, ptr, i64, i64, i64, i64)` | pending | Core equivalent: `map2check_map_alloca` with `int32_t` sizes (#21). |
@@ -135,7 +137,7 @@ Map2Check.
 | `map2check_load` | `(ptr, i64)` | pending | Core `map2check_check_load` takes 5 arguments (#21). |
 | `map2check_add_store_pointer` | 6 arguments | pending | Core `map2check_map_store_pointer` differs in order and types (#21). |
 | `map2check_function` | `(ptr, ptr)` | pending | Core equivalent: `map2check_map_funct_address` (#21). |
-| `map2check_target_function` | — | pending | #21. |
+| `map2check_target_function` | `(ptr, i32, i32)` | pending | Core equivalent: `map2check_reach_target`, same arguments; records and returns instead of ending the run (SD-15). The pass switches to it later in the cutover. |
 | `map2check_assume` | — | pending | #21. |
 | `map2check_assume_loop` | — | pending | #21. |
 | `map2check_crab_assume` | — | pending | #21. |
@@ -155,6 +157,27 @@ The passes also expect the result channel of the embedded library: files
 named `map2check_property_*` that the Map2Check frontend parses. This
 library only prints the JSON report on stdout (SD-01). The file channel is
 tracked in #19.
+
+## Analysis modes
+
+`map2check_set_mode()` replaces the link-time choice of
+`AnalysisMode*.c` in the Map2Check frontend (`caller.cpp:575-612`). The
+per-mode `match` is in `rust/src/analysismode/mode.rs`. Tracking calls
+(`map2check_map_*`, nondet and basic-block logs) record in every mode.
+
+| Mode | Frontend mode | Checks that report | End of program (`map2check_check_mem_endprog`) |
+|---|---|---|---|
+| unset (`map2check_set_mode` never called) | — | all | leak → `MEMSAFETY_MEMTRACK`, or `MEMSAFETY_MEMCLEANUP` with the option |
+| `AnalysisMode_None` (0) | `COVER_BRANCHES_MODE` | none | nothing |
+| `AnalysisMode_Memtrack` (1) | `MEMTRACK_MODE` | load, deref, free, free resolved | leak → `MEMSAFETY_MEMTRACK`, or `MEMSAFETY_MEMCLEANUP` with the option |
+| `AnalysisMode_Memcleanup` (2) | `MEMCLEANUP_MODE` | none (free resolved still records the release) | leak → `MEMSAFETY_MEMCLEANUP` |
+| `AnalysisMode_Overflow` (3) | `OVERFLOW_MODE` | `map2check_binop_*` | nothing |
+| `AnalysisMode_Assert` (4) | `ASSERT_MODE` | `map2check_is_valid_assert` (`ASSERT`) | nothing |
+| `AnalysisMode_Target` (5) | `REACHABILITY_MODE` | none | nothing |
+
+`map2check_reach_target` and `set_false_result` record in every mode.
+`ViolatedProperty` gained `Assert` (8) and `Unknown` (9), appended after
+`None`; `Reachability` is the target-reached property.
 
 ## Discontinued: `map2check_gen_data_fuzzer_pchar` / `_loff_t` / `_sector_t`
 

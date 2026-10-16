@@ -4,6 +4,7 @@
 use std::sync::{LazyLock, Mutex};
 
 use crate::{
+    analysismode::mode::AnalysisMode,
     bbtrack::BasicBlockEntry,
     caller::{AnalysisResult, ViolatedProperty},
     error::Map2CheckError,
@@ -18,9 +19,12 @@ static CONFIG: Mutex<Config> = Mutex::new(Config::new());
 
 /// Run configuration, kept apart from the analysis state: it changes only
 /// through its setters, so `map2check_init()` and `map2check_reset()` never
-/// clear it. Task 2.3 adds the analysis mode here.
+/// clear it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Config {
+    /// Set by `map2check_set_mode()`. `None` means unset: every check is
+    /// active and the leak tag follows `memcleanup`, as before Task 2.3.
+    pub mode: Option<AnalysisMode>,
     /// Set by `map2check_set_memcleanup()`: a leak at exit is reported as
     /// `MemsafetyMemcleanup` instead of `MemsafetyMemtrack`.
     pub memcleanup: bool,
@@ -31,6 +35,7 @@ pub struct Config {
 impl Config {
     pub const fn new() -> Self {
         Self {
+            mode: None,
             memcleanup: false,
             null_is_valid: false,
         }
@@ -108,20 +113,29 @@ fn ensure_state() -> &'static Mutex<AnalysisState> {
     &ANALYSIS_STATE
 }
 
-/// Starts a fresh analysis: forces the singleton into existence and clears
-/// every counter, container, result and flag, so a second `map2check_init()`
-/// in the same process never sees data from an earlier analysis.
+/// Starts a fresh analysis: forces the singleton into existence and runs the
+/// `analysis_init` of the selected mode, which clears every counter,
+/// container, result and flag, so a second `map2check_init()` in the same
+/// process never sees data from an earlier analysis. The configuration,
+/// including the mode, is kept.
 pub fn init() {
-    reset();
+    let mode = config().mode;
+    with_state_recovering(|s| crate::analysismode::mode::analysis_init(mode, s));
 }
 
 pub fn reset() {
+    with_state_recovering(AnalysisState::reset);
+}
+
+/// Applies `f` to the state, recovering the lock if an earlier panic
+/// poisoned it.
+fn with_state_recovering(f: impl FnOnce(&mut AnalysisState)) {
     let state = ensure_state();
     match state.lock() {
-        Ok(mut guard) => guard.reset(),
+        Ok(mut guard) => f(&mut guard),
         Err(poisoned) => {
             let mut guard = poisoned.into_inner();
-            guard.reset();
+            f(&mut guard);
             state.clear_poison();
         }
     }
