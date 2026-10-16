@@ -62,15 +62,18 @@ int main(void) {
     map2check_is_valid_assert(20, "main", 1);
     assert(get_current_property() == None);
 
-    /* map2check_check_mem_endprog is a no-op until map2check_set_memcleanup()
-     * is called (see rust/src/ffi.rs). The exact leak-detection heuristic
-     * itself is adjudicated in M6, so this test only exercises the on/off
-     * plumbing, not the heuristic's outcome. */
+    /* The end-of-program leak check runs in both modes (SD-04): a leak is
+     * MemsafetyMemtrack by default and MemsafetyMemcleanup after
+     * map2check_set_memcleanup(), as in the develop C runtime. */
+    map2check_reset();
     map2check_map_malloc((void *)0x2000, 8);
     map2check_check_mem_endprog();
-    assert(get_current_property() == None);
+    assert(get_current_property() == MemsafetyMemtrack);
+    map2check_reset();
     map2check_set_memcleanup();
+    map2check_map_malloc((void *)0x2000, 8);
     map2check_check_mem_endprog();
+    assert(get_current_property() == MemsafetyMemcleanup);
     vcc_reset_meta_data();
 
     map2check_success();
