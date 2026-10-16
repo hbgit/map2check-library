@@ -32,9 +32,10 @@ compiled with `clang-16`. Each binary runs in a fresh directory.
 | `POSIX-MEMALIGN` | `AnalysisModeMemtrack.c` | memory prelude, `q` on the stack, `q = BLOCK2` written into its slot, `map2check_posix(&q, 32)`, `map2check_success` (both blocks leak) |
 | `ASSERT` | `AnalysisModeAssert.c` | `map2check_assert(0, ...)` |
 | `TARGET-REACHED` | `AnalysisModeNone.c` (`REACHABILITY_MODE`) | `map2check_target_function` |
+| `NONDET-TYPES` | `AnalysisModeAssert.c` | one `map2check_nondet_<t>` of each of the 16 `NONDET_TYPE`s, with the value as `NonDetPass.cpp` casts it to `int`, then `map2check_assert(0, ...)` |
 
 `drivers/golden.h` holds the shared calls: three basic blocks (one line
-repeated), five nondet values (int, uint, char, long, double) and the
+repeated), five nondet values (int, uint, char, long, double; the char zero-extended, as `NonDetPass.cpp` passes it) and the
 memory prelude (`p` on the stack, `&main`, `p = malloc(16)`).
 
 Two accommodations make the output reproducible and complete:

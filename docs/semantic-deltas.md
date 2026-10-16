@@ -234,23 +234,39 @@ map2check_reset();
 map2check_check_free("p", (void *)0x5000, 0, 4, "main");             /* MemsafetyFree */
 ```
 
-### SD-07 — `__VERIFIER_assume(0)` ends the process
+### SD-07 — `__VERIFIER_assume(0)` abandons the fuzzer input; outside one it exits with 0
 
-**Classification:** accepted limitation
-**Tests:** `rust/src/nondet/libfuzzer.rs::verifier_assume_false_exits_with_zero`, `rust/src/nondet/libfuzzer.rs::map2check_fuzzer_assume_false_exits_with_zero`
+**Classification:** intentional
+**Tests:** `rust/src/nondet/libfuzzer.rs::failed_assume_abandons_only_the_current_iteration`, `rust/src/nondet/libfuzzer.rs::failed_fuzzer_assume_abandons_the_iteration_too`, `rust/src/nondet/libfuzzer.rs::verifier_assume_false_exits_with_zero`, `rust/src/nondet/libfuzzer.rs::map2check_fuzzer_assume_false_exits_with_zero`
 
-**Rust:** `__VERIFIER_assume(0)` and `map2check_fuzzer_assume(0)` call
-`exit(0)`. A Rust panic must not unwind across `extern "C"`, so there is no
-safe way to return to `LLVMFuzzerTestOneInput`. The cost is that the
-current fuzzing process ends. See “Accepted: `__VERIFIER_assume` /
-`map2check_fuzzer_assume` end the process” in `api-deltas.md`.
+**Rust:** inside `LLVMFuzzerTestOneInput`, `__VERIFIER_assume(0)` and
+`map2check_fuzzer_assume(0)` abandon the current input: they unwind (a
+`resume_unwind` with a private payload) through the analysed program's
+frames back to `LLVMFuzzerTestOneInput`, which catches it and returns 0.
+The fuzzer goes on with the next input in the same process, and the next
+iteration starts from an empty state (SD-11). Both exports, and the
+`__map2check_main__` import, are `extern "C-unwind"`; the program's frames
+need unwind tables, the clang default on x86-64 Linux. With no iteration
+running (a program linked without a fuzzer driver), or in a
+`panic = "abort"` build, they keep calling `exit(0)`.
 
-**Legacy:** not verified against source (#15).
+**Legacy (Map2Check `develop`):** `nondet_assume` calls `nondet_cancel`,
+which `longjmp`s back to the `setjmp` in the `__AFL_LOOP` of `main`, and the
+loop moves on to the next input (`NonDetGeneratorAFL.c:31-37`, `:184-196`).
+The Rust library does the same with an unwind instead of `longjmp`: Rust
+cannot call `setjmp`, and a `longjmp` over Rust frames is undefined when
+one of them has a destructor. Outside the `__AFL_LOOP` develop has no
+case: its `main` always runs the program inside the loop.
 
 **Reproduce (link with `--features libfuzzer`):**
 
 ```c
-__VERIFIER_assume(0);   /* process exits with status 0 */
+int __map2check_main__(void) {
+  __VERIFIER_assume(__VERIFIER_nondet_int() == 7);
+  /* reached only for inputs that start with 07 00 00 00 */
+  return 0;
+}
+/* LLVMFuzzerTestOneInput returns 0 for every input; the process goes on */
 ```
 
 ### SD-08 — `__VERIFIER_error()` reports REACHABILITY, then aborts
@@ -534,10 +550,8 @@ appends before it checks (`AnalysisModeMemtrack.c:346-358`); the golden
   writes it only with the AFL++ or KLEE generator; `NonDetGeneratorNone.c`
   writes none (`:42`). A `float` value, which develop has no logger for, is
   logged as a double (type 15). Every other type matches develop byte for
-  byte, value format and type number included: the value is the one
-  `NonDetPass.cpp` hands to develop's `int` wrapper (narrow types
-  zero-extended, so a `char` -3 is `253`; wide types and addresses
-  truncated to 32 bits), as the golden `NONDET-TYPES` checks.
+  byte, value format and type number included (golden `NONDET-TYPES`,
+  SD-18).
 - **Long function names.** Develop copies names into `char[35]` with
   `strncpy` (`FUNCTION_MAX_LENGTH_NAME`), which leaves names of 35 or more
   characters unterminated; this library writes the whole name.
@@ -552,4 +566,46 @@ map2check_enable_witness();
 map2check_init();
 map2check_binop_add_signed(INT64_MAX, 1, 64, 1, "main");
 /* klee_log.csv is written; develop's NonDetGeneratorNone.c writes none */
+```
+
+### SD-18 — Nondet values: develop's AFL++ input layout and log format, with three differences
+
+**Classification:** intentional
+**Tests:** `rust/src/nondet/libfuzzer.rs::every_generator_reads_sizeof_type_bytes_and_wraps_like_develop`, `rust/src/nondet/libfuzzer.rs::seed_a_reads_0x41414141_like_develop`, `rust/src/nondet/libfuzzer.rs::bool_consumes_four_bytes_and_is_the_int_converted_to_bool`, `rust/src/nondet/libfuzzer.rs::empty_input_yields_zero`, `rust/src/nondet/libfuzzer.rs::without_an_iteration_every_generator_yields_zero`, `rust/src/nondet/libfuzzer.rs::pchar_reads_an_unsigned_length_then_length_minus_one_chars`, `rust/src/ffi_golden_tests.rs::nondet_types_match_c_runtime`
+
+**Rust:** the `__VERIFIER_nondet_<t>` generators read the fuzzer input as
+develop's `NonDetGeneratorAFL.c` does: `sizeof(type)` bytes per value, in
+order, copied in memory order (little-endian on x86-64; `:67-99`), and past
+the end of the input the reader rewinds, returning `data[0]` once without
+advancing (`get_next_input_from_afl`, `:56-63`). With the 1-byte seed `A`
+an `int` is `0x41414141`, as in develop. `pchar` reads an `unsigned`
+length, returns NULL for 0, caps it at 4096 and reads `length - 1` chars
+(`:101-117`); the string comes from the C `malloc`. The
+`map2check_save_nondet_log_<t>` exports write the `klee_log.csv` row
+develop writes for the same program: the type number of `enum NONDET_TYPE`
+and the value as `NonDetPass.cpp` hands it to the C wrapper (zero-extended
+narrow types, so a `char` -3 is `253` and a `short` -2 is `65534`; the low
+32 bits of wide types and addresses; `unsigned` with `%u`, `uint` with
+`%d`). The differences:
+
+- **Empty input.** Develop reads `data[0]` of an empty buffer, out of
+  bounds; the library returns 0 bytes. With no iteration running every
+  generator returns 0 and `pchar` returns NULL.
+- **`bool`.** Develop's `map2check_non_det_bool` returns the raw `int` of
+  its four bytes to a caller that declared `_Bool`, so what the program
+  sees depends on how the caller's code reads the register. The library
+  reads the same four bytes and returns that `int` converted to `_Bool`
+  (`!= 0`).
+- **`float`.** Develop has no `float` generator or logger. The library
+  reads four bytes for it and logs it as a double (SD-17).
+
+**Reproduce (link with `--features libfuzzer`):**
+
+```c
+int __map2check_main__(void) {
+  int x = __VERIFIER_nondet_int();   /* input "A": x == 0x41414141 */
+  char *s = __VERIFIER_nondet_pchar();
+  free(s);
+  return 0;
+}
 ```

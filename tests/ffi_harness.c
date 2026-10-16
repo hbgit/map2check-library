@@ -31,7 +31,28 @@
  * (rust/src/nondet/libfuzzer.rs only defines this under cfg(test); the real
  * static lib expects the linking program — here, this harness — to provide
  * it). */
+/* With `harness_reject_inputs` set, it plays a program whose assume
+ * rejects every input whose first int is not 7 (develop: nondet_cancel), so
+ * the unwind of a failed __VERIFIER_assume crosses this C frame. */
+static int harness_reject_inputs = 0;
+static int harness_after_assume = 0;
+static int harness_completed = 0;
+
+static void harness_require_completion(void) {
+    if (!harness_completed) {
+        fprintf(stderr, "ffi_harness: process ended before main returned\n");
+        _exit(97);
+    }
+}
+
 int __map2check_main__(void) {
+    if (harness_reject_inputs) {
+        char *s = __VERIFIER_nondet_pchar();
+        int x = __VERIFIER_nondet_int();
+        free(s);
+        __VERIFIER_assume(x == 7);
+        harness_after_assume++;
+    }
     return 0;
 }
 
@@ -47,6 +68,17 @@ static void run_pre_init_boundary(void) {
     char char_value = 'x';
     float float_value = 0.5f;
     double double_value = 0.5;
+    unsigned int unsigned_value = 1;
+    unsigned long ulong_value = 1;
+    unsigned char uchar_value = 1;
+    short short_value = 1;
+    unsigned short ushort_value = 1;
+    int bool_value = 1;
+    size_t size_t_value = 1;
+    long long loff_t_value = 1;
+    unsigned long sector_t_value = 1;
+    void *pointer_value = NULL;
+    char *pchar_value = NULL;
     int stack_obj = 0;
     void *heap_obj = malloc(8);
     if (heap_obj == NULL) {
@@ -86,6 +118,19 @@ static void run_pre_init_boundary(void) {
     (void)map2check_save_nondet_log_char(1, 0, CHAR_ID, &char_value, "main");
     (void)map2check_save_nondet_log_float(1, 0, FLOAT_ID, &float_value, "main");
     (void)map2check_save_nondet_log_double(1, 0, DOUBLE_ID, &double_value, "main");
+    (void)map2check_save_nondet_log_unsigned(1, 0, 5, &unsigned_value, "main");
+    (void)map2check_save_nondet_log_ulong(1, 0, 6, &ulong_value, "main");
+    (void)map2check_save_nondet_log_uchar(1, 0, 8, &uchar_value, "main");
+    (void)map2check_save_nondet_log_short(1, 0, 14, &short_value, "main");
+    (void)map2check_save_nondet_log_ushort(1, 0, 3, &ushort_value, "main");
+    (void)map2check_save_nondet_log_bool(1, 0, 7, &bool_value, "main");
+    (void)map2check_save_nondet_log_size_t(1, 0, 10, &size_t_value, "main");
+    (void)map2check_save_nondet_log_loff_t(1, 0, 11, &loff_t_value, "main");
+    (void)map2check_save_nondet_log_sector_t(1, 0, 12, &sector_t_value, "main");
+    (void)map2check_save_nondet_log_pointer(1, 0, 2, &pointer_value, "main");
+    (void)map2check_save_nondet_log_pchar(1, 0, 9, &pchar_value, "main");
+    (void)map2check_save_nondet_log_unsigned(1, 0, 5, NULL, "main");
+    (void)map2check_save_nondet_log_pchar(1, 0, 9, NULL, "main");
 
     map2check_is_valid_assert(1, "main", 1);
     map2check_binop_add_int(1, 1, 1, 0, "main");
@@ -119,6 +164,9 @@ static void run_pre_init_boundary(void) {
     (void)__VERIFIER_nondet_double();
     (void)__VERIFIER_nondet_size_t();
     (void)__VERIFIER_nondet_pointer();
+    (void)__VERIFIER_nondet_loff_t();
+    (void)__VERIFIER_nondet_sector_t();
+    free(__VERIFIER_nondet_pchar());
 
     /* truthy conditions only: falsy ones terminate the process by design */
     __VERIFIER_assume(1);
@@ -145,6 +193,17 @@ static void run_bad_inputs(void) {
     char char_value = 0;
     float float_value = 0.0f;
     double double_value = 0.0;
+    unsigned int unsigned_value = 1;
+    unsigned long ulong_value = 1;
+    unsigned char uchar_value = 1;
+    short short_value = 1;
+    unsigned short ushort_value = 1;
+    int bool_value = 1;
+    size_t size_t_value = 1;
+    long long loff_t_value = 1;
+    unsigned long sector_t_value = 1;
+    void *pointer_value = NULL;
+    char *pchar_value = NULL;
 
     /* result/state management, pre-init */
     map2check_reset();
@@ -192,6 +251,19 @@ static void run_bad_inputs(void) {
     (void)map2check_save_nondet_log_char(9, 0, CHAR_ID, &char_value, NULL);
     (void)map2check_save_nondet_log_float(9, 0, FLOAT_ID, &float_value, NULL);
     (void)map2check_save_nondet_log_double(9, 0, DOUBLE_ID, &double_value, NULL);
+    (void)map2check_save_nondet_log_unsigned(1, 0, 5, &unsigned_value, NULL);
+    (void)map2check_save_nondet_log_ulong(1, 0, 6, &ulong_value, NULL);
+    (void)map2check_save_nondet_log_uchar(1, 0, 8, &uchar_value, NULL);
+    (void)map2check_save_nondet_log_short(1, 0, 14, &short_value, NULL);
+    (void)map2check_save_nondet_log_ushort(1, 0, 3, &ushort_value, NULL);
+    (void)map2check_save_nondet_log_bool(1, 0, 7, &bool_value, NULL);
+    (void)map2check_save_nondet_log_size_t(1, 0, 10, &size_t_value, NULL);
+    (void)map2check_save_nondet_log_loff_t(1, 0, 11, &loff_t_value, NULL);
+    (void)map2check_save_nondet_log_sector_t(1, 0, 12, &sector_t_value, NULL);
+    (void)map2check_save_nondet_log_pointer(1, 0, 2, &pointer_value, NULL);
+    (void)map2check_save_nondet_log_pchar(1, 0, 9, &pchar_value, NULL);
+    (void)map2check_save_nondet_log_unsigned(1, 0, 5, NULL, NULL);
+    (void)map2check_save_nondet_log_pchar(1, 0, 9, NULL, NULL);
 
     /* assert and overflow family with null function name / extreme values */
     map2check_is_valid_assert(10, NULL, 0);
@@ -229,6 +301,9 @@ static void run_bad_inputs(void) {
     (void)__VERIFIER_nondet_double();
     (void)__VERIFIER_nondet_size_t();
     (void)__VERIFIER_nondet_pointer();
+    (void)__VERIFIER_nondet_loff_t();
+    (void)__VERIFIER_nondet_sector_t();
+    free(__VERIFIER_nondet_pchar());
 
     /* __VERIFIER_assume/assert/map2check_fuzzer_assume only with a truthy
      * condition here: a falsy one calls exit(0)/abort() by design (see
@@ -315,6 +390,9 @@ static void run_valid_pass(void) {
     (void)__VERIFIER_nondet_double();
     (void)__VERIFIER_nondet_size_t();
     (void)__VERIFIER_nondet_pointer();
+    (void)__VERIFIER_nondet_loff_t();
+    (void)__VERIFIER_nondet_sector_t();
+    free(__VERIFIER_nondet_pchar());
 
     /* __VERIFIER_assume/assert/map2check_fuzzer_assume only with a truthy
      * condition here: a falsy one calls exit(0)/abort() by design (see
@@ -627,6 +705,42 @@ int main(void) {
         }
     }
 
+    /* A failed __VERIFIER_assume abandons only the current input: the
+     * unwind crosses __map2check_main__ (a C frame), LLVMFuzzerTestOneInput
+     * returns 0, and the next input runs (develop: nondet_cancel). */
+    /* An exit(0) instead of the unwind would also end with status 0, so
+     * from here on an early exit is turned into a failure. Registered after
+     * the forking scenarios above, whose children exit on purpose. */
+    atexit(harness_require_completion);
+    {
+        const uint8_t rejected[] = {0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00};
+        const uint8_t accepted[] = {0x00, 0x00, 0x00, 0x00, 0x07, 0x00, 0x00, 0x00};
+        const uint8_t wrapped[] = {0x07};
+        harness_reject_inputs = 1;
+        for (int i = 0; i < 100; i++) {
+            if (LLVMFuzzerTestOneInput(rejected, sizeof(rejected)) != 0) {
+                return 1;
+            }
+        }
+        if (harness_after_assume != 0) {
+            fprintf(stderr, "assume did not abandon the input\n");
+            return 1;
+        }
+        if (LLVMFuzzerTestOneInput(accepted, sizeof(accepted)) != 0 ||
+            harness_after_assume != 1) {
+            fprintf(stderr, "accepted input did not run to the end\n");
+            return 1;
+        }
+        /* {0x07}: pchar length 0x07070707 (capped, 4095 chars from the
+         * wrap), then x reads 07 07 07 07: rejected. */
+        if (LLVMFuzzerTestOneInput(wrapped, sizeof(wrapped)) != 0 ||
+            harness_after_assume != 1) {
+            return 1;
+        }
+        harness_reject_inputs = 0;
+    }
+
+    harness_completed = 1;
     map2check_success();
     return 0;
 }
