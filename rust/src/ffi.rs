@@ -97,6 +97,20 @@ fn violated_property_from_raw(raw: i32) -> Option<ViolatedProperty> {
     }
 }
 
+/// Failure policy at the `extern "C"` boundary (issue #8).
+///
+/// Every `#[no_mangle]` export runs its body through this function
+/// (enforced by `tests/ffi_guard_coverage.rs`).
+///
+/// - Unwinding profiles (`dev`, `release`, `runtime`; `panic = "unwind"`):
+///   a panic is caught here with `catch_unwind`, a diagnostic is written to
+///   stderr and `default` is returned, so no unwind ever reaches C.
+/// - `panic = "abort"` builds (the future KLEE build): `catch_unwind` cannot
+///   intercept anything; a panic aborts the process immediately and there is
+///   no recovery. Exports therefore must not rely on panics for control flow.
+///
+/// Deliberate process termination (`__VERIFIER_error`, `__VERIFIER_assume(0)`)
+/// is not a failure and bypasses recovery by design.
 pub(crate) fn ffi_guard<T>(f: impl FnOnce() -> T, default: T) -> T {
     match std::panic::catch_unwind(std::panic::AssertUnwindSafe(f)) {
         Ok(value) => value,

@@ -13,6 +13,7 @@
  */
 #include <stdint.h>
 #include <stddef.h>
+#include <stdlib.h>
 
 #include "../include/map2check.h"
 
@@ -27,6 +28,97 @@
  * it). */
 int __map2check_main__(void) {
     return 0;
+}
+
+/* ── Round 0 (issue #8): every export called BEFORE map2check_init(), as the
+ * very first thing the process does, with valid boundary inputs only: NULL
+ * where a pointer is allowed, real stack/heap addresses, valid C strings and
+ * zero sizes. No arbitrary invalid pointers are ever passed (they could fault
+ * before Rust gets a chance to validate them). ─────────────────────────── */
+static void run_pre_init_boundary(void) {
+    int32_t int_value = 1;
+    uint32_t uint_value = 1;
+    long long_value = 1;
+    char char_value = 'x';
+    float float_value = 0.5f;
+    double double_value = 0.5;
+    int stack_obj = 0;
+    void *heap_obj = malloc(8);
+    if (heap_obj == NULL) {
+        return;
+    }
+
+    set_false_result(None, 0, "");
+    (void)get_current_property();
+    (void)get_current_step();
+    (void)get_next_step();
+    vcc_reset_meta_data();
+    map2check_set_memcleanup();
+    map2check_set_null_is_valid();
+
+    map2check_map_alloca("", &stack_obj, 0, 0, 1, 0);
+    map2check_map_non_static_alloca("", &stack_obj, 0, 0, 1, 0);
+    map2check_map_funct_address("main", &stack_obj);
+    map2check_map_malloc(heap_obj, 0);
+    map2check_map_calloc(heap_obj, 0, 0);
+    map2check_map_store_pointer(&stack_obj, heap_obj, 0, "", 1, "main");
+    map2check_check_load(heap_obj, 1, 0, 0, "main");
+    map2check_check_deref(heap_obj, 0, 1, "main");
+    map2check_check_free("", heap_obj, 0, 1, "main");
+    map2check_check_free_resolved_address(heap_obj, 1, "main", 0);
+    map2check_map_free("", heap_obj, 0, 1, "main");
+    map2check_check_mem_endprog();
+
+    (void)map2check_save_basic_block_log(1, "main");
+    (void)map2check_is_in_trackbb_container(0);
+
+    (void)map2check_save_nondet_log_int(1, 0, INT_ID, &int_value, "main");
+    (void)map2check_save_nondet_log_uint(1, 0, UNIT_ID, &uint_value, "main");
+    (void)map2check_save_nondet_log_long(1, 0, LONG_ID, &long_value, "main");
+    (void)map2check_save_nondet_log_char(1, 0, CHAR_ID, &char_value, "main");
+    (void)map2check_save_nondet_log_float(1, 0, FLOAT_ID, &float_value, "main");
+    (void)map2check_save_nondet_log_double(1, 0, DOUBLE_ID, &double_value, "main");
+
+    map2check_is_valid_assert(1, "main", 1);
+    map2check_binop_add_int(1, 1, 1, 0, "main");
+    map2check_binop_sub_int(1, 1, 1, 0, "main");
+    map2check_binop_mul_int(1, 1, 1, 0, "main");
+    map2check_binop_div_int(1, 1, 1, 0, "main");
+    map2check_binop_add_unsigned(1u, 1u, 1, 0, "main");
+    map2check_binop_sub_unsigned(1u, 1u, 1, 0, "main");
+    map2check_binop_mul_unsigned(1u, 1u, 1, 0, "main");
+    map2check_binop_div_unsigned(1u, 1u, 1, 0, "main");
+    map2check_binop_neg_int(1, 0, 1, 0, "main");
+    map2check_binop_shl_int(1, 1, 1, 0, "main");
+    map2check_binop_shr_int(1, 1, 1, 0, "main");
+    map2check_binop_shr_unsigned(1u, 1u, 1, 0, "main");
+
+    (void)__VERIFIER_nondet_bool();
+    (void)__VERIFIER_nondet_char();
+    (void)__VERIFIER_nondet_uchar();
+    (void)__VERIFIER_nondet_short();
+    (void)__VERIFIER_nondet_ushort();
+    (void)__VERIFIER_nondet_int();
+    (void)__VERIFIER_nondet_uint();
+    (void)__VERIFIER_nondet_long();
+    (void)__VERIFIER_nondet_ulong();
+    (void)__VERIFIER_nondet_float();
+    (void)__VERIFIER_nondet_double();
+    (void)__VERIFIER_nondet_size_t();
+    (void)__VERIFIER_nondet_pointer();
+
+    /* truthy conditions only: falsy ones terminate the process by design */
+    __VERIFIER_assume(1);
+    __VERIFIER_assert(1);
+    map2check_fuzzer_assume(1);
+
+    /* LLVMFuzzerTestOneInput with a zero-size, NULL buffer is valid. */
+    (void)LLVMFuzzerTestOneInput(NULL, 0);
+
+    print_all_containers_as_json();
+    map2check_success();
+    map2check_reset();
+    free(heap_obj);
 }
 
 /* ── Round 1: hostile calls made *before* map2check_init() ──────────────
@@ -253,6 +345,9 @@ int main(void) {
     if (MAP2CHECK_VERSION[0] == '\0') {
         return 1;
     }
+
+    /* round 0: all exports before map2check_init() (issue #8) */
+    run_pre_init_boundary();
 
     if (test_result_and_control_flags() != 0) {
         return 1;

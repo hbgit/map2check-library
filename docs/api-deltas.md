@@ -176,6 +176,22 @@ exercises.
 `__VERIFIER_nondet_*`-style generator for the specific width needed instead
 of resurrecting the old kernel-typed names.
 
+## Accepted: failure behaviour at the FFI boundary (panic strategy)
+
+Every `#[no_mangle]` export runs its body through `ffi_guard`
+(`rust/src/ffi.rs`), enforced by the source-scanning test
+`tests/ffi_guard_coverage.rs`.
+
+| Build | Panic strategy | Behaviour on a Rust panic inside an export |
+|---|---|---|
+| `dev`, `release`, `runtime` | `unwind` | Caught by `catch_unwind` in `ffi_guard`; a diagnostic goes to stderr and the export returns its neutral default. Nothing unwinds into C. |
+| any `panic = "abort"` build (future KLEE build) | `abort` | No recovery: the process aborts at the panic. `ffi_guard` is then a no-op wrapper. |
+
+Deliberate termination (`__VERIFIER_error` aborts, `__VERIFIER_assume(0)`
+exits with 0) is not a failure and is unaffected. `tests/ffi_harness.c`
+calls every export before `map2check_init()` with valid boundary inputs
+under ASan/UBSan.
+
 ## Accepted: `__VERIFIER_assume` / `map2check_fuzzer_assume` end the process
 
 `__VERIFIER_assume(0)` and `map2check_fuzzer_assume(0)` call

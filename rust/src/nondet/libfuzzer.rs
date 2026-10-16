@@ -210,7 +210,7 @@ pub extern "C" fn __VERIFIER_assume(condition: i32) {
 /// generator. See `__VERIFIER_assume` for the exit(0) design note.
 #[no_mangle]
 pub extern "C" fn map2check_fuzzer_assume(condition: i32) {
-    __VERIFIER_assume(condition);
+    crate::ffi::ffi_guard(|| __VERIFIER_assume(condition), ());
 }
 
 /// SV-COMP reachability primitive: records a `Reachability` violation and
