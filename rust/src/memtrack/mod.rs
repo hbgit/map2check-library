@@ -490,14 +490,32 @@ pub fn is_invalid_address(entries: &[MemTrackEntry], address: usize, size: usize
                 .checked_add(entry.size_destiny)
                 .is_some_and(|allocation_end| address_end <= allocation_end)
     };
-    let mut decided = FixedHashSet::default();
-    !entries.iter().rev().any(|entry| {
-        if entry.is_dynamic || entry.is_free {
-            decided.insert(entry.points_to) && !entry.is_free && covers(entry)
-        } else {
-            entry.size_destiny > 0 && covers(entry)
+    let is_heap_event = |entry: &MemTrackEntry| entry.is_dynamic || entry.is_free;
+    // No hash set and no allocation: this runs on every load, and under KLEE
+    // a set built per call cost about 95% of the runtime's instructions
+    // (Task 2.7b). An older event of a block is skipped when that block's
+    // latest event was already looked up; remembering the last such block
+    // is enough for the common case (one block freed and reallocated in a
+    // loop) and only saves work, so it cannot change the result.
+    let mut last_looked_up: Option<usize> = None;
+    for (i, entry) in entries.iter().enumerate().rev() {
+        if is_heap_event(entry) {
+            // A freed block (size 0) never validates the access.
+            if entry.is_free || !covers(entry) || last_looked_up == Some(entry.points_to) {
+                continue;
+            }
+            last_looked_up = Some(entry.points_to);
+            let is_latest = !entries[i + 1..]
+                .iter()
+                .any(|newer| is_heap_event(newer) && newer.points_to == entry.points_to);
+            if is_latest {
+                return false;
+            }
+        } else if entry.size_destiny > 0 && covers(entry) {
+            return false;
         }
-    })
+    }
+    true
 }
 
 /// Search for the most recent entry with the given `address` as `var_addr`.
@@ -759,6 +777,74 @@ mod tests {
         let live = [malloc, free, realloc];
         assert!(!is_invalid_address(&live, 0x204, 4));
         assert!(is_invalid_address(&live, 0x208, 4));
+    }
+
+    /// The set-based `is_invalid_address` before Task 2.7b, kept as the
+    /// reference the rewrite must agree with.
+    fn is_invalid_address_reference(
+        entries: &[MemTrackEntry],
+        address: usize,
+        size: usize,
+    ) -> bool {
+        let Some(address_end) = address.checked_add(size) else {
+            return true;
+        };
+        let covers = |entry: &MemTrackEntry| {
+            address >= entry.points_to
+                && entry
+                    .points_to
+                    .checked_add(entry.size_destiny)
+                    .is_some_and(|allocation_end| address_end <= allocation_end)
+        };
+        let mut decided = FixedHashSet::default();
+        !entries.iter().rev().any(|entry| {
+            if entry.is_dynamic || entry.is_free {
+                decided.insert(entry.points_to) && !entry.is_free && covers(entry)
+            } else {
+                entry.size_destiny > 0 && covers(entry)
+            }
+        })
+    }
+
+    #[test]
+    fn invalid_address_matches_the_set_based_reference() {
+        // Random histories over a few block addresses, so blocks are freed,
+        // reallocated with other sizes and overlap: every kind of entry the
+        // exports push (malloc, free, stack slot, pointer store).
+        let mut seed: u64 = 0x2545_F491_4F6C_DD1D;
+        let mut next = |bound: u64| {
+            seed ^= seed << 13;
+            seed ^= seed >> 7;
+            seed ^= seed << 17;
+            (seed % bound) as usize
+        };
+        for _ in 0..3000 {
+            let mut entries = Vec::new();
+            for _ in 0..next(24) {
+                let addr = 0x100 + 8 * next(6);
+                let size = 4 * next(5);
+                let entry = match next(4) {
+                    0 => make_entry(addr, addr, true, false, size),
+                    1 => {
+                        let mut e = make_entry(addr, addr, true, false, size);
+                        e.set_free();
+                        e
+                    }
+                    2 => make_entry(addr, addr, false, false, size),
+                    _ => make_entry(0x900 + addr, addr, false, false, 0),
+                };
+                entries.push(entry);
+            }
+            for _ in 0..8 {
+                let address = 0xF8 + next(64);
+                let size = next(10);
+                assert_eq!(
+                    is_invalid_address(&entries, address, size),
+                    is_invalid_address_reference(&entries, address, size),
+                    "address {address:#x} size {size} entries {entries:?}"
+                );
+            }
+        }
     }
 
     #[test]
