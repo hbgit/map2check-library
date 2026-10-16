@@ -51,7 +51,7 @@ build with `--features libfuzzer`.
 | `get_current_step` | `uint64_t get_current_step(void)` | `long get_current_step(void)` | changed | Returns `uint64_t` instead of `long`. |
 | `get_next_step` | `uint64_t get_next_step(void)` | `get_next_step()` / `next_current_step()` | same | Advances and returns the step counter. `next_current_step` is not exported; see its row. |
 | `print_all_containers_as_json` | `void print_all_containers_as_json(void)` | `print_all_containers_as_json` | changed | Report shape and whitespace differ (SD-01, SD-02; schema decision in #14). |
-| `vcc_reset_meta_data` | `void vcc_reset_meta_data(void)` | `vcc_reset_meta_data` | same |  |
+| `vcc_reset_meta_data` | `void vcc_reset_meta_data(void)` | `vcc_reset_meta_data` | same | Host/test-only: the Map2Check passes never call it. It clears a recorded violation by design, bypassing the first-violation rule (SD-03). |
 | `map2check_set_memcleanup` | `void map2check_set_memcleanup(void)` | `map2check_set_memcleanup` | same | Enables the end-of-program leak check (SD-04). |
 | `map2check_set_null_is_valid` | `void map2check_set_null_is_valid(void)` | `map2check_set_null_is_valid` | same | Makes a NULL load safe (SD-05). |
 | `map2check_save_nondet_log_int` | `non_det_log_t *map2check_save_nondet_log_int(int line, int scope, enum var_type_t type_var, int *value, const char *function_name)` | returns `non_det_log_t *` | same | Returned record is not linked into a list (SD-10). |
@@ -84,7 +84,7 @@ build with `--features libfuzzer`.
 | `map2check_binop_shr_unsigned` | `void map2check_binop_shr_unsigned(uint32_t param1, uint32_t param2, uint32_t line, uint32_t scope, const char *function_name)` | `map2check_binop_shr_unsigned` | same | `int`/`unsigned` (32-bit) only, as in C. |
 | `map2check_check_load` | `void map2check_check_load(const void *ptr, int32_t line, uint32_t scope, int32_t size, const char *function_name)` | `map2check_check_load` | changed | Address-validity rule rewritten (plan R1; differential check in #15); since #11 a heap block is valid only while its latest alloc/free event is an allocation, as in `develop` (`AllocationLog.c:127-148`). The first violation is final; a later check never clears or replaces it (SD-03); NULL handling in SD-05. |
 | `map2check_check_free` | `void map2check_check_free(const char *_name, const void *ptr, uint32_t _scope, uint32_t line, const char *function_name)` | `map2check_check_free` | same | `_name` and `_scope` are ignored. Untracked address is a violation (SD-06). |
-| `map2check_check_free_resolved_address` | `void map2check_check_free_resolved_address(const void *ptr, uint32_t line, const char *function_name, int16_t is_null_valid)` | `analysis_memory.h:46` | same | Semantics in its section; untracked address is a violation (SD-06). |
+| `map2check_check_free_resolved_address` | `void map2check_check_free_resolved_address(const void *ptr, uint32_t line, const char *function_name, int16_t is_null_valid)` | `analysis_memory.h:46` | same | Semantics in its section; records the release when the check passes, unlike `map2check_check_free`; untracked address is a violation (SD-06); see also SD-13. |
 | `map2check_check_deref` | `void map2check_check_deref(const void *ptr, uint32_t scope, uint32_t line, const char *function_name)` | `map2check_check_deref` | same | Name collides with the pass ABI `map2check_check_deref(i64, ptr)`; see the pass matrix (#21). |
 | `map2check_check_mem_endprog` | `void map2check_check_mem_endprog(void)` | `map2check_check_mem_endprog` | changed | Leak algorithm rewritten; no-op until `map2check_set_memcleanup()` (SD-04). |
 | `LLVMFuzzerTestOneInput` | `int32_t LLVMFuzzerTestOneInput(const uint8_t *data, uintptr_t size)` | `LLVMFuzzerTestOneInput` | same | Feature `libfuzzer`. Resets the analysis state on every iteration (SD-11). |
@@ -263,12 +263,20 @@ receives. The Rust export:
 - reports `MEMSAFETY_FREE` when the most recent record whose
   `mem_address_points_to` equals `ptr` is already freed;
 - reports `MEMSAFETY_FREE` for an address with no heap record (SD-06, #37);
-- only checks: it does not mark the block freed. The caller records the
-  release with `map2check_map_free`.
+- records the release (a free event for `ptr`) when the check passes, so
+  the caller must not add `map2check_map_free`. A NULL `ptr` and a failed
+  check record nothing.
 
-The C runtime of Map2Check `develop`
-(`modules/backend/library/lib/AnalysisModeMemtrack.c:164-183` and
-`ListLog.c:95-118`) agrees on the untracked address since #37, and still
-differs in one way: the function also marks the block freed. That keeps the
-split between checking and recording that the rest of the core API already
-uses.
+This matches the C runtime of Map2Check `develop`
+(`modules/backend/library/lib/AnalysisModeMemtrack.c:164-183`): the
+function checks with `is_invalid_free` (`ListLog.c:95-118`) and then marks
+the block freed (`:178-182`). The pass uses it for `realloc` and for frees
+whose argument is not a load, so it is a single call.
+
+**Asymmetry with `map2check_check_free`:** `map2check_check_free` only
+checks; the pass calls `map2check_map_free` after it to record the
+release. `map2check_check_free_resolved_address` checks and records in one
+call.
+
+The free check itself consults the allocation and free records, not the
+pointer stores that `develop` scans; see SD-13.

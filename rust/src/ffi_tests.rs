@@ -987,6 +987,66 @@ fn check_free_resolved_address_rejects_stack_slot() {
 }
 
 #[test]
+fn resolved_free_records_the_release_so_a_moved_realloc_is_not_a_leak() {
+    // develop: `map2check_free_resolved_address` marks the block freed when
+    // the check passes (AnalysisModeMemtrack.c:178-182). The pass uses it for
+    // realloc: free the old block, then malloc the new one.
+    let _guard = fresh();
+    // SAFETY: C-string literal is valid; fake addresses are never dereferenced.
+    unsafe {
+        map2check_map_malloc(addr(0x1000), 16);
+        map2check_check_free_resolved_address(addr(0x1000), 3, c"main".as_ptr(), 0);
+        map2check_map_malloc(addr(0x2000), 32);
+        map2check_check_free_resolved_address(addr(0x2000), 4, c"main".as_ptr(), 0);
+    }
+    map2check_set_memcleanup();
+    map2check_check_mem_endprog();
+    assert_ok();
+}
+
+#[test]
+fn resolved_free_twice_is_an_invalid_free() {
+    let _guard = fresh();
+    // SAFETY: C-string literal is valid; fake address is never dereferenced.
+    unsafe {
+        map2check_map_malloc(addr(0x1000), 16);
+        map2check_check_free_resolved_address(addr(0x1000), 3, c"main".as_ptr(), 0);
+    }
+    assert_ok();
+    // SAFETY: as above.
+    unsafe { map2check_check_free_resolved_address(addr(0x1000), 4, c"main".as_ptr(), 0) };
+    assert_violated(ViolatedProperty::MemsafetyFree, 4, "main");
+}
+
+#[test]
+fn load_after_resolved_free_is_invalid() {
+    let _guard = fresh();
+    // SAFETY: C-string literal is valid; fake address is never dereferenced.
+    unsafe {
+        map2check_map_malloc(addr(0x1000), 16);
+        map2check_check_free_resolved_address(addr(0x1000), 3, c"main".as_ptr(), 0);
+        map2check_check_load(addr(0x1000), 4, 0, 4, c"main".as_ptr());
+    }
+    assert_violated(ViolatedProperty::MemsafetyDeref, 4, "main");
+}
+
+#[test]
+fn sd13_free_of_a_never_stored_pointer_is_valid() {
+    // SD-13: `free(malloc(8))` — the block was never stored through a tracked
+    // pointer store. Rust decides by the allocation record and accepts it;
+    // develop scans only list_log (pointer stores) and reports FALSE_FREE.
+    let _guard = fresh();
+    // SAFETY: C-string literals are valid; fake addresses are never dereferenced.
+    unsafe {
+        map2check_map_malloc(addr(0x1000), 8);
+        map2check_check_free_resolved_address(addr(0x1000), 3, c"main".as_ptr(), 0);
+        map2check_map_malloc(addr(0x2000), 8);
+        map2check_check_free(c"p".as_ptr(), addr(0x2000), 0, 4, c"main".as_ptr());
+    }
+    assert_ok();
+}
+
+#[test]
 fn check_free_resolved_address_null_depends_on_flag() {
     let _guard = fresh();
     // SAFETY: C-string literal is valid; null is never dereferenced.

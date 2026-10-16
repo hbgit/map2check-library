@@ -56,7 +56,9 @@ fn log_error(e: &Map2CheckError) {
     eprintln!("[map2check] error: {e}");
 }
 
-fn run_vcc_check(checker: impl VccChecker, ctx: &VccContext, line: u32, fname: &str) {
+/// Runs `checker`, records a violation if it finds one, and returns whether
+/// the check passed (`false` on a violation or an internal error).
+fn run_vcc_check(checker: impl VccChecker, ctx: &VccContext, line: u32, fname: &str) -> bool {
     match checker.check(ctx) {
         Ok(crate::analysismode::VccOutcome::Violated { property }) => {
             if let Err(e) = state::with_state(|s| {
@@ -65,9 +67,13 @@ fn run_vcc_check(checker: impl VccChecker, ctx: &VccContext, line: u32, fname: &
             }) {
                 log_error(&e);
             }
+            false
         }
-        Ok(crate::analysismode::VccOutcome::Safe) => {}
-        Err(e) => log_error(&e),
+        Ok(crate::analysismode::VccOutcome::Safe) => true,
+        Err(e) => {
+            log_error(&e);
+            false
+        }
     }
 }
 
@@ -207,6 +213,8 @@ pub extern "C" fn print_all_containers_as_json() {
 }
 
 /// Resets violation metadata without clearing tracking containers.
+/// Host/test-only: the Map2Check passes never call it. It clears a recorded
+/// violation by design, bypassing the first-violation rule (#36, SD-03).
 #[no_mangle]
 pub extern "C" fn vcc_reset_meta_data() {
     ffi_guard(
@@ -968,6 +976,14 @@ pub unsafe extern "C" fn map2check_check_free(
 /// the heap address itself (post-indirection), not the address of the
 /// pointer variable that holds it (that case is `map2check_check_free`).
 ///
+/// When the check passes, it also records the release (a free event for
+/// `ptr`), as `map2check_free_resolved_address` of the Map2Check `develop` C
+/// runtime does (`AnalysisModeMemtrack.c:178-182`). The pass uses this path
+/// for `realloc` and for frees of a value that is not a load, so the caller
+/// must not add `map2check_map_free`. Unlike this export,
+/// `map2check_check_free` only checks; the pass calls `map2check_map_free`
+/// after it. A NULL `ptr` is never recorded.
+///
 /// # Safety
 /// `function_name` must be null or a valid null-terminated C string; `ptr` may be null.
 #[no_mangle]
@@ -985,7 +1001,7 @@ pub unsafe extern "C" fn map2check_check_free_resolved_address(
                 return;
             }
             let ctx = VccContext::new(line, 0, fname);
-            run_vcc_check(
+            let passed = run_vcc_check(
                 FreeResolvedChecker {
                     address: ptr as usize,
                 },
@@ -993,6 +1009,21 @@ pub unsafe extern "C" fn map2check_check_free_resolved_address(
                 line,
                 fname,
             );
+            if !passed || ptr.is_null() {
+                return;
+            }
+            let addr = ptr as usize;
+            if let Err(e) = state::with_state(|s| {
+                let step = s.next_step();
+                let mut entry = MemTrackEntry::new(
+                    step, line, 0, addr, addr, true, false, "", fname, 0, 1, false,
+                );
+                entry.set_free();
+                s.memtrack.push(entry);
+                Ok(())
+            }) {
+                log_error(&e);
+            }
         },
         (),
     );

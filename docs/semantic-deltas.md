@@ -175,7 +175,8 @@ map2check_check_load(NULL, 12, 0, 4, "main");   /* None */
 both report `MEMSAFETY_FREE` for an address with no heap record (no
 allocation or free event; a stack slot or a pointer store does not count).
 The most recent heap record for the address decides: a freed block is an
-invalid free, a live one is valid.
+invalid free, a live one is valid. When the resolved check passes, it also
+records the release, as `develop` does (`AnalysisModeMemtrack.c:178-182`).
 
 Before #37, `map2check_check_free_resolved_address` treated an address with
 no record as a safe free (`is_invalid_free_resolved` ended in
@@ -187,7 +188,14 @@ lets the most recent `list_log` row pointing to the address decide
 (invalid if freed or not dynamic) and returns true when no row is found.
 Both `map2check_free` (`AnalysisModeMemtrack.c:351`) and
 `map2check_free_resolved_address` (`AnalysisModeMemtrack.c:171`) use it in
-memtrack mode. `develop` matches `lib_old` here. (In memcleanup mode,
+memtrack mode. `develop` matches `lib_old` here.
+
+Parity is on the verdict for an untracked address only, not on the lookup.
+`develop` scans `list_log` (pointer stores, free rows and reference
+updates) and never `allocation_log`. Rust scans the allocation and free
+records and skips pointer stores, which carry no status snapshot here. The
+two differ when a block is freed without ever being stored through a
+tracked pointer store; that case is SD-13. (In memcleanup mode,
 `AnalysisModeMemcleanup.c:167` and `:341` hard-code `error = FALSE`; this
 library does not have that mode split.)
 
@@ -333,4 +341,34 @@ map2check_map_non_static_alloca("vla", vla, n, sizeof(int), 3, 0);  /* element c
 map2check_set_memcleanup();
 map2check_check_mem_endprog();                                     /* None (before #38: MemsafetyMemcleanup) */
 map2check_check_load(&vla[2], 4, 0, sizeof(int), "main");          /* None (before #38: MemsafetyDeref) */
+```
+
+### SD-13 — Freeing a block that was never stored through a pointer
+
+**Classification:** intentional
+**Tests:** `rust/src/ffi_tests.rs::sd13_free_of_a_never_stored_pointer_is_valid`
+
+**Rust:** the free check decides by the allocation and free records. A live
+block is a valid free even if its address was never written to a tracked
+pointer variable, so `free(malloc(8))` reports nothing. This is the correct
+verdict: the program frees a live heap block exactly once.
+
+**C runtime of Map2Check `develop`:** `is_invalid_free`
+(`modules/backend/library/lib/ListLog.c:95-118`) only scans `list_log`,
+which `map2check_add_store_pointer` fills (`AnalysisModeMemtrack.c:246-295`)
+together with free rows and reference updates (`:185-244`). `map2check_malloc`
+writes only `allocation_log` (`:305-323`). When the freed pointer was never
+stored through a tracked store, there is no row, `is_invalid_free` returns
+TRUE and `map2check_free_resolved_address` reports FALSE_FREE
+(`AnalysisModeMemtrack.c:171-177`). This happens for `free(malloc(8))`, or
+for `free(mk())` where `mk` returns `malloc(n)`. At -O0 the result is not
+stored, and the pass takes the resolved path (`MemoryTrackPass.cpp:311-327`).
+This is a false positive in `develop`.
+
+**Reproduce:**
+
+```c
+map2check_init();
+map2check_map_malloc((void *)0x1000, 8);
+map2check_check_free_resolved_address((void *)0x1000, 3, "main", 0);  /* None; develop: FALSE_FREE */
 ```
