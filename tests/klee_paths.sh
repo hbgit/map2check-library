@@ -211,6 +211,25 @@ else
   fail "reach.c: klee_log.csv does not log 42: '$(cat "$d/klee_log.csv" 2>/dev/null)'"
 fi
 
+# ── multistate.c: many states on the exit path, one violation ────────────────
+# The legacy files are written through a temporary file and a rename, so a
+# state that exits cleanly cannot truncate the violation of another one.
+echo "== multistate.c"
+run_klee multistate rust full
+count multistate rust
+for rep in 1 2 3; do
+  run_klee multistate rust frontend
+  d="$W/multistate-rust-frontend"
+  if [ -n "$(abort_ktest "$d")" ] &&
+    [ "$(head -n 1 "$d/map2check_property" 2>/dev/null)" = TARGET-REACHED ] &&
+    [ -z "$(find "$d" -maxdepth 1 -name '.*.tmp')" ]; then
+    pass "multistate.c ($rep): the property file ends with TARGET-REACHED, no temporary file left"
+  else
+    fail "multistate.c ($rep): property '$(cat "$d/map2check_property" 2>/dev/null)', tmp: '$(find "$d" -maxdepth 1 -name '.*.tmp')'"
+  fi
+  rm -rf "$d"
+done
+
 # ── range.c, json.c: formatting a non-unique value (condition 7) ─────────────
 echo "== range.c"
 run_klee range rust full
@@ -365,7 +384,7 @@ fi
 # ── develop's C runtime, same programs ────────────────────────────────────────
 if [ -n "${DEVELOP_SRC:-}" ]; then
   echo "== develop C runtime ($DEVELOP_SRC)"
-  for prog in prog reach range deref vererr_deref vererr_target wasm layout; do
+  for prog in prog reach multistate range deref vererr_deref vererr_target wasm layout; do
     run_klee "$prog" develop full
     count "$prog" develop
     run_klee "$prog" develop frontend
@@ -377,7 +396,7 @@ fi
 table="$(
   echo "| program | Rust runtime (completed+partial) | develop C runtime (completed+partial) |"
   echo "|---|---|---|"
-  for prog in prog reach range json deref vererr_deref vererr_target wasm layout; do
+  for prog in prog reach multistate range json deref vererr_deref vererr_target wasm layout; do
     echo "| $prog.c | ${COUNT[$prog/rust]:-?} | ${COUNT[$prog/develop]:-not run} |"
   done
 )"

@@ -124,18 +124,62 @@ fn property_text(result: &AnalysisResult) -> (Option<String>, Option<&'static st
     }
 }
 
+/// Writes `contents` to `dir/name` atomically: the full text goes to a
+/// temporary file of the same directory, which is then renamed over the
+/// target. `std::fs::write` truncates the target and writes in separate
+/// calls; under KLEE (`--external-calls=all`) the forked states share the
+/// real file system and one state can truncate the file after another wrote
+/// its violation, leaving it empty when KLEE halts on the abort. A reader of
+/// the target sees the old file or the new one, never an empty or partial
+/// one.
+///
+/// The temporary name has the pid and a counter. KLEE states
+/// share the pid and each has a copy of the counter, so the file is created
+/// with `create_new` and a name that already exists is skipped.
+pub fn write_atomic(dir: &Path, name: &str, contents: &str) -> io::Result<()> {
+    use std::io::Write as _;
+    use std::sync::atomic::{AtomicU64, Ordering};
+    static COUNTER: AtomicU64 = AtomicU64::new(0);
+
+    let pid = std::process::id();
+    let mut attempts = 0u32;
+    let (tmp, mut file) = loop {
+        let n = COUNTER.fetch_add(1, Ordering::Relaxed);
+        let tmp = dir.join(format!(".{name}.{pid}.{n}.tmp"));
+        match std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&tmp)
+        {
+            Ok(file) => break (tmp, file),
+            Err(e) if e.kind() == io::ErrorKind::AlreadyExists && attempts < 10_000 => {
+                attempts += 1;
+            }
+            Err(e) => return Err(e),
+        }
+    };
+    let result = file.write_all(contents.as_bytes()).and_then(|()| {
+        drop(file);
+        std::fs::rename(&tmp, dir.join(name))
+    });
+    if result.is_err() {
+        let _ = std::fs::remove_file(&tmp);
+    }
+    result
+}
+
 /// Writes the property files of `result` into `dir`, as `write_property`
 /// and the `write_property_*` helpers of `PropertyGenerator.c` do.
 pub fn write_property_files(dir: &Path, result: &AnalysisResult) -> io::Result<()> {
     let (text, extra) = property_text(result);
     match text {
         Some(text) => {
-            std::fs::write(dir.join(PROPERTY_FILE), &text)?;
+            write_atomic(dir, PROPERTY_FILE, &text)?;
             if let Some(extra) = extra {
-                std::fs::write(dir.join(extra), &text)?;
+                write_atomic(dir, extra, &text)?;
             }
         }
-        None => std::fs::write(dir.join(PROPERTY_FILE_UNKNOWN), "UNKNOWN\n")?,
+        None => write_atomic(dir, PROPERTY_FILE_UNKNOWN, "UNKNOWN\n")?,
     }
     Ok(())
 }
@@ -154,7 +198,7 @@ pub fn remove_stale_property_files(dir: &Path) {
 
 /// `generate_confirmation_file` (`WitnessGeneration.c:28-32`).
 pub fn write_checked_error(dir: &Path) -> io::Result<()> {
-    std::fs::write(dir.join(CHECKED_ERROR_FILE), "END OF TIME\n")
+    write_atomic(dir, CHECKED_ERROR_FILE, "END OF TIME\n")
 }
 
 /// `trackbb_log_to_file` (`TrackBBLog.c:35-44`): `%u;%s\n` per row.
@@ -166,7 +210,7 @@ pub fn write_trackbb_log(dir: &Path, rows: &[BasicBlockEntry]) -> io::Result<()>
     for row in rows.iter().filter(|r| seen.insert(r.line)) {
         let _ = writeln!(out, "{};{}", row.line, row.function_name);
     }
-    std::fs::write(dir.join(TRACKBB_LOG_FILE), out)
+    write_atomic(dir, TRACKBB_LOG_FILE, &out)
 }
 
 /// The value column and the `enum NONDET_TYPE` number
@@ -567,7 +611,7 @@ impl LegacyLogs {
                 r.step
             );
         }
-        std::fs::write(dir.join(LIST_LOG_FILE), out)
+        write_atomic(dir, LIST_LOG_FILE, &out)
     }
 
     /// `allocation_log_to_file` (`AllocationLog.c:161-174`).
@@ -582,7 +626,7 @@ impl LegacyLogs {
                 i32::from(r.is_free)
             );
         }
-        std::fs::write(dir.join(ALLOCATION_LOG_FILE), out)
+        write_atomic(dir, ALLOCATION_LOG_FILE, &out)
     }
 
     /// `heap_log_to_file` (`HeapLog.c:54-66`).
@@ -591,7 +635,7 @@ impl LegacyLogs {
         for r in &self.heap {
             let _ = writeln!(out, "{};{};{}", c_pointer(r.addr), r.name, r.size);
         }
-        std::fs::write(dir.join(HEAP_LOG_FILE), out)
+        write_atomic(dir, HEAP_LOG_FILE, &out)
     }
 
     /// `nondet_log_to_file` (`NonDetLog.c:17-60`):
@@ -606,7 +650,7 @@ impl LegacyLogs {
                 r.line, r.scope, r.function, r.step
             );
         }
-        std::fs::write(dir.join(NONDET_LOG_FILE), out)
+        write_atomic(dir, NONDET_LOG_FILE, &out)
     }
 }
 
@@ -699,6 +743,87 @@ mod tests {
             );
             assert_eq!(std::fs::read_dir(dir.path()).unwrap().count(), 1, "{tag}");
         }
+    }
+
+    fn bb_rows(count: u32, function: &str) -> Vec<BasicBlockEntry> {
+        (1..=count)
+            .map(|line| BasicBlockEntry::new(u64::from(line), line, function))
+            .collect()
+    }
+
+    /// Race test (the list-ext defect): a reader that polls the target while
+    /// the writer rewrites it must see the old file or the new one in full,
+    /// never an empty or partial file. The files are large, so the window
+    /// between truncating and writing, which `std::fs::write` leaves open, is
+    /// wide; with the old code this fails on every run seen.
+    #[test]
+    fn concurrent_reader_never_sees_empty_or_partial_file() {
+        use std::sync::atomic::{AtomicBool, Ordering};
+        let dir = tempfile::tempdir().unwrap();
+        let old = bb_rows(400_000, "old");
+        let new = bb_rows(500_000, "newer");
+        write_trackbb_log(dir.path(), &old).unwrap();
+        let target = dir.path().join(TRACKBB_LOG_FILE);
+        let old_len = std::fs::metadata(&target).unwrap().len();
+        let done = AtomicBool::new(false);
+        let mut seen = Vec::new();
+        std::thread::scope(|s| {
+            s.spawn(|| {
+                for _ in 0..20 {
+                    write_trackbb_log(dir.path(), &new).unwrap();
+                    write_trackbb_log(dir.path(), &old).unwrap();
+                }
+                done.store(true, Ordering::SeqCst);
+            });
+            while !done.load(Ordering::SeqCst) {
+                if let Ok(m) = std::fs::read(&target) {
+                    seen.push(m.len() as u64);
+                }
+            }
+        });
+        let new_len = {
+            write_trackbb_log(dir.path(), &new).unwrap();
+            std::fs::metadata(&target).unwrap().len()
+        };
+        assert!(!seen.is_empty());
+        for len in seen {
+            assert!(
+                len == old_len || len == new_len,
+                "a reader saw {len} bytes, expected {old_len} or {new_len}"
+            );
+        }
+    }
+
+    /// Structural check, deterministic: the target is replaced by a rename
+    /// (its inode changes), and no temporary file is left behind.
+    #[test]
+    fn write_goes_through_a_temp_file_and_rename() {
+        use std::os::unix::fs::MetadataExt as _;
+        let dir = tempfile::tempdir().unwrap();
+        let target = dir.path().join(PROPERTY_FILE);
+        write_property_files(dir.path(), &violated(ViolatedProperty::Assert, 5, "main")).unwrap();
+        let first = std::fs::metadata(&target).unwrap().ino();
+        // An open handle on the old file keeps its inode alive, so a new
+        // file cannot reuse the number.
+        let _held = std::fs::File::open(&target).unwrap();
+        write_property_files(dir.path(), &violated(ViolatedProperty::Assert, 5, "main")).unwrap();
+        assert_ne!(first, std::fs::metadata(&target).unwrap().ino());
+        let mut names: Vec<String> = std::fs::read_dir(dir.path())
+            .unwrap()
+            .map(|e| e.unwrap().file_name().into_string().unwrap())
+            .collect();
+        names.sort();
+        assert_eq!(names, ["map2check_property", "map2check_property_assert"]);
+    }
+
+    #[test]
+    fn temp_name_collisions_are_skipped() {
+        let dir = tempfile::tempdir().unwrap();
+        for _ in 0..50 {
+            write_atomic(dir.path(), "f", "x\n").unwrap();
+        }
+        assert_eq!(std::fs::read(dir.path().join("f")).unwrap(), b"x\n");
+        assert_eq!(std::fs::read_dir(dir.path()).unwrap().count(), 1);
     }
 
     #[test]
