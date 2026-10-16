@@ -322,7 +322,10 @@ __VERIFIER_error();   /* returns; nothing recorded */
 
 **Rust:** the FFI layer never trusts its arguments. Negative sizes in the
 `map2check_map_*` calls drop the record, and a `calloc` size that
-overflows is dropped too. `set_false_result` ignores an unknown property
+overflows is dropped too. A NULL block in `map2check_map_malloc` or
+`map2check_map_calloc` is tested first, as develop does, so it stays
+`UNKNOWN` in the memory modes whatever the size: a `malloc` over
+`i32::MAX` bytes fails, and the pass then passes NULL with a negative size. `set_false_result` ignores an unknown property
 value. NULL or non-UTF-8 strings become `""`. A negative size in
 `map2check_check_load` is a `MEMSAFETY_DEREF` violation. Panics are caught
 at the boundary.

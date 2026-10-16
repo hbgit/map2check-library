@@ -845,7 +845,8 @@ fn malloc_returned_null(ptr_address: *const std::os::raw::c_void) -> bool {
 
 /// Records a heap allocation of `size` bytes at `ptr_address`. In the
 /// memtrack and memcleanup modes a NULL `ptr_address` reports `UNKNOWN`
-/// instead, as develop does.
+/// instead, as develop does, whatever `size` is; only a non-NULL block with
+/// a negative size is dropped (SD-09).
 ///
 /// # Safety
 /// `ptr_address` may be null (null malloc result is valid C).
@@ -853,10 +854,9 @@ fn malloc_returned_null(ptr_address: *const std::os::raw::c_void) -> bool {
 pub unsafe extern "C" fn map2check_map_malloc(ptr_address: *const std::os::raw::c_void, size: i32) {
     ffi_guard(
         || {
-            if size < 0 {
-                return;
-            }
-            if malloc_returned_null(ptr_address) {
+            // The block before the size, as develop: a failed `malloc(n)`
+            // with `n` over `i32::MAX` arrives as NULL with a negative size.
+            if malloc_returned_null(ptr_address) || size < 0 {
                 return;
             }
             let addr = ptr_address as usize;
@@ -889,7 +889,8 @@ pub unsafe extern "C" fn map2check_map_malloc(ptr_address: *const std::os::raw::
 
 /// Records a heap allocation of `quantity * size` bytes at `ptr_address`.
 /// In the memtrack and memcleanup modes a NULL `ptr_address` reports
-/// `UNKNOWN` instead, as develop's `map2check_calloc` does.
+/// `UNKNOWN` instead, as develop's `map2check_calloc` does, whatever the
+/// sizes are.
 ///
 /// # Safety
 /// `ptr_address` may be null.
@@ -901,10 +902,8 @@ pub unsafe extern "C" fn map2check_map_calloc(
 ) {
     ffi_guard(
         || {
-            if quantity < 0 || size < 0 {
-                return;
-            }
-            if malloc_returned_null(ptr_address) {
+            // The block first, as in `map2check_map_malloc`.
+            if malloc_returned_null(ptr_address) || quantity < 0 || size < 0 {
                 return;
             }
             let quantity = quantity as usize;

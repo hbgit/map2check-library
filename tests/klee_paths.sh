@@ -121,7 +121,7 @@ develop_runtime() { # <mode: target|memtrack> <out.bc>
 run_klee() {
   local prog="$1" rt="$2" kind="$3" dir="$W/$1-$2-$3" rtbc cflags=() mode=target
   mkdir -p "$dir"
-  case "$prog" in deref | vererr_deref | wasm) mode=memtrack ;; esac
+  case "$prog" in deref | hugemalloc | vererr_deref | wasm) mode=memtrack ;; esac
   if [ "$rt" = develop ]; then
     cflags=(-DM2C_DEVELOP)
     rtbc="$W/dev-$mode.bc"
@@ -283,6 +283,26 @@ else
   fail "deref.c: the abort's ktest does not have i = 4"
 fi
 
+# ── hugemalloc.c: a failed malloc of a symbolic size is UNKNOWN ──────────────
+# lis_unsafe: KLEE returns NULL for 4 * n > 2^31 and the pass hands the
+# runtime a negative int size. The NULL block must end the run as UNKNOWN,
+# as develop does; dropping the call let the state reach the second malloc,
+# which KLEE bound to a concrete 2 GiB object (4.4 GB RSS, task 2.7c).
+echo "== hugemalloc.c"
+run_klee hugemalloc rust frontend
+d="$W/hugemalloc-rust-frontend"
+if [ -n "$(abort_ktest "$d")" ] && [ -e "$d/map2check_property__unknown" ] &&
+  [ ! -e "$d/map2check_property" ]; then
+  pass "hugemalloc.c: the NULL block of a huge malloc aborts as UNKNOWN"
+else
+  fail "hugemalloc.c: abort '$(abort_ktest "$d")', files: $(ls "$d" | tr '\n' ' ')"
+fi
+if grep -q 'Large alloc\|over memory cap' "$d/klee.log"; then
+  fail "hugemalloc.c: KLEE: $(grep 'Large alloc\|over memory cap' "$d/klee.log" | head -n 1)"
+else
+  pass "hugemalloc.c: no state reaches a concrete multi-GiB object"
+fi
+
 # ── vererr_*.c: __VERIFIER_error/_assert are no-ops with a mode set ─────────
 echo "== vererr_deref.c"
 run_klee vererr_deref rust full
@@ -384,7 +404,7 @@ fi
 # ── develop's C runtime, same programs ────────────────────────────────────────
 if [ -n "${DEVELOP_SRC:-}" ]; then
   echo "== develop C runtime ($DEVELOP_SRC)"
-  for prog in prog reach multistate range deref vererr_deref vererr_target wasm layout; do
+  for prog in prog reach multistate range deref hugemalloc vererr_deref vererr_target wasm layout; do
     run_klee "$prog" develop full
     count "$prog" develop
     run_klee "$prog" develop frontend

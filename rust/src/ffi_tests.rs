@@ -1913,6 +1913,28 @@ fn malloc_null_reports_unknown_in_memory_modes_only() {
 }
 
 #[test]
+fn malloc_null_is_unknown_before_the_size_is_looked_at() {
+    // develop tests the block before anything else (AnalysisModeMemtrack.c:305-311),
+    // so a NULL block is UNKNOWN whatever the size. The pass truncates the
+    // size to `int`: `malloc(4 * n)` that fails because it is over 2 GiB
+    // arrives here as NULL with a negative size. Dropping that call as SD-09
+    // let the program run on with the NULL block (task-2.7c-report.md).
+    let _guard = fresh();
+    for mode in [AnalysisMode::Memtrack, AnalysisMode::Memcleanup] {
+        start(mode);
+        // SAFETY: a NULL block is only compared.
+        unsafe { map2check_map_malloc(std::ptr::null(), i32::MIN + 0x0100_0000) };
+        assert_violated(ViolatedProperty::Unknown, 0, "");
+        for (quantity, size) in [(-1, 4), (2, -4)] {
+            start(mode);
+            // SAFETY: as above.
+            unsafe { map2check_map_calloc(std::ptr::null(), quantity, size) };
+            assert_violated(ViolatedProperty::Unknown, 0, "");
+        }
+    }
+}
+
+#[test]
 fn options_default_off() {
     let _guard = fresh();
     assert_eq!(
