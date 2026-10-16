@@ -22,6 +22,10 @@ pub enum ViolatedProperty {
     Assert,
     /// The analysis could not decide (`UNKNOWN` in `PropertyGenerator.c`).
     Unknown,
+    /// Signed division or remainder by zero (`FALSE_DIVBYZERO`,
+    /// `Map2CheckTypes.h:78`), reported by `map2check_binop_div_signed` and
+    /// `map2check_binop_rem_signed`.
+    DivByZero,
 }
 
 impl ViolatedProperty {
@@ -37,6 +41,7 @@ impl ViolatedProperty {
             Self::None => "NONE",
             Self::Assert => "ASSERT",
             Self::Unknown => "UNKNOWN",
+            Self::DivByZero => "DIVBYZERO",
         }
     }
 }
@@ -87,6 +92,7 @@ mod tests {
         assert_eq!(ViolatedProperty::None as i32, 7);
         assert_eq!(ViolatedProperty::Assert as i32, 8);
         assert_eq!(ViolatedProperty::Unknown as i32, 9);
+        assert_eq!(ViolatedProperty::DivByZero as i32, 10);
     }
 
     #[test]
@@ -105,6 +111,7 @@ mod tests {
             (ViolatedProperty::None, "NONE"),
             (ViolatedProperty::Assert, "ASSERT"),
             (ViolatedProperty::Unknown, "UNKNOWN"),
+            (ViolatedProperty::DivByZero, "DIVBYZERO"),
         ];
         for (property, name) in cases {
             assert_eq!(property.as_str(), name);

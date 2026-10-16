@@ -100,6 +100,11 @@ static void run_pre_init_boundary(void) {
     map2check_binop_shl_int(1, 1, 1, 0, "main");
     map2check_binop_shr_int(1, 1, 1, 0, "main");
     map2check_binop_shr_unsigned(1u, 1u, 1, 0, "main");
+    map2check_binop_add_signed(1, 1, 32, 1, "main");
+    map2check_binop_sub_signed(1, 1, 32, 1, "main");
+    map2check_binop_mul_signed(1, 1, 32, 1, "main");
+    map2check_binop_div_signed(1, 1, 32, 1, "main");
+    map2check_binop_rem_signed(1, 1, 32, 1, "main");
 
     (void)__VERIFIER_nondet_bool();
     (void)__VERIFIER_nondet_char();
@@ -197,6 +202,13 @@ static void run_bad_inputs(void) {
     map2check_binop_shl_int(1, 31, 11, 0, NULL);
     map2check_binop_shr_int(-1, 32, 11, 0, NULL);
     map2check_binop_shr_unsigned(4294967295u, 32, 11, 0, NULL);
+    map2check_binop_add_signed(INT64_MAX, 1, 64, 12, NULL);
+    map2check_binop_sub_signed(INT64_MIN, 1, 64, 12, NULL);
+    map2check_binop_mul_signed(INT64_MIN, -1, 64, 12, NULL);
+    map2check_binop_div_signed(INT64_MIN, -1, 64, 12, NULL);
+    map2check_binop_rem_signed(INT64_MIN, -1, 64, 12, NULL);
+    map2check_binop_div_signed(1, 0, 0, 12, NULL);
+    map2check_binop_rem_signed(1, 0, 4096, 12, NULL);
 
     /* nondet generators, pre-init */
     (void)__VERIFIER_nondet_bool();
@@ -270,6 +282,11 @@ static void run_valid_pass(void) {
     map2check_binop_shl_int(1, 2, 29, 0, "main");
     map2check_binop_shr_int(8, 2, 29, 0, "main");
     map2check_binop_shr_unsigned(8u, 2u, 29, 0, "main");
+    map2check_binop_add_signed(1, 2, 32, 29, "main");
+    map2check_binop_sub_signed(2, 1, 16, 29, "main");
+    map2check_binop_mul_signed(2, 3, 8, 29, "main");
+    map2check_binop_div_signed(6, 3, 64, 29, "main");
+    map2check_binop_rem_signed(7, 3, 32, 29, "main");
 
     (void)__VERIFIER_nondet_bool();
     (void)__VERIFIER_nondet_char();

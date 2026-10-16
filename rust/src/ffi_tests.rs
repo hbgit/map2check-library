@@ -702,6 +702,156 @@ fn binop_shr_unsigned_detects_wide_shift() {
     );
 }
 
+// ── Signed binops at the operation's width (Task 2.5, AnalysisModeOverflow.c) ──
+
+type SignedBinop = unsafe extern "C" fn(i64, i64, u32, u32, *const std::os::raw::c_char);
+
+/// What one call of a signed binop export records on a fresh analysis.
+fn signed_outcome(op: SignedBinop, a: i64, b: i64, bits: u32) -> ViolatedProperty {
+    state::reset();
+    // SAFETY: C-string literal is valid and null-terminated.
+    unsafe { op(a, b, bits, 4, c"f".as_ptr()) };
+    let result = snapshot(|s| s.result.clone());
+    if !result.ok {
+        assert_eq!((result.line, result.function_name.as_str()), (4, "f"));
+    }
+    result.property
+}
+
+/// `signed_min_for_width` / `signed_max_for_width` of develop
+/// (`AnalysisModeOverflow.c:111-124`).
+fn signed_bounds(bits: u32) -> (i64, i64) {
+    if bits == 0 || bits >= 64 {
+        (i64::MIN, i64::MAX)
+    } else {
+        (-(1i64 << (bits - 1)), (1i64 << (bits - 1)) - 1)
+    }
+}
+
+#[test]
+fn signed_binops_check_every_width_like_develop() {
+    let _guard = fresh();
+    let add: SignedBinop = map2check_binop_add_signed;
+    let sub: SignedBinop = map2check_binop_sub_signed;
+    let mul: SignedBinop = map2check_binop_mul_signed;
+    let div: SignedBinop = map2check_binop_div_signed;
+    let rem: SignedBinop = map2check_binop_rem_signed;
+    // 8/16/32/64 are what C types give; the pass sends any width up to 64
+    // (OverflowPass.cpp:426), and develop treats 0 like 64.
+    for bits in [8, 16, 32, 64, 1, 24, 0] {
+        let (min, max) = signed_bounds(bits);
+        let cases: [(&str, SignedBinop, i64, i64, ViolatedProperty); 14] = [
+            ("max+1", add, max, 1, P::Overflow),
+            ("(max-1)+1", add, max - 1, 1, P::None),
+            ("min-1", sub, min, 1, P::Overflow),
+            ("(min+1)-1", sub, min + 1, 1, P::None),
+            ("min*-1", mul, min, -1, P::Overflow),
+            ("max*-1", mul, max, -1, P::None),
+            ("min/-1", div, min, -1, P::Overflow),
+            ("max/-1", div, max, -1, P::None),
+            ("min%-1", rem, min, -1, P::Overflow),
+            ("max%-1", rem, max, -1, P::None),
+            ("x/0", div, max, 0, P::DivByZero),
+            ("x/1", div, max, 1, P::None),
+            ("x%0", rem, min, 0, P::DivByZero),
+            ("x%1", rem, min, 1, P::None),
+        ];
+        for (name, op, a, b, expected) in cases {
+            assert_eq!(
+                signed_outcome(op, a, b, bits),
+                expected,
+                "{name} em {bits} bits ({a}, {b})"
+            );
+        }
+    }
+}
+
+#[test]
+fn signed_binops_follow_develop_on_operands_wider_than_the_width() {
+    let _guard = fresh();
+    let add: SignedBinop = map2check_binop_add_signed;
+    let mul: SignedBinop = map2check_binop_mul_signed;
+    let div: SignedBinop = map2check_binop_div_signed;
+    // 64-bit predicates first (AnalysisModeOverflow.c:141-183), then the
+    // range of the width: an i64 product that wraps is caught even at 8 bits.
+    assert_eq!(signed_outcome(mul, i64::MAX, 2, 8), P::Overflow);
+    assert_eq!(signed_outcome(add, i64::MIN, -1, 32), P::Overflow);
+    assert_eq!(signed_outcome(mul, -128, -1, 8), P::Overflow);
+    assert_eq!(signed_outcome(mul, 0, i64::MIN, 64), P::None);
+    // Division compares only the dividend with the width's minimum (:259),
+    // so MIN/-1 of a wider width is not an overflow at a narrower one.
+    assert_eq!(signed_outcome(div, i64::from(i32::MIN), -1, 16), P::None);
+    assert_eq!(signed_outcome(div, 0, 0, 32), P::DivByZero);
+}
+
+#[test]
+fn signed_binops_are_gated_like_the_other_binops() {
+    let _guard = fresh();
+    let calls: [(SignedBinop, i64, i64); 3] = [
+        (map2check_binop_add_signed, i64::from(i32::MAX), 1),
+        (map2check_binop_div_signed, 1, 0),
+        (map2check_binop_rem_signed, 1, 0),
+    ];
+    for mode in MODES {
+        for (op, a, b) in calls {
+            state::reset();
+            map2check_set_mode(mode as i32);
+            map2check_init();
+            // SAFETY: C-string literal is valid and null-terminated.
+            unsafe { op(a, b, 32, 4, c"f".as_ptr()) };
+            let reported = !snapshot(|s| s.result.ok);
+            assert_eq!(reported, mode == AnalysisMode::Overflow, "{mode:?}");
+        }
+    }
+    state::reset_config();
+    state::reset();
+    // Unset mode: every check is active.
+    // SAFETY: C-string literal is valid and null-terminated.
+    unsafe { map2check_binop_div_signed(1, 0, 32, 4, c"f".as_ptr()) };
+    assert_violated(ViolatedProperty::DivByZero, 4, "f");
+}
+
+#[test]
+fn signed_binop_violation_is_final() {
+    let _guard = fresh();
+    // SAFETY: C-string literals are valid and null-terminated.
+    unsafe {
+        map2check_binop_rem_signed(1, 0, 32, 4, c"f".as_ptr());
+        map2check_binop_add_signed(i64::MAX, 1, 64, 9, c"g".as_ptr());
+    }
+    assert_violated(ViolatedProperty::DivByZero, 4, "f");
+}
+
+#[test]
+fn signed_binops_called_as_c_does() {
+    let _guard = fresh();
+    // As the pass emits them: i32 operands sign-extended, width 32.
+    // SAFETY: C-string literals are valid and null-terminated.
+    unsafe {
+        map2check_binop_add_signed(-5, 3, 32, 1, c"main".as_ptr());
+        map2check_binop_sub_signed(-5, 3, 32, 1, c"main".as_ptr());
+        map2check_binop_mul_signed(-5, 3, 32, 1, c"main".as_ptr());
+        map2check_binop_div_signed(-5, 3, 32, 1, c"main".as_ptr());
+        map2check_binop_rem_signed(-5, 3, 32, 1, c"main".as_ptr());
+    }
+    assert_ok();
+    // SAFETY: as above.
+    unsafe { map2check_binop_sub_signed(i64::from(i16::MIN), 1, 16, 2, c"main".as_ptr()) };
+    assert_violated(ViolatedProperty::Overflow, 2, "main");
+    state::reset();
+    // SAFETY: as above.
+    unsafe { map2check_binop_mul_signed(i64::from(i8::MIN), -1, 8, 3, c"main".as_ptr()) };
+    assert_violated(ViolatedProperty::Overflow, 3, "main");
+}
+
+#[test]
+fn set_false_result_accepts_div_by_zero() {
+    let _guard = fresh();
+    // SAFETY: C-string literal is valid and null-terminated.
+    unsafe { set_false_result(10, 3, c"main".as_ptr()) };
+    assert_violated(ViolatedProperty::DivByZero, 3, "main");
+}
+
 // ── Analysis mode: memory ───────────────────────────────────────────────────
 
 #[test]

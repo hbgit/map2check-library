@@ -27,6 +27,7 @@ compiled with `clang-16`. Each binary runs in a fresh directory.
 | `NONE` | `AnalysisModeMemtrack.c` | memory prelude, `map2check_free` of `p`, `map2check_success` |
 | `UNKNOWN` | `AnalysisModeMemtrack.c` | memory prelude, `map2check_malloc(NULL, 4)` |
 | `OVERFLOW` | `AnalysisModeOverflow.c` | `map2check_binop_add(INT_MAX, 1, 32, ...)` |
+| `DIVBYZERO` | `AnalysisModeOverflow.c` | `map2check_binop_sdiv(7, 0, 32, ...)` |
 | `ASSERT` | `AnalysisModeAssert.c` | `map2check_assert(0, ...)` |
 | `TARGET-REACHED` | `AnalysisModeNone.c` (`REACHABILITY_MODE`) | `map2check_target_function` |
 

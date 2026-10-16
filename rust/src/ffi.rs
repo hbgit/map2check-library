@@ -25,6 +25,8 @@ use crate::analysismode::overflow::NegI32;
 use crate::analysismode::overflow::ShlI32;
 use crate::analysismode::overflow::ShrI32;
 use crate::analysismode::overflow::ShrU32;
+use crate::analysismode::overflow::SignedBinop;
+use crate::analysismode::overflow::SignedOp;
 use crate::analysismode::overflow::SubI32;
 use crate::analysismode::overflow::SubU32;
 use crate::analysismode::VccChecker;
@@ -110,6 +112,7 @@ fn violated_property_from_raw(raw: i32) -> Option<ViolatedProperty> {
         7 => Some(ViolatedProperty::None),
         8 => Some(ViolatedProperty::Assert),
         9 => Some(ViolatedProperty::Unknown),
+        10 => Some(ViolatedProperty::DivByZero),
         _ => None,
     }
 }
@@ -1062,6 +1065,143 @@ overflow_ffi_binop!(map2check_binop_div_unsigned, DivU32, u32);
 overflow_ffi_shift!(map2check_binop_shl_int, ShlI32, i32);
 overflow_ffi_shift!(map2check_binop_shr_int, ShrI32, i32);
 overflow_ffi_shift!(map2check_binop_shr_unsigned, ShrU32, u32);
+
+/// Shared body of the `map2check_binop_*_signed` exports. `a` and `b` are
+/// the operands sign-extended to 64 bits and `bits` is the width of the
+/// operation's result type, as the Map2Check overflow pass sends them
+/// (`OverflowPass.cpp:418-440`); a width of 0 or above 64 means 64. The
+/// checks are those of develop's `AnalysisModeOverflow.c:110-276`. Active
+/// in unset and overflow modes only, like the other binops.
+///
+/// # Safety
+/// `function_name` must be null or a valid null-terminated C string.
+unsafe fn signed_binop(
+    op: SignedOp,
+    a: i64,
+    b: i64,
+    bits: u32,
+    line: u32,
+    function_name: *const std::os::raw::c_char,
+) {
+    if !check_active(Check::Overflow) {
+        return;
+    }
+    // SAFETY: caller guarantees function_name is valid or null.
+    let fname = unsafe { c_str(function_name) };
+    let ctx = VccContext::new(line, 0, fname);
+    let checker = SignedBinop {
+        op,
+        lhs: a,
+        rhs: b,
+        bits,
+    };
+    run_vcc_check(checker, &ctx, line, fname);
+}
+
+/// Signed `a + b`: reports `OVERFLOW` when the sum leaves the range of
+/// `bits` (develop `map2check_binop_add`).
+/// See [`signed_binop`] for the operands, the width and the mode gating.
+///
+/// # Safety
+/// `function_name` must be null or a valid null-terminated C string.
+#[no_mangle]
+pub unsafe extern "C" fn map2check_binop_add_signed(
+    a: i64,
+    b: i64,
+    bits: u32,
+    line: u32,
+    function_name: *const std::os::raw::c_char,
+) {
+    ffi_guard(
+        // SAFETY: forwarded caller contract.
+        || unsafe { signed_binop(SignedOp::Add, a, b, bits, line, function_name) },
+        (),
+    );
+}
+
+/// Signed `a - b`: reports `OVERFLOW` when the difference leaves the range
+/// of `bits` (develop `map2check_binop_sub`).
+/// See [`signed_binop`] for the operands, the width and the mode gating.
+///
+/// # Safety
+/// `function_name` must be null or a valid null-terminated C string.
+#[no_mangle]
+pub unsafe extern "C" fn map2check_binop_sub_signed(
+    a: i64,
+    b: i64,
+    bits: u32,
+    line: u32,
+    function_name: *const std::os::raw::c_char,
+) {
+    ffi_guard(
+        // SAFETY: forwarded caller contract.
+        || unsafe { signed_binop(SignedOp::Sub, a, b, bits, line, function_name) },
+        (),
+    );
+}
+
+/// Signed `a * b`: reports `OVERFLOW` when the product leaves the range of
+/// `bits` (develop `map2check_binop_mul`).
+/// See [`signed_binop`] for the operands, the width and the mode gating.
+///
+/// # Safety
+/// `function_name` must be null or a valid null-terminated C string.
+#[no_mangle]
+pub unsafe extern "C" fn map2check_binop_mul_signed(
+    a: i64,
+    b: i64,
+    bits: u32,
+    line: u32,
+    function_name: *const std::os::raw::c_char,
+) {
+    ffi_guard(
+        // SAFETY: forwarded caller contract.
+        || unsafe { signed_binop(SignedOp::Mul, a, b, bits, line, function_name) },
+        (),
+    );
+}
+
+/// Signed `a / b`: reports `DIVBYZERO` when `b` is 0 and `OVERFLOW` for
+/// MIN / -1 of `bits` (develop `map2check_binop_sdiv`).
+/// See [`signed_binop`] for the operands, the width and the mode gating.
+///
+/// # Safety
+/// `function_name` must be null or a valid null-terminated C string.
+#[no_mangle]
+pub unsafe extern "C" fn map2check_binop_div_signed(
+    a: i64,
+    b: i64,
+    bits: u32,
+    line: u32,
+    function_name: *const std::os::raw::c_char,
+) {
+    ffi_guard(
+        // SAFETY: forwarded caller contract.
+        || unsafe { signed_binop(SignedOp::Div, a, b, bits, line, function_name) },
+        (),
+    );
+}
+
+/// Signed `a % b`: reports `DIVBYZERO` when `b` is 0 and `OVERFLOW` for
+/// MIN % -1 of `bits` (develop `map2check_binop_srem`).
+/// See [`signed_binop`] for the operands, the width and the mode gating.
+///
+/// # Safety
+/// `function_name` must be null or a valid null-terminated C string.
+#[no_mangle]
+pub unsafe extern "C" fn map2check_binop_rem_signed(
+    a: i64,
+    b: i64,
+    bits: u32,
+    line: u32,
+    function_name: *const std::os::raw::c_char,
+) {
+    ffi_guard(
+        // SAFETY: forwarded caller contract.
+        || unsafe { signed_binop(SignedOp::Rem, a, b, bits, line, function_name) },
+        (),
+    );
+}
 
 // ── Analysis mode: memory ─────────────────────────────────────────────────────
 

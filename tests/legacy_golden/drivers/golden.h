@@ -53,6 +53,8 @@ void map2check_load(void *ptr, int size);
 void map2check_check_deref(int line, const char *function_name);
 void map2check_binop_add(long long param1, long long param2, unsigned width,
                          unsigned line, unsigned scope, char *function_name);
+void map2check_binop_sdiv(long long param1, long long param2, unsigned width,
+                          unsigned line, unsigned scope, char *function_name);
 void map2check_assert(int condition, int line, const char *func_name);
 
 /* Fixed addresses, mirrored by rust/src/output/golden_tests.rs. */

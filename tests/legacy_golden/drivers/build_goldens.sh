@@ -43,12 +43,13 @@ declare -A MODE=(
   [NONE]="AnalysisModeMemtrack $MEMORY"
   [UNKNOWN]="AnalysisModeMemtrack $MEMORY"
   [OVERFLOW]="AnalysisModeOverflow"
+  [DIVBYZERO]="AnalysisModeOverflow"
   [ASSERT]="AnalysisModeAssert"
   [TARGET-REACHED]="AnalysisModeNone"
 )
 
 for tag in FALSE-FREE FALSE-DEREF FALSE-MEMTRACK FALSE-MEMCLEANUP NONE \
-  UNKNOWN OVERFLOW ASSERT TARGET-REACHED; do
+  UNKNOWN OVERFLOW DIVBYZERO ASSERT TARGET-REACHED; do
   bc "$DRIVERS/$tag.c" "$WORK/$tag-output.bc"
   inputs=("$WORK/$tag-output.bc")
   for f in $COMMON ${MODE[$tag]} NonDetGeneratorLog WitnessGeneration; do

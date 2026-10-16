@@ -302,6 +302,21 @@ fn overflow_matches_c_runtime() {
 }
 
 #[test]
+fn div_by_zero_child() {
+    if is_child() {
+        start(AnalysisMode::Overflow);
+        // SAFETY: C-string literal is valid.
+        unsafe { map2check_binop_div_signed(7, 0, 32, 23, c"main".as_ptr()) };
+        map2check_success();
+    }
+}
+
+#[test]
+fn div_by_zero_matches_c_runtime() {
+    assert_matches_golden("DIVBYZERO", "div_by_zero_child");
+}
+
+#[test]
 fn assert_child() {
     if is_child() {
         start(AnalysisMode::Assert);

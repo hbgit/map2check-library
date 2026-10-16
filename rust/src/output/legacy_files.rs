@@ -114,6 +114,8 @@ fn property_text(result: &AnalysisResult) -> (Option<String>, Option<&'static st
             Some("map2check_property_memcleanup"),
         ),
         ViolatedProperty::Reachability => (Some(located("TARGET-REACHED")), None),
+        // `:98-102`: no per-property file.
+        ViolatedProperty::DivByZero => (Some(located("FALSE-DIVBYZERO")), None),
         // The only UNKNOWN the C runtime reports is `write_property_unknown`
         // (NULL from malloc, AnalysisModeMemtrack.c:305-311): it writes
         // `map2check_property__unknown` and no `map2check_property`.
@@ -663,6 +665,22 @@ mod tests {
             );
             assert_eq!(std::fs::read_dir(dir.path()).unwrap().count(), 1, "{tag}");
         }
+    }
+
+    #[test]
+    fn div_by_zero_writes_only_map2check_property() {
+        // PropertyGenerator.c:98-102: no per-property file for FALSE_DIVBYZERO.
+        let dir = tempfile::tempdir().unwrap();
+        write_property_files(
+            dir.path(),
+            &violated(ViolatedProperty::DivByZero, 23, "main"),
+        )
+        .unwrap();
+        assert_eq!(
+            std::fs::read(dir.path().join("map2check_property")).unwrap(),
+            golden("DIVBYZERO", "map2check_property")
+        );
+        assert_eq!(std::fs::read_dir(dir.path()).unwrap().count(), 1);
     }
 
     #[test]
