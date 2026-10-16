@@ -47,11 +47,11 @@ Programas de prova (`spikes/llvm16/`):
 |---|---|---|---|
 | A: bitcode do rustc 1.82 no `llvm-link-16` | `dis16≠0` | `dis16=1`, `Unknown attribute kind (91)` | **falha (como esperado)** |
 | B: `libmap2check.a` nativo + `clang-16 -fsanitize=fuzzer` | liga e roda | com o `prog.c` cru, **não liga** (`main` duplicado + `__map2check_main__` indefinido); com `main` renomeado, liga e roda (`rc=0`) | **passa, desde que o passe renomeie `main`** |
-| B1: staticlib + driver libFuzzer do AFL++ | throughput ≥ 90% do C | 97 474 exec/s, 1 crash (`x == 42`) em 0,39 s | **passa** (227% do B2) |
+| B1: staticlib + driver libFuzzer do AFL++ | throughput ≥ 90% do C | 97 474 exec/s, 1 crash (`x == 42`) em 0,39 s; com CmpLog, 1º crash em 3,0 s / 280 900 execs (B2: 0,25 s / 2 748) | **passa provisoriamente** (227% do B2, comparação não igual por igual; CmpLog pior) |
 | B2: `NonDetGeneratorAFL.c` (referência) | — | 42 919 exec/s, 1 crash (`x == 42`) em 0,33 s | referência |
 | B sob KLEE (`.so` nativo) | 1 caminho, não explora `x == 42` | 1 caminho completo; `x == 42` não explorado | **falha para `symex` (como esperado)** |
 | A′: `no_std` + rustc 1.72.1 (LLVM 16) | 2 caminhos | 2 caminhos, ktests `42` e `0` | **passa** |
-| A′ estendida: a biblioteca inteira (`std`, `serde_json`) com rustc 1.72.1 | — (fora do brief) | após 6 ajustes de fonte e `Cargo.lock` com resolução por MSRV, roda no KLEE com as flags do Map2Check: 22 caminhos, `x == 42` encontrado | **passa, com ressalvas** |
+| A′ estendida: a biblioteca inteira (`std`, `serde_json`) com rustc 1.72.1 | — (fora do brief) | após 6 ajustes de fonte e `Cargo.lock` com resolução por MSRV, roda no KLEE com um subconjunto das flags do Map2Check: 22 caminhos, `x == 42` encontrado | **passa, com ressalvas** |
 | C: Map2Check em LLVM 19 | sim/não + estimativa | KLEE 3.3 (2026-10-15) tem suporte completo a LLVM 17–19; passes usam 49 APIs `llvm::` | **viável, não medido** |
 
 ## Rota A: bitcode do rustc 1.82 no LLVM 16
@@ -108,7 +108,20 @@ INFO: Loaded 1 modules   (3 inline 8-bit counters)
 Done 1000 runs in 0 second(s)
 ```
 
-Cada execução imprime o relatório JSON (`"result": "TRUE"`) na stdout. Uma rodada de 2 000 000 execuções com `-use_value_profile=1` levou 7 s (285 714 exec/s). A instrumentação SanitizerCoverage entra no bitcode do usuário no passo final (3 contadores), não na biblioteca.
+Cada execução imprime o relatório JSON (`"result": "TRUE"`) na stdout. Uma rodada de 2 000 000 execuções com `-use_value_profile=1`:
+
+```bash
+./prog_m.fuzz -runs=2000000 -use_value_profile=1 -artifact_prefix=crB/ > fuzzB2.log 2>&1   # rc2=0
+grep -E "^#|Done|SUMMARY|deadly|crash|exit" fuzzB2.log | tail -5
+```
+
+```
+#1048576	pulse  cov: 2 ft: 67 corp: 58/229b lim: 4096 exec/s: 349525 rss: 28Mb
+#2000000	DONE   cov: 2 ft: 67 corp: 58/229b lim: 4096 exec/s: 285714 rss: 28Mb
+Done 2000000 runs in 7 second(s)
+```
+
+ A instrumentação SanitizerCoverage entra no bitcode do usuário no passo final (3 contadores), não na biblioteca.
 
 Resultado: **passa**, com a condição de que o `main` do programa seja renomeado pelo passe antes da ligação.
 
@@ -133,7 +146,21 @@ afl-clang-fast -g -O2 -fsanitize=fuzzer prog42_m.bc $L -ldl -lpthread -lm -o b1.
 AFL_LLVM_CMPLOG=1 afl-clang-fast -g -O2 -fsanitize=fuzzer prog42_m.bc $L -ldl -lpthread -lm -o b1.cmplog.afl
 ```
 
-Liga. O binário tem `main` do driver, `LLVMFuzzerTestOneInput` da biblioteca, `__map2check_main__` e `__afl_persistent_loop`. Ele também contém o marcador `##SIG_AFL_PERSISTENT##`, então roda em persistent mode. Tamanho: 5 796 288 bytes (B2: 146 512).
+Liga. Os símbolos foram verificados num build anterior com os mesmos fontes, mas sem `-g -O2` (`prog42_m.afl`). Para o `b1.afl` final, essa verificação não foi registrada:
+
+```bash
+nm prog42_m.afl | grep -E " T (main|LLVMFuzzerTestOneInput|__map2check_main__|__afl_persistent_loop)$"
+strings prog42_m.afl | grep -c SIG_AFL_PERSISTENT
+```
+
+```
+0000000000023830 T LLVMFuzzerTestOneInput
+00000000000e5c70 T __afl_persistent_loop
+00000000000188b0 T __map2check_main__
+1
+```
+
+O `main` não aparece com o tipo `T`. Talvez seja o símbolo fraco do driver, mas isso não foi registrado. O marcador `##SIG_AFL_PERSISTENT##` está presente, então o binário roda em persistent mode. Tamanhos (`ls -la`): `b1.afl` tem 5 796 288 bytes; `b2.afl`, 146 512.
 
 ### B2: referência C (`NonDetGeneratorAFL.c`)
 
@@ -166,9 +193,25 @@ Valores de `out/default/fuzzer_stats`:
 | B1 com CmpLog (`-c`) | 97 270,49 | 2 918 212 | 1 | 100,00% | 3 037 ms, 280 900 | sim |
 | B2 com CmpLog (`-c`) | 42 562,56 | 1 276 962 | 1 | 78,38% | 252 ms, 2 748 (`op:its`) | sim, entrada `2a 00 00 00` |
 
-Throughput B1/B2: **227%** sem CmpLog e **229%** com CmpLog, acima do critério de 90% da D1. Ressalva: o B2 faz E/S de arquivo por execução (`write_property` e `generate_aux_files` em `map2check_success`). O B1 só imprime JSON na stdout, que o afl-fuzz descarta. Parte da diferença é custo de E/S, não do gerador. A comparação justa de throughput fica para quando a saída em arquivo do Rust existir (Task 2.4).
+Throughput B1/B2: **227%** sem CmpLog e **229%** com CmpLog. O critério de 90% da D1 está **atendido só provisoriamente**, porque a comparação não é igual por igual:
 
-Em ambos os casos o valor é lido como 4 bytes little-endian do início da entrada, então a semântica do vetor coincide nos dois runtimes.
+1. O B2 grava arquivos a cada execução (`write_property` e `generate_aux_files` em `map2check_success`). O B1 só imprime JSON na stdout, que o afl-fuzz descarta.
+2. A instrumentação difere. O runtime C entra no `afl-clang-fast` como bitcode e é instrumentado junto com o programa. O `libmap2check.a` é objeto nativo e não é instrumentado.
+3. Foi uma única rodada por variante (n = 1).
+4. B1 e B2 rodaram ao mesmo tempo, no mesmo contêiner (`--cpus 4`).
+
+A remedição em condições iguais é a condição 3 da D1 (`decisoes.md`). Ela vem depois da Task 2.4 (saída em arquivo do Rust) e da Task 2.5 (`assume`), e usa programas com muitos `assume`.
+
+**CmpLog e tempo até o crash.** O frontend sempre roda com CmpLog (`-c <hash>-cmplog.out`). Nesse modo, o B1 precisou de **3 037 ms e 280 900 execs** até o primeiro crash, e o B2 de **252 ms e 2 748 execs**: cerca de 100× mais execuções no B1. O crash do B2 veio da etapa de input-to-state (`op:its`); o do B1, de havoc. Sem CmpLog a diferença é pequena (27 994 contra 10 543 execs). Para guardas de valor mágico, comuns no SV-COMP, o tempo até o bug pesa mais que exec/s.
+
+- **Hipótese principal** (lida do código, não medida): entradas mais curtas que o valor lido. O `read_bytes` do Rust (`rust/src/nondet/libfuzzer.rs:54-71`) devolve `None` se faltarem bytes, e `read_u32` vira 0. O `get_next_input_from_afl` do C volta ao início do buffer. Com a semente `A` (1 byte), o C lê `x = 0x41414141`. O CmpLog vê `0x41414141 == 42`, acha os bytes `41` na entrada e os troca por `2a 00 00 00`. No Rust, `x = 0` não vem de nenhum byte da entrada, então o input-to-state não tem o que substituir.
+- **Hipótese secundária:** a leitura passa por código Rust não instrumentado.
+
+O tempo até o primeiro crash com CmpLog passou a ser critério de aceitação da D1 (condição 4), remedido no corpus no gate 4.2.
+
+**Estabilidade.** O B2 ficou em 75,68% / 78,38%, e o B1 em 100%. Não investiguei a causa. Hipótese: o runtime C instrumentado carrega estado entre as iterações persistentes (contêineres alocados em `map2check_init`, arquivos, `map2check_destroy` com `static alreadyReleased`), e isso faz arestas variarem entre execuções da mesma entrada. O runtime Rust não é instrumentado e zera o estado a cada `LLVMFuzzerTestOneInput`. Por isso, mesmo que vazasse estado, isso não apareceria como instabilidade.
+
+Com entrada de pelo menos 4 bytes, os dois runtimes leem o valor como 4 bytes little-endian do início da entrada. Com entrada mais curta, divergem: o Rust devolve 0, e o C volta ao início do buffer (ver acima).
 
 ### Replay standalone do crash (achado relevante para a Task 3.x)
 
@@ -265,29 +308,38 @@ O debug info do `std` pré-compilado é incompatível com o verificador. Ao roda
 KLEE: done: completed paths = 2        (sem libc; com --libc=uclibc --posix-runtime: idem, 15 371 instruções)
 ```
 
-Restam 17 a 34 referências indefinidas, todas em caminhos que o programa não executa (`_Unwind_*`, `pthread_key_*`, `dl_iterate_phdr`, `getrandom`, `statx`).
+Restam referências indefinidas, todas em funções que o programa não executa. `klee3.log` é a execução sem libc; `klee4.log` usa `--libc=uclibc --posix-runtime`:
+
+```bash
+grep -c "undefined reference" klee3.log    # 34
+grep -c "undefined reference" klee4.log    # 17
+```
+
+Exemplos, nos dois logs: `_Unwind_Backtrace`, `_Unwind_GetIP`, `_Unwind_SetIP`, `__cxa_thread_atexit_impl`, `bcmp`, `dl_iterate_phdr` e `pthread_key_create`. Com a biblioteca real (`klee-full.log`), aparecem também `getrandom` e `statx`.
 
 ### A′ com a biblioteca real (`spikes/llvm16/full172`, fora do brief)
 
 Cópia de `Cargo.toml` + `rust/` com rustc 1.72.1. Obstáculos, em ordem:
 
 1. `error: failed to parse lock file at: /src/Cargo.lock`: o lockfile v4 não é lido pelo cargo 1.72.
-2. Sem o lockfile, o resolvedor do 1.72 escolhe crates com `edition = "2024"` (`getrandom 0.4.3`, `wit-bindgen 0.57.1` via `mockall` e `cbindgen`). Correção: tirar `[dev-dependencies]` e `build.rs` (cbindgen) da cópia, declarar `rust-version = "1.72"` e gerar o lockfile com cargo 1.86 usando `CARGO_RESOLVER_INCOMPATIBLE_RUST_VERSIONS=fallback`, depois rebaixá-lo para `version = 3`. Resultado: `serde 1.0.229`, `serde_json 1.0.154`, `thiserror 2.0.20`.
+2. Sem o lockfile, o resolvedor do 1.72 escolhe crates com `edition = "2024"` (`getrandom 0.4.3`, `wit-bindgen 0.57.1` via `mockall` e `cbindgen`). Correção: tirar `[dev-dependencies]` e `build.rs` (cbindgen) da cópia, declarar `rust-version = "1.72"` e gerar o lockfile assim: `rustup toolchain install 1.86.0 --profile minimal && CARGO_RESOLVER_INCOMPATIBLE_RUST_VERSIONS=fallback RUSTUP_TOOLCHAIN=1.86.0 cargo generate-lockfile && sed -i 's/^version = 4/version = 3/' Cargo.lock`. Resultado: `serde 1.0.229`, `serde_json 1.0.154`, `thiserror 2.0.20`.
 3. Seis erros de fonte com o 1.72.1:
    ```
    error: extern block cannot be declared unsafe            --> rust/src/nondet/libfuzzer.rs:44
    error[E0658]: use of unstable library feature 'lazy_cell' --> rust/src/state.rs:4, :14, :15 (x2)
    error[E0658]: use of unstable library feature 'mutex_unpoison' --> rust/src/state.rs:68
    ```
-   Correção: `extern "C"` sem `unsafe`, `LazyLock` → `OnceLock::get_or_init` e remoção de `clear_poison()`.
-4. Para o KLEE, um módulo `nondet/klee.rs` (feature `klee`) com `__VERIFIER_nondet_int` → `klee_make_symbolic`, que registra o valor no `AnalysisState` real.
+   Correção: `extern "C"` sem `unsafe`, `LazyLock` → `OnceLock::get_or_init` e remoção de `clear_poison()`. As duas primeiras compilam igual em 1.82. A terceira muda o comportamento do build normal, porque o mutex envenenado deixa de ser limpo. O custo e a mitigação (`#[cfg(not(feature = "klee"))]`) estão na D1, em `decisoes.md`.
+4. Para o KLEE, um módulo novo `nondet/klee.rs` (feature `klee`, que não existe no repo e é só do spike) com `__VERIFIER_nondet_int` → `klee_make_symbolic`, que registra o valor no `AnalysisState` real.
 
 ```bash
-RUSTUP_TOOLCHAIN=1.72.1 cargo rustc --release --features klee --lib --crate-type staticlib -- --emit=llvm-bc -C panic=abort
-opt-16 --strip-debug map2check-*.bc -o rt-nodbg.bc          # só o runtime; o programa mantém -g
+cd spikes/llvm16/full172      # manifesto próprio: build = false, sem dev-deps, [workspace], Cargo.lock v3
+RUSTUP_TOOLCHAIN=1.72.1 CARGO_TARGET_DIR=/src/spikes/llvm16/target-172c \
+  cargo rustc --release --features klee --lib --crate-type staticlib -- --emit=llvm-bc -C panic=abort
+opt-16 --strip-debug /src/spikes/llvm16/target-172c/release/deps/map2check-*.bc -o rt-nodbg.bc          # só o runtime; o programa mantém -g
 clang-16 -g -emit-llvm -c prog.c -o prog-g.bc
 llvm-link-16 prog-g.bc rt-nodbg.bc -o linked5.bc
-klee --external-calls=all --optimize --use-cex-cache --libc=uclibc linked5.bc   # flags do caller.cpp:820
+klee --external-calls=all --optimize --use-cex-cache --libc=uclibc linked5.bc   # subconjunto das flags de caller.cpp:815-822
 ```
 
 ```
@@ -296,6 +348,8 @@ KLEE: done: completed paths = 22
 KLEE: done: partially completed paths = 0
 KLEE: done: generated tests = 22
 ```
+
+Ficaram de fora estas flags do frontend: `--solver-backend=<solver>` (ou `--solver-backend=metasmt --metasmt-backend=<solver>`), as políticas de parada e de busca, e a flag de sementes.
 
 Há 21 relatórios JSON `"result": "TRUE"` com `Container_NonDetLog` preenchido. Entre os ktests estão `42` (o caminho de `return 1`, sem relatório), `0`, `1`, `-8`, `-2147483648` etc. Sem o `--strip-debug` no runtime, o resultado é o mesmo `Broken module found` da variante `std`.
 
@@ -311,7 +365,19 @@ grep -ohE 'llvm::[A-Za-z:]+' *.cpp | sort -u | wc -l          # 49
 grep -ohE 'llvm::[A-Za-z:]+' *.cpp *.hpp | sort -u | wc -l    # 60
 ```
 
-São 9 passes, cerca de 4 250 linhas de C++, e 163 declarações `using llvm::…`. Usos que quebram ou mudam de semântica entre LLVM 16 e 19:
+Os números de tamanho e de uso saem destes comandos, rodados no mesmo diretório:
+
+```bash
+cat *.cpp *.hpp | wc -l                                                              # 4253
+grep -c "using llvm::\|namespace llvm" *.cpp *.hpp | awk -F: '{s+=$2} END{print s}'  # 163
+grep -ohE '\b(startswith|endswith|CreateGlobalStringPtr|insertBefore|getTerminator|getOrInsertFunction|DebugLoc|dbg\.declare|DbgDeclareInst)\b' *.cpp *.hpp | sort | uniq -c | sort -rn
+#  33 getOrInsertFunction  25 CreateGlobalStringPtr  5 DebugLoc  4 endswith
+#   3 DbgDeclareInst         2 startswith             1 insertBefore  1 getTerminator  1 dbg.declare
+grep -ohE '\b(FunctionCallee|PassManager|PassPluginLibraryInfo|PointerType::get)\b' *.cpp *.hpp | sort | uniq -c
+#  58 FunctionCallee  10 PassManager  10 PassPluginLibraryInfo  44 PointerType::get
+```
+
+A contagem de passes vem do `CMakeLists.txt`, que tem 9 entradas em `MAP2CHECK_PASS_LIB`. Usos que quebram ou mudam de semântica entre LLVM 16 e 19:
 
 | Uso | Contagem | Situação no LLVM 19 |
 |---|---|---|
@@ -321,11 +387,11 @@ São 9 passes, cerca de 4 250 linhas de C++, e 163 declarações `using llvm::�
 | `getOrInsertFunction` / `FunctionCallee` | 33 / 58 | estável |
 | `PassPluginLibraryInfo` / `PassManager` (novo PM) | 10 / 10 | já no novo PM; estável |
 
-KLEE (releases no GitHub, consultadas em 2026-10-15):
+KLEE: releases no GitHub, consultadas em 2026-10-15 com `curl -s https://api.github.com/repos/klee/klee/releases`. As frases entre aspas são citações literais do corpo de cada release:
 
 - **v3.1** (2024-02-29, a da imagem): LLVM 11–16.
-- **v3.2** (2025-12-23): "Added partial support for LLVM 17-19"; recomendado LLVM 16.
-- **v3.3** (2026-10-15, publicada hoje): "Added full support for LLVM 17-19", "Current recommended version is LLVM 18".
+- **v3.2** (2025-12-23): "Added partial support for LLVM 17-19 (@mrexodia)" e "Current recommended version is LLVM 16". <https://github.com/klee/klee/releases/tag/v3.2>
+- **v3.3** (`published_at` 2026-10-15T15:14:13Z, mesmo dia do spike): "Added full support for LLVM 17-19 (@ccadar)" e "Current recommended version is LLVM 18". <https://github.com/klee/klee/releases/tag/v3.3>
 
 Resposta: **sim, há KLEE com suporte a LLVM 19 (3.3)**, mas a release saiu hoje e não foi testada aqui. Não verifiquei se o AFL++ 4.40c compila com LLVM 19. Estimativa da Rota C: os passes são P–M (troca mecânica mais revisão do tratamento de debug info, cerca de 2 a 4 dias). Somam-se a reconstrução da imagem (clang/LLVM 19, KLEE 3.3 + STP/Z3 + klee-uclibc para LLVM 19, AFL++ recompilado) e a revalidação dos baselines de corpus, porque todo o pipeline muda de versão. No total, G (1 a 2 semanas), com o risco de ser a primeira versão de KLEE com suporte completo a LLVM 19.
 

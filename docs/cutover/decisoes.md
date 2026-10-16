@@ -8,52 +8,130 @@ Registro das decisões D1–D5 do plano `docs/superpowers/plans/2026-10-15-cutov
 
 **Status: PROPOSTA — aguardando aprovação do mantenedor**
 
-Evidência: `docs/cutover/spike-llvm16.md` (Task 1.1). Código na branch local `spike/llvm16`.
+Evidência: `docs/cutover/spike-llvm16.md` (Task 1.1). Código na branch local `spike/llvm16` (commit `d13045b`).
 
 ### Proposta por gerador
 
 | Gerador | Rota proposta | Evidência principal |
 |---|---|---|
-| `none` | **B**: `libmap2check.a` nativo (rustc do repo, 1.82) ligado no passo final, sem `llvm-link` | A rota B liga e roda com clang-16 (`rc=0`). O frontend de `develop` não executa o modo `none` (`Caller::executeAnalysis`: "This mode is not supported"; `map2check.cpp:977` troca `None` por AFL++). Basta que a ligação funcione, e ela usa o mesmo artefato do `afl`. |
-| `afl` | **B + B1**: `libmap2check.a` nativo + driver libFuzzer do AFL++ (`afl-clang-fast -fsanitize=fuzzer`), chamando o `LLVMFuzzerTestOneInput` da biblioteca | Em 30 s, o B1 fez 97 474 exec/s contra 42 919 do `NonDetGeneratorAFL.c` (227%; 229% com CmpLog). Os dois acharam `x == 42`, com 1 `saved_crashes` cada. O critério da D1 (≥ 90% do C) é atendido sem portar o `__AFL_LOOP` para Rust (B2). |
-| `symex` | **A′**: runtime compilado para bitcode por um rustc com LLVM 16 (1.72.1, LLVM 16.0.5), LTO fat, `opt-16 --strip-debug` só no runtime e `llvm-link-16` com o `-result.bc` | A rota A falha (`llvm-dis-16: error: Unknown attribute kind (91) (Producer: 'LLVM19.1.1-rust-1.82.0-stable' Reader: 'LLVM 16.0.6')`). A rota B sob KLEE dá 1 caminho, sem explorar `x == 42`. A A′ dá 2 caminhos (ktests 42 e 0) na crate `no_std` do brief. A **biblioteca real** (`std`, `serde_json`, `Mutex`) também roda no KLEE 3.1 com as flags do `caller.cpp`: 22 caminhos completos, `x == 42` encontrado. |
+| `none` | **B**: `libmap2check.a` nativo (rustc do repo, 1.82), ligado no passo final, sem `llvm-link` | A rota B liga e roda com clang-16 (`rc=0`). O frontend de `develop` não executa `none` como gerador. `Caller::executeAnalysis` registra "This mode is not supported", e `map2check.cpp:977-1008` troca `None` por AFL++ → KLEE (→ AFL++ de novo com `--seed-exchange`). Na prática, `none` é a combinação de `afl` e `symex`, e herda as condições das duas, inclusive a 9. |
+| `afl` | **B + B1**: `libmap2check.a` nativo + driver libFuzzer do AFL++ (`afl-clang-fast -fsanitize=fuzzer`), chamando o `LLVMFuzzerTestOneInput` da biblioteca | Os dois fuzzers acharam `x == 42` em 30 s, com 1 `saved_crashes` cada. Throughput: B1 97 474 exec/s, contra 42 919 do `NonDetGeneratorAFL.c` (B2), ou 227% (229% com CmpLog). **O critério da D1 (≥ 90% do C) está atendido provisoriamente.** A comparação não é igual por igual (condição 3). Com CmpLog, que é como o frontend sempre roda, o B1 levou **3 037 ms / 280 900 execs** até o crash, contra **252 ms / 2 748 execs** do B2 (condição 4). O B2, port do `__AFL_LOOP` para Rust, continua como alternativa nomeada se as condições 3 ou 4 falharem. |
+| `symex` | **A′**: runtime compilado para bitcode por um rustc com LLVM 16 (1.72.1, LLVM 16.0.5), com manifesto e lockfile próprios, LTO fat e `opt-16 --strip-debug` só no runtime, depois `llvm-link-16` com o bitcode do programa | A rota A falha: `llvm-dis-16: error: Unknown attribute kind (91) (Producer: 'LLVM19.1.1-rust-1.82.0-stable' Reader: 'LLVM 16.0.6')`. A rota B sob KLEE dá 1 caminho e não explora `x == 42`. A A′ dá 2 caminhos (ktests 42 e 0) com a crate `no_std` do brief. A **biblioteca real** (`std`, `serde_json`, `Mutex`) roda no KLEE 3.1 com um subconjunto das flags do `caller.cpp`: 22 caminhos completos, `x == 42` encontrado. |
 
-A rota C (Map2Check em LLVM 19) fica como **alternativa futura para `symex`**, não como caminho do cutover. O KLEE 3.3, com "full support for LLVM 17-19", saiu em 2026-10-15 e não foi testado. Migrar o pipeline inteiro custa G (1 a 2 semanas) mais a revalidação dos baselines.
+A rota C (Map2Check em LLVM 19 + KLEE 3.3) fica como **saída futura do pin do rustc 1.72.1**, não como caminho do cutover (ver "Custo do pin e saída").
 
-O `symex` **não está bloqueado**: existe uma rota medida que funciona. A consequência prevista no brief para o caso de nenhuma rota servir não se aplica. O texto era: "o cutover completo fica bloqueado: pela restrição 'não remover sem equivalente validado', o runtime C do KLEE não pode sair".
+O `symex` **não está bloqueado**, porque existe uma rota medida que funciona. A consequência que o brief previa para o caso de nenhuma rota servir não se aplica. O texto era: "o cutover completo fica bloqueado: pela restrição 'não remover sem equivalente validado', o runtime C do KLEE não pode sair".
 
-### Comandos de build e ligação que a Task 3.1 implementa
+### Comandos de build e ligação
 
-`none` e `afl` (o passe já renomeia `main` para `__map2check_main__`):
+#### `none` e `afl`
+
+O passe já renomeia `main` para `__map2check_main__`.
 
 ```bash
-# biblioteca (rustc do repo)
+# biblioteca (rustc do repo, 1.82)
 cargo build --release --features libfuzzer          # -> target/release/libmap2check.a
 # programa: o -result.bc sai do llvm-link SEM os .bc do runtime C
 afl-clang-fast -g -O2 -fsanitize=fuzzer <hash>-result.bc libmap2check.a -ldl -lpthread -lm -o <hash>-fuzzed.out
 AFL_LLVM_CMPLOG=1 afl-clang-fast -g -O2 -fsanitize=fuzzer <hash>-result.bc libmap2check.a -ldl -lpthread -lm -o <hash>-cmplog.out
 afl-fuzz -i afl-in -o afl-out -c ./<hash>-cmplog.out -- ./<hash>-fuzzed.out
-# replay: o crash vai como ARGUMENTO, não pela stdin (ver condição 2)
+# replay: o crash vai como ARGUMENTO, não pela stdin (condição 2)
 ./<hash>-witness-fuzzed.out <crash-file>
 ```
 
-`symex`:
+#### `symex`
+
+Estes são os comandos que produziram os 22 caminhos. Rodaram em `spikes/llvm16/full172/` na branch `spike/llvm16`, na imagem `map2check-dev:cutover-rust`. **Não funcionam no manifesto principal do repo.** Lá o cargo 1.72 falha com `error: failed to parse lock file at: /src/Cargo.lock` (lockfile v4). Sem esse lockfile, ele falha com `failed to parse the 'edition' key`, porque `mockall` e `cbindgen` puxam crates com `edition = "2024"`.
 
 ```bash
-# runtime em bitcode LLVM 16 (toolchain separado, LTO fat no perfil)
-RUSTUP_TOOLCHAIN=1.72.1 cargo rustc --release --features klee --lib --crate-type staticlib -- --emit=llvm-bc -C panic=abort
-opt-16 --strip-debug target/release/deps/map2check-*.bc -o map2check-klee.bc
-llvm-link-16 <hash>-output.bc map2check-klee.bc -o <hash>-witness-result.bc
-klee --external-calls=all --optimize --use-cex-cache --libc=uclibc ./<hash>-witness-result.bc
+cd spikes/llvm16/full172
+# Manifesto do build KLEE: cópia do Cargo.toml com `build = false` (sem cbindgen),
+# sem [dev-dependencies] (sem mockall), `rust-version = "1.72"`, `[features] klee = []`
+# e `[workspace]` próprio. Fontes: cópia de rust/ + nondet/klee.rs.
+
+# 1. lockfile próprio, resolvido por MSRV (cargo >= 1.84 para o resolvedor com fallback)
+rustup toolchain install 1.86.0 --profile minimal
+CARGO_RESOLVER_INCOMPATIBLE_RUST_VERSIONS=fallback RUSTUP_TOOLCHAIN=1.86.0 cargo generate-lockfile
+sed -i 's/^version = 4/version = 3/' Cargo.lock     # cargo 1.72 só lê v3
+#    resultado: serde 1.0.229, serde_json 1.0.154, thiserror 2.0.20
+
+# 2. runtime em bitcode LLVM 16; release com panic = "abort", lto = "fat", codegen-units = 1
+RUSTUP_TOOLCHAIN=1.72.1 CARGO_TARGET_DIR=/src/spikes/llvm16/target-172c \
+  cargo rustc --release --features klee --lib --crate-type staticlib -- --emit=llvm-bc -C panic=abort
+opt-16 --strip-debug /src/spikes/llvm16/target-172c/release/deps/map2check-*.bc -o rt-nodbg.bc
+
+# 3. ligação e execução (o programa mantém -g)
+clang-16 -g -emit-llvm -c ../prog.c -o prog-g.bc
+llvm-link-16 prog-g.bc rt-nodbg.bc -o linked5.bc
+klee --external-calls=all --optimize --use-cex-cache --libc=uclibc linked5.bc
 ```
 
-### Condições da proposta (o que a aprovação aceita junto)
+O frontend passa ainda `--solver-backend`, uma política de parada e de busca e a flag de sementes (`caller.cpp:815-822`). Essas flags não foram usadas no spike.
 
-1. **`main` renomeado é obrigatório.** Com o `prog.c` cru, a ligação falha (`multiple definition of 'main'` no LibFuzzer; `undefined reference to '__map2check_main__'` no LibFuzzer e no AFL++). O passe atual já renomeia o `main`; isso não pode regredir.
-2. **Replay pela stdin não funciona com B1.** `./b1.afl < crash` não termina (`rc=124` após 5 s), enquanto `./b1.afl crash` aborta (`rc=134`). O frontend (`caller.cpp:957`) hoje redireciona o arquivo para a stdin e precisa passar a usar argumento.
-3. **`assume` em persistent mode.** O C faz `longjmp` e segue para a próxima entrada. O Rust faz `exit(0)` (`libfuzzer.rs`, `__VERIFIER_assume`), que derruba o processo persistente. O throughput medido não cobre programas com `assume`. Medir na Task 2.5 antes de fechar o B1. Se cair abaixo de 90% do C, a resposta é B2 (port do loop).
-4. **MSRV 1.72 para o build `symex`.** Com rustc 1.72.1, a biblioteca real tem 6 erros de fonte: `unsafe extern` (1), `LazyLock` (4) e `Mutex::clear_poison` (1). Também precisa de um `Cargo.lock` v3 resolvido por MSRV (`serde_json 1.0.154`, `thiserror 2.0.20`), sem `mockall`/`cbindgen` no grafo desse build. Trocas usadas no spike: `extern "C"`, `OnceLock`, sem `clear_poison`. Alternativa: um crate `no_std` separado só para KLEE (rota A′ do brief, comprovada), ao custo de duplicar a lógica de estado.
-5. **LTO fat e `--strip-debug` no runtime `symex` são obrigatórios.** Sem LTO: `KLEE: ERROR: Unable to load symbol(__rust_no_alloc_shim_is_unstable)`. Com o debug info do `std`: `LLVM ERROR: Broken module found` ("inlinable function call in a function with debug info must have a !dbg location"). O `-g` do programa analisado é preservado.
-6. **Concretizar antes de serializar no `symex`.** O `serde_json` formatando valores simbólicos levou `prog.c` de 2 para 22 caminhos. O gerador KLEE do Rust precisa concretizar (`klee_get_value_*`) o que vai para o log, como o C faz ao escrever por chamada externa.
-7. **A rota B sob KLEE não é usada.** Além de não explorar símbolos, o KLEE 3.1 não tem `--load` (`Unknown command line argument '--load=...'`), e a `.so` só carrega com `LD_PRELOAD` e `-Wl,-z,lazy`.
-8. **O `rustc 1.72.1` (2023) fica preso ao LLVM 16.** Quando o Map2Check migrar de LLVM, o toolchain do `symex` precisa acompanhar. A rota C remove essa dependência.
+**A Task 2.7 precisa transformar isso em produto.** Peças concretas:
+
+1. **Segundo manifesto** para o build KLEE, como membro de workspace ou diretório próprio (por exemplo `klee/Cargo.toml`). Ele aponta para as mesmas fontes de `rust/src`, com `build = false`, sem dev-dependencies e com `rust-version = "1.72"`.
+2. **`Cargo.lock` v3 próprio** para esse manifesto, gerado com o comando acima e versionado. Ele é separado do lockfile v4 do build principal.
+3. **Teto de dependências.** Só servem versões que resolvem e compilam em 1.72: hoje `serde_json ≤ 1.0.154` e `thiserror ≤ 2.0.20`. O `thiserror 2.0.21` já exige Rust 1.77.
+4. **Feature `klee`**: código novo, inexistente no repo. A referência é `full172/rust/src/nondet/klee.rs`, com `__VERIFIER_nondet_int` → `klee_make_symbolic`. A Task 2.7 precisa escrever os demais tipos, `klee_assume` e a concretização da condição 7.
+5. **LTO fat e `--strip-debug`** do bitcode do runtime. Sem LTO: `KLEE: ERROR: Unable to load symbol(__rust_no_alloc_shim_is_unstable)`. Com o debug info do `std`: `LLVM ERROR: Broken module found`.
+
+### Custo do pin do rustc 1.72.1 e saída
+
+Os 6 ajustes de fonte que o 1.72.1 exigiu, e o que cada um faz no build normal (rustc 1.82, `panic = unwind`, `ffi_guard` → `catch_unwind` em `rust/src/ffi.rs:100-107`):
+
+| Ajuste | Efeito no build normal |
+|---|---|
+| `unsafe extern "C"` → `extern "C"` (1 erro) | Nenhum: compila igual em 1.82 / edition 2021. |
+| `LazyLock` → `OnceLock::get_or_init` (4 erros) | Nenhum: `OnceLock` existe desde 1.70, e a semântica de inicialização preguiçosa é a mesma. |
+| Remover `state.clear_poison()` (1 erro) | **Muda comportamento.** Depois de um pânico capturado por `ffi_guard`, o mutex fica envenenado. `reset()` ainda recupera o guard com `into_inner`, mas não limpa o veneno. Todo `with_state` seguinte (`state.lock()?`) devolve `LockPoisoned`, até o fim de um processo persistente do AFL++. |
+
+**Para evitar a regressão,** o `clear_poison` continua no build normal e só sai do build `symex`:
+
+```rust
+#[cfg(not(feature = "klee"))]
+state.clear_poison();
+```
+
+Sob `symex` isso é seguro, porque o perfil é `panic = "abort"` e não há pânico capturado que envenene o mutex. Há uma alternativa compatível com 1.72 sem `cfg`. É tornar `with_state` tolerante a veneno (`lock().unwrap_or_else(PoisonError::into_inner)`), como `state.rs:101` já faz nos testes. Ela muda o contrato de erro de `with_state`, então precisa de decisão própria.
+
+**Custos contínuos, aceitos junto com a A′ sobre a biblioteca real:**
+
+- (a) **O código que o build `symex` compila fica preso ao rustc 1.72 para sempre.** Ficam proibidos `LazyLock`, `unsafe extern`, edition 2024 e qualquer API de `std` posterior a 1.72. Isso precisa de um job de CI em 1.72.1, porque o `clippy` em 1.82 não detecta essas violações.
+- (b) **Teto de dependências e dois lockfiles.** O v3 do `symex` e o v4 principal já divergem: `serde_json` 1.0.154 contra 1.0.150, `thiserror` 2.0.20 contra 2.0.18. O `cargo deny check` só cobre o lockfile principal, então o segundo precisa de passo próprio. Atualizar uma dependência passa a ser testado nos dois toolchains.
+- (c) **O grafo do 1.72 não pode incluir `build.rs`/cbindgen nem `mockall`.** O header continua gerado só pelo build principal.
+
+**Alternativa que reduz o custo:** um crate `no_std` separado só para o KLEE, a A′ do brief, comprovada com 2 caminhos. Com ela, o crate principal fica livre em 1.82, e só um crate pequeno fica preso a 1.72. O preço é duplicar a lógica de estado e de saída que o KLEE precisa (log de nondet, resultado e relatório). Também perde-se a garantia de que KLEE e fuzzer rodam o mesmo código. A escolha entre "biblioteca real com MSRV 1.72 no que o `symex` compila" e "crate KLEE separado" fica com o mantenedor, como parte da aprovação desta D1. Esta proposta recomenda a biblioteca real com o `cfg` acima, porque um só código é o que torna o cutover verificável.
+
+**A saída do pin é a rota C** (LLVM 19 + KLEE 3.3, <https://github.com/klee/klee/releases/tag/v3.3>). Vale a pena quando ocorrer o primeiro destes eventos:
+
+- o build principal precisar de algo que o 1.72 não compila e que o `cfg` não isola;
+- o Map2Check decidir mudar de LLVM por outro motivo;
+- o KLEE 3.3 (ou posterior) passar pelo corpus de baseline com resultados iguais aos do 3.1.
+
+Estimativa: G (1 a 2 semanas), com detalhes em `spike-llvm16.md`.
+
+### Condições da proposta
+
+A aprovação aceita a proposta junto com estas condições.
+
+1. **O `main` renomeado é obrigatório.** Com o `prog.c` cru, a ligação falha: `multiple definition of 'main'` no LibFuzzer, e `undefined reference to '__map2check_main__'` no LibFuzzer e no AFL++. O passe atual já renomeia o `main`, e isso não pode regredir.
+2. **O replay pela stdin não funciona com B1.** `./b1.afl < crash` não termina (`rc=124` após 5 s), enquanto `./b1.afl crash` aborta (`rc=134`). O frontend (`caller.cpp:957`) hoje redireciona o arquivo para a stdin e precisa passar a usar argumento. Responsável: Task 3.x (frontend).
+3. **Remedir o throughput de B1 contra B2, em condições iguais.** Responsável: Task 2.5, depois da Task 2.4. A comparação do spike não é igual por igual, por quatro motivos:
+   - o B2 grava arquivos a cada execução (`write_property` e `generate_aux_files` em `map2check_success`), e o B1 só imprime JSON na stdout;
+   - a instrumentação difere: o runtime C entra no `afl-clang-fast` como bitcode e é instrumentado; o `libmap2check.a` é objeto nativo e não é instrumentado;
+   - foi uma única rodada (n = 1);
+   - B1 e B2 rodaram ao mesmo tempo, na mesma máquina (`--cpus 4`).
+
+   A remedição exige a saída em arquivo do Rust (Task 2.4), um `__VERIFIER_assume` que não encerre o processo persistente e programas com muitos `assume`. O Rust faz `exit(0)` (`libfuzzer.rs:197-206`); o C faz `longjmp` e segue para a próxima entrada. As campanhas devem rodar em sequência, com as mesmas flags e pelo menos 5 repetições. Abaixo de 90% do C, o `afl` passa para B2 (port do `__AFL_LOOP`).
+4. **O tempo até o primeiro crash com CmpLog é critério de aceitação da D1.** Ele será remedido no corpus no gate 4.2. O frontend sempre roda o afl-fuzz com `-c <cmplog>`, então para guardas de valor mágico o que conta é o tempo até o crash, não exec/s. No spike, com CmpLog, o B1 levou cerca de 100× mais execuções que o B2 (280 900 contra 2 748), e o B2 achou o crash pela etapa de input-to-state (`op:its`).
+
+   **Hipótese principal,** tirada do código e não medida (o spike não foi refeito): a diferença está em entradas mais curtas que o valor lido. O `read_bytes` do Rust (`libfuzzer.rs:54-71`) devolve `None` se faltarem bytes, e `read_u32` vira **0**. O C (`get_next_input_from_afl`) **volta ao início do buffer**. Com a semente `A` (1 byte), o C lê `x = 0x41414141`, que aparece na entrada. O CmpLog vê `0x41414141 == 42`, acha os bytes e os troca por `2a 00 00 00`. No Rust, `x = 0` não vem de nenhum byte da entrada, e o input-to-state não tem o que substituir. Só a mutação havoc, depois de crescer a entrada para 4 bytes, chega a `x = 42`.
+
+   Hipótese secundária, do revisor: a leitura passa por código Rust não instrumentado. A correção provável da principal é a Task 2.5 alinhar a semântica de entrada curta à do C. Isso também é exigido pela condição 9.
+5. **MSRV 1.72 no que o build `symex` compila,** com os custos (a)–(c) acima e o `clear_poison` sob `#[cfg(not(feature = "klee"))]`. Responsável: Task 2.7, com o job de CI em 1.72.1.
+6. **LTO fat e `--strip-debug` do runtime `symex` são obrigatórios.** O `-g` do programa analisado é preservado. Responsável: Task 2.7.
+7. **Concretizar antes de serializar no `symex`.** O `serde_json` formatando valores simbólicos levou o `prog.c` de 2 para 22 caminhos. O gerador KLEE do Rust precisa concretizar (`klee_get_value_*`) o que vai para o log e para o relatório, como o C faz ao escrever por chamada externa. Responsável: Task 2.7.
+8. **A rota B sob KLEE não é usada.** Além de não explorar símbolos, o KLEE 3.1 não tem `--load` (`Unknown command line argument '--load=...'`), e a `.so` só carrega com `LD_PRELOAD` e `-Wl,-z,lazy`.
+9. **O layout do vetor tem de ser o mesmo entre KLEE e AFL++.** No modo padrão (`none` → AFL++ → KLEE → AFL++ com `--seed-exchange`), os vetores do KLEE viram sementes do AFL++ (`Caller::exportKleeVectorsAsSeeds`). O gerador AFL do Rust tem de consumir a semente exatamente como o KLEE a produz: `sizeof(tipo)` bytes por valor, em ordem, little-endian. É o que `read_u32` faz hoje para `int`, mas falta verificar os demais tipos. A semântica de entrada curta precisa estar alinhada com a do C (condição 4). Responsável: Tasks 2.5 e 2.7, com teste cruzado ktest → semente → replay.
+10. **O rustc 1.72.1 (2023) fica preso ao LLVM 16.** Quando o Map2Check migrar de LLVM, o toolchain do `symex` precisa acompanhar ou ser removido pela rota C.
