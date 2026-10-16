@@ -395,6 +395,117 @@ KLEE: releases no GitHub, consultadas em 2026-10-15 com `curl -s https://api.git
 
 Resposta: **sim, há KLEE com suporte a LLVM 19 (3.3)**, mas a release saiu hoje e não foi testada aqui. Não verifiquei se o AFL++ 4.40c compila com LLVM 19. Estimativa da Rota C: os passes são P–M (troca mecânica mais revisão do tratamento de debug info, cerca de 2 a 4 dias). Somam-se a reconstrução da imagem (clang/LLVM 19, KLEE 3.3 + STP/Z3 + klee-uclibc para LLVM 19, AFL++ recompilado) e a revalidação dos baselines de corpus, porque todo o pipeline muda de versão. No total, G (1 a 2 semanas), com o risco de ser a primeira versão de KLEE com suporte completo a LLVM 19.
 
+## Remedição (Task 2.5b)
+
+Data: 2026-10-15. Biblioteca no commit `f4e4908` (branch `cutover/runtime-rust`): o leitor de entrada segue o `NonDetGeneratorAFL.c` (volta ao início do buffer, `sizeof(tipo)` bytes por valor) e um `__VERIFIER_assume` falso abandona a entrada sem encerrar o processo persistente (desenrola até o `LLVMFuzzerTestOneInput`, que devolve 0). Responde às condições 3 e 4 da D1.
+
+### Montagem
+
+Tudo na imagem `map2check-dev:cutover-rust`, com `docker run --rm --cpus 4`. As campanhas rodaram **em sequência**, um fuzzer por vez, 5 repetições de cada variante.
+
+- **B1:** `libmap2check.a` do perfil `runtime` com `--features libfuzzer` (rustc 1.82 da imagem), ligado com `afl-clang-fast -g -O2 -fsanitize=fuzzer` ao programa com `-Dmain=__map2check_main__`; o binário CmpLog com `AFL_LLVM_CMPLOG=1`. Comandos iguais aos de `b1build.sh` do spike.
+- **B2:** o runtime C de `develop` compilado **das fontes** (`modules/backend/library/lib/*.c`, `clang-16 -c -emit-llvm`, como o `CMakeLists.txt` da biblioteca), na ligação de alcançabilidade do `caller.cpp` (`Map2CheckFunctions`, `TrackBBLog`, `NonDetLog`, `PropertyGenerator`, `ContainerRealloc`, `AnalysisModeNone`, `NonDetGeneratorAFL`, `WitnessGenerationNone`), `llvm-link-16` e `afl-clang-fast -g -O2`. Comandos iguais aos de `b2build.sh` do spike.
+- **Programas:** `prog42.c` / `prog42_c.c` do spike (o `prog.c` com `abort()` em `x == 42`, para o crash ser contado) e um programa com muitos `assume`, em duas formas como as anteriores:
+
+```c
+/* assume.c (B1); assume_c.c (B2) chama map2check_non_det_int,
+ * map2check_assume (= nondet_assume, Map2CheckFunctions.c:45) e map2check_init(0) */
+int main(void) {
+  map2check_init();
+  int x = __VERIFIER_nondet_int();
+  __VERIFIER_assume(x > 100);
+  __VERIFIER_assume(x < 200);
+  if (x == 150) abort();
+  map2check_success();
+  return 0;
+}
+```
+
+- **Campanha:** semente `A` (a do frontend, `caller.cpp:904-907`) e o ambiente do frontend (`caller.cpp:919-925`) sem `AFL_BENCH_UNTIL_CRASH`, para a campanha durar os 30 s inteiros:
+
+```bash
+AFL_NO_UI=1 AFL_NO_AFFINITY=1 AFL_SKIP_CPUFREQ=1 AFL_I_DONT_CARE_ABOUT_MISSING_CRASHES=1 \
+AFL_CRASHING_SEEDS_AS_NEW_CRASH=1 afl-fuzz -i seed -o runs/<v>-<prog>-<cmplog>-<rep> -V 30 \
+  [-c ./<v>-<prog>.cmplog.afl] -- ./<v>-<prog>.afl
+```
+
+  Ordem: para cada repetição, `prog42` e depois `assume`; sem e com CmpLog; B1 e depois B2. O 1º crash vem do nome do primeiro arquivo em `crashes/` (`time`, `execs`, `op`).
+
+Antes das campanhas, um teste diferencial ligou um programa que lê um valor de cada tipo (16 tipos, `pchar` incluído) ao B1 e ao B2 e comparou as saídas para entradas de 1, 2, 4, 7, 7 (`pchar` de tamanho 5), 37, 64 e 200 bytes: **idênticas em todas** (B2 lendo da stdin, B1 pelo `LLVMFuzzerTestOneInput`).
+
+### Dados brutos
+
+| rep | rota | programa | CmpLog | `execs_per_sec` | `execs_done` | `stability` | 1º crash (`time` ms, `execs`, `op`) |
+|---|---|---|---|---|---|---|---|
+| 1 | B1 | `prog42` | não | 113373,29 | 3 401 312 | 100,00% | 3636, 397 890, `havoc` |
+| 1 | B2 | `prog42` | não | 96080,26 | 2 882 504 | 75,68% | 82, 1 677, `havoc` |
+| 1 | B1 | `prog42` | sim | 113733,28 | 3 412 112 | 100,00% | 231, 14 988, `havoc` |
+| 1 | B2 | `prog42` | sim | 95805,70 | 2 876 183 | 78,38% | 207, 544, `its` |
+| 1 | B1 | `assume` | não | 67556,28 | 2 027 837 | 100,00% | 246, 19 009, `havoc` |
+| 1 | B2 | `assume` | não | 115492,63 | 3 465 010 | 80,00% | 295, 27 045, `havoc` |
+| 1 | B1 | `assume` | sim | 102674,16 | 3 080 430 | 100,00% | 247, 7 843, `havoc` |
+| 1 | B2 | `assume` | sim | 123441,82 | 3 703 378 | 100,00% | 204, 1 534, `havoc` |
+| 2 | B1 | `prog42` | não | 116556,51 | 3 496 812 | 100,00% | 201, 15 586, `havoc` |
+| 2 | B2 | `prog42` | não | 98477,62 | 2 954 427 | 75,68% | 1436, 130 559, `havoc` |
+| 2 | B1 | `prog42` | sim | 115136,56 | 3 454 212 | 100,00% | 822, 86 511, `havoc` |
+| 2 | B2 | `prog42` | sim | 97434,11 | 2 924 777 | 78,38% | 189, 538, `its` |
+| 2 | B1 | `assume` | não | 59714,79 | 1 792 220 | 100,00% | 109, 2 636, `havoc` |
+| 2 | B2 | `assume` | não | 116131,52 | 3 484 178 | 80,00% | 82, 1 306, `havoc` |
+| 2 | B1 | `assume` | sim | 59930,52 | 1 803 729 | 100,00% | 145, 8 689, `havoc` |
+| 2 | B2 | `assume` | sim | 101517,68 | 3 046 850 | 100,00% | 469, 37 277, `havoc` |
+| 3 | B1 | `prog42` | não | 116879,84 | 3 506 512 | 100,00% | 1991, 229 706, `havoc` |
+| 3 | B2 | `prog42` | não | 97799,48 | 2 934 180 | 75,68% | 671, 56 521, `havoc` |
+| 3 | B1 | `prog42` | sim | 115509,88 | 3 465 412 | 100,00% | 298, 25 229, `havoc` |
+| 3 | B2 | `prog42` | sim | 98499,00 | 2 955 167 | 78,38% | 196, 545, `its` |
+| 3 | B1 | `assume` | não | 100495,07 | 3 015 053 | 100,00% | 513, 48 445, `havoc` |
+| 3 | B2 | `assume` | não | 106180,13 | 3 185 510 | 80,00% | 140, 9 025, `havoc` |
+| 3 | B1 | `assume` | sim | 80445,25 | 2 414 001 | 100,00% | 158, 8 272, `havoc` |
+| 3 | B2 | `assume` | sim | 107068,98 | 3 212 819 | 100,00% | 298, 13 751, `havoc` |
+| 4 | B1 | `prog42` | não | 116096,53 | 3 483 012 | 100,00% | 801, 83 658, `havoc` |
+| 4 | B2 | `prog42` | não | 98181,92 | 2 945 654 | 75,68% | 5951, 594 288, `havoc` |
+| 4 | B1 | `prog42` | sim | 115666,54 | 3 470 112 | 100,00% | 1346, 146 540, `havoc` |
+| 4 | B2 | `prog42` | sim | 96819,37 | 2 904 678 | 78,38% | 190, 539, `its` |
+| 4 | B1 | `assume` | não | 64018,25 | 1 922 532 | 100,00% | 208, 16 015, `havoc` |
+| 4 | B2 | `assume` | não | 112247,26 | 3 367 530 | 80,00% | 291, 26 376, `havoc` |
+| 4 | B1 | `assume` | sim | 75394,05 | 2 261 897 | 100,00% | 103, 1 936, `havoc` |
+| 4 | B2 | `assume` | sim | 123763,01 | 3 713 014 | 100,00% | 629, 46 719, `havoc` |
+| 5 | B1 | `prog42` | não | 116389,85 | 3 491 812 | 100,00% | 590, 59 409, `havoc` |
+| 5 | B2 | `prog42` | não | 98060,26 | 2 942 102 | 75,68% | 416, 34 493, `havoc` |
+| 5 | B1 | `prog42` | sim | 115703,21 | 3 471 212 | 100,00% | 836, 88 894, `havoc` |
+| 5 | B2 | `prog42` | sim | 97957,20 | 2 938 814 | 78,38% | 185, 650, `its` |
+| 5 | B1 | `assume` | não | 57883,57 | 1 736 565 | 100,00% | 103, 3 406, `havoc` |
+| 5 | B2 | `assume` | não | 115598,85 | 3 468 081 | 80,00% | 118, 4 449, `havoc` |
+| 5 | B1 | `assume` | sim | 64970,70 | 1 949 446 | 100,00% | 91, 1 497, `havoc` |
+| 5 | B2 | `assume` | sim | 99577,21 | 2 987 416 | 100,00% | 227, 4 740, `havoc` |
+
+### Medianas (n = 5)
+
+| Programa | CmpLog | exec/s B1 | exec/s B2 | B1/B2 | 1º crash B1 (ms; execs) | 1º crash B2 (ms; execs) | B1 ÷ B2 |
+|---|---|---|---|---|---|---|---|
+| `prog42` | não | 116 390 | 98 060 | **118,7%** | 801; 83 658 | 671; 56 521 | 1,19× |
+| `prog42` | sim | 115 510 | 97 434 | **118,6%** | **822; 86 511** | **190; 544** | **4,33×** |
+| `assume` | não | 64 018 | 115 493 | **55,4%** | 208; 16 015 | 140; 9 025 | 1,49× |
+| `assume` | sim | 75 394 | 107 069 | **70,4%** | 145; 7 843 | 298; 13 751 | 0,49× |
+
+Todas as 40 campanhas acharam o crash. Estabilidade: B1 100% em todas; B2 75,68% (`prog42`), 78,38% (`prog42` com CmpLog), 80% e 100% (`assume`).
+
+### Leitura
+
+**Throughput (condição 3).** No `prog42` o B1 fica em 119% do B2, agora com o B2 gravando arquivos e as campanhas em sequência. No programa com `assume`, quase toda entrada é rejeitada, e o B1 cai para **55%** (sem CmpLog) e **70%** (com CmpLog) do B2. O B2 rejeita com `longjmp`, que custa poucos nanossegundos; o B1 rejeita com um desenrolar de pilha (`resume_unwind` + `catch_unwind`), que passa pelo unwinder (`_Unwind_RaiseException`, busca de FDE) a cada rejeição. O B1 também varia mais entre repetições (57 884 a 100 495 exec/s sem CmpLog), o que é consistente com o custo crescer com a fração de entradas rejeitadas.
+
+**Tempo até o 1º crash com CmpLog (condição 4).** No `prog42` o B2 achou o crash pela etapa input-to-state (`op:its`) nas 5 repetições, em 185 a 207 ms; o B1, por havoc nas 5, com mediana de 822 ms. Corrigir o leitor (a hipótese principal) **não fechou a diferença**. Linha de base com a biblioteca de antes desta task (`0d5b1f6`, leitor que devolvia 0), mesmo protocolo, só `prog42` com CmpLog: 102, 749, 2 845, 115 e 1 083 ms, mediana **749 ms**, todas por havoc. A diferença está no corpus. No B2, o runtime C é instrumentado, e o ramo de volta ao início do buffer de `get_next_input_from_afl` é uma aresta nova: entradas de 2 e 4 bytes (`41 41`, `c0 c0 c0 c0`) entram no corpus em 50 execuções (`corpus_count` 4), e o input-to-state troca os 4 bytes do `c0c0c0c0` por `2a 00 00 00`. No B1 o leitor é Rust não instrumentado, o corpus fica só com a semente `A` (`corpus_count` 1), e o input-to-state não consegue pôr um operando de 4 bytes numa entrada de 1 byte. É a hipótese secundária da condição 4.
+
+Verificação (informativa, não altera o protocolo): a mesma campanha `prog42` com CmpLog, mas com a semente `AAAA` e `AFL_BENCH_UNTIL_CRASH=1`, 5 repetições sequenciais. O B1 achou o crash em 171 a 184 ms (13 execs, `op:its`) e o B2 em 170 a 184 ms (25 execs, `op:its`): as duas rotas ficam iguais quando a semente já tem o tamanho do valor lido.
+
+No programa com `assume`, com CmpLog, o B1 achou o crash antes do B2 (mediana 145 ms contra 298 ms).
+
+### Veredito contra os critérios da D1
+
+- **Condição 3 (throughput ≥ 90% do B2): NÃO ATENDIDA.** Atendida no `prog42` (119%), não atendida no programa com `assume` (55% sem CmpLog, 70% com CmpLog).
+- **Condição 4 (1º crash com CmpLog não pior que 2× a mediana do B2): NÃO ATENDIDA** no `prog42` (822 ms contra 190 ms, 4,33×); atendida no programa com `assume` (0,49×).
+
+A rota da D1 não foi alterada. Caminhos possíveis, para decisão do controlador: (a) para a condição 4, uma semente no frontend (Task 3.x) com pelo menos o tamanho do maior valor lido (8 bytes cobrem `long`, `double` e ponteiros); com 4 bytes e um `int`, o teste acima igualou B1 e B2; (b) para a condição 3, rejeitar a entrada sem desenrolar a pilha, por exemplo com um `setjmp` num trecho C ligado à biblioteca (exige compilar C no `build.rs`, e o `longjmp` só é definido se nenhum frame Rust pulado tiver destrutor); (c) a alternativa nomeada na D1, o B2 (port do `__AFL_LOOP`).
+
 ## Como reproduzir
 
 Na branch `spike/llvm16`: `spikes/llvm16/{b1build.sh,b2build.sh,fuzz.sh}`, `klee-rt/`, `klee-rt-std/`, `full172/` (com o `Cargo.lock` v3 usado) e `Dockerfile.rust`.
