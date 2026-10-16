@@ -1,3 +1,0 @@
-[build]
-# Enable source-based coverage instrumentation for tarpaulin / llvm-cov
-rustflags = ["-C", "instrument-coverage"]

@@ -93,6 +93,12 @@ done
 case "$crate_line" in
   *'-C lto=thin'* | *'-C lto=off'* | *'-C lto=no'*) die "LTO is not fat: $crate_line" ;;
 esac
+# Coverage counters (a RUSTFLAGS or .cargo/config.toml `instrument-coverage`)
+# put a load/add/store in every basic block that KLEE then executes: about a
+# third of the runtime's instructions on list-ext (Task 2.7b).
+case "$crate_line" in
+  *instrument-coverage*) die "the runtime must not be built with coverage instrumentation: $crate_line" ;;
+esac
 
 mapfile -t modules < <(find "$deps" -maxdepth 1 -name 'map2check-*.bc')
 [ "${#modules[@]}" -eq 1 ] || die "expected one map2check-*.bc in $deps, found ${#modules[@]}"
