@@ -70,6 +70,7 @@ build with `--features libfuzzer`.
 | `map2check_map_funct_address` | `void map2check_map_funct_address(const char *var_name, const void *ptr_address)` | `container_memtracklog.h:48` | same | Signature and semantics reconstructed; see its section. |
 | `map2check_map_malloc` | `void map2check_map_malloc(const void *ptr_address, int32_t size)` | `map2check_map_malloc` | same | Negative sizes are ignored (SD-09). |
 | `map2check_map_calloc` | `void map2check_map_calloc(const void *ptr_address, int32_t quantity, int32_t size)` | `map2check_map_calloc` | same | Negative sizes are ignored (SD-09). |
+| `map2check_map_posix_memalign` | `void map2check_map_posix_memalign(const void *ptr_address, int32_t size)` | `map2check_posix` (develop) | new | `ptr_address` is posix_memalign's `memptr` (`void **`): reads the block from it, records it as `map2check_map_malloc`, then the store of the block into `*ptr_address` with scope 1, line 1, name `pointer`, function `cocoiso`, as develop's `map2check_posix` (`AnalysisModeMemtrack.c:327-333`); golden `POSIX-MEMALIGN`. NULL `ptr_address` ignored (SD-09); NULL block: as `map2check_map_malloc`, and no store. |
 | `map2check_map_free` | `void map2check_map_free(const char *var_name, const void *ptr_address, uint32_t scope, uint32_t line_number, const char *function_name)` | `map2check_map_free` | same |  |
 | `map2check_map_store_pointer` | `void map2check_map_store_pointer(const void *var_address, const void *value, uint32_t scope, const char *var_name, int32_t line_number, const char *funct_name)` | `map2check_map_store_pointer` | same |  |
 | `map2check_is_valid_assert` | `void map2check_is_valid_assert(int32_t line_number, const char *function_name, int32_t expression)` | `map2check_is_valid_assert` | changed | A failed assertion reports `ASSERT` (before Task 2.3: `REACHABILITY`) and, with the mode unset, prints the JSON report; with a mode set it ends the run (“Result files”) and prints nothing. Active in unset and assert modes only (SD-14). |
@@ -137,7 +138,7 @@ Map2Check.
 | `map2check_non_static_alloca` | `(ptr, ptr, i64, i64, i64, i64)` | pending | Core equivalent: `map2check_map_non_static_alloca` (#21). |
 | `map2check_malloc` | `(ptr, i64)` | pending | Core equivalent: `map2check_map_malloc` (#21). |
 | `map2check_calloc` | `(ptr, i64, i64)` | pending | Core equivalent: `map2check_map_calloc` (#21). |
-| `map2check_posix` | `(ptr, i64)` | pending | Deprecated in the embedded C library (#21). |
+| `map2check_posix` | `(ptr, i64)` | pending | Core equivalent: `map2check_map_posix_memalign(ptr, int32_t)`; the pass narrows the size (`coerceToParamType`) and switches to it in Task 3.2. |
 | `map2check_free` | `(ptr, ptr, i64, i64, ptr)` | pending | The pass passes the address of the pointer variable (#21). |
 | `map2check_free_resolved_address` | `(ptr, i64, ptr, i1)` | pending | Core equivalent: `map2check_check_free_resolved_address` (#21). |
 | `map2check_load` | `(ptr, i64)` | pending | Core `map2check_check_load` takes 5 arguments (#21). |

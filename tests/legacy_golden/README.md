@@ -28,6 +28,7 @@ compiled with `clang-16`. Each binary runs in a fresh directory.
 | `UNKNOWN` | `AnalysisModeMemtrack.c` | memory prelude, `map2check_malloc(NULL, 4)` |
 | `OVERFLOW` | `AnalysisModeOverflow.c` | `map2check_binop_add(INT_MAX, 1, 32, ...)` |
 | `DIVBYZERO` | `AnalysisModeOverflow.c` | `map2check_binop_sdiv(7, 0, 32, ...)` |
+| `POSIX-MEMALIGN` | `AnalysisModeMemtrack.c` | memory prelude, `q` on the stack, `q = BLOCK2` written into its slot, `map2check_posix(&q, 32)`, `map2check_success` (both blocks leak) |
 | `ASSERT` | `AnalysisModeAssert.c` | `map2check_assert(0, ...)` |
 | `TARGET-REACHED` | `AnalysisModeNone.c` (`REACHABILITY_MODE`) | `map2check_target_function` |
 

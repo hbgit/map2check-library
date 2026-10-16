@@ -173,6 +173,11 @@ static void run_bad_inputs(void) {
     map2check_map_funct_address(NULL, NULL);
     map2check_map_malloc(NULL, -1);
     map2check_map_calloc(NULL, -1, -1);
+    map2check_map_posix_memalign(NULL, 16);
+    {
+        void *null_block = NULL;
+        map2check_map_posix_memalign(&null_block, -1);
+    }
     map2check_map_store_pointer(NULL, NULL, 0, NULL, 6, NULL);
     map2check_map_free(NULL, NULL, 0, 7, NULL);
 
@@ -251,6 +256,15 @@ static void run_valid_pass(void) {
     map2check_map_non_static_alloca("stack", NULL, 8, 8, 20, 1);
     map2check_map_funct_address("main", (void *)0x1);
     map2check_map_store_pointer((void *)0x1, (void *)0x2, 1, "buf", 21, "main");
+    {
+        /* posix_memalign(&aligned, 16, 32): the export reads the block
+         * through the void ** it receives. */
+        void *aligned = NULL;
+        if (posix_memalign(&aligned, 16, 32) == 0) {
+            map2check_map_posix_memalign(&aligned, 32);
+            free(aligned);
+        }
+    }
     map2check_map_free("buf", (void *)0x1, 1, 22, "main");
 
     map2check_check_load((void *)0x1, 23, 1, 4, "main");

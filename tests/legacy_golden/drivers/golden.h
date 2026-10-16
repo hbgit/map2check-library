@@ -41,6 +41,7 @@ void map2check_alloca(const char *name, void *ptr, int size,
                       int size_of_primitive, int line, int scope);
 void map2check_function(const char *name, void *ptr);
 void map2check_malloc(void *ptr, int size);
+void map2check_posix(void *ptr, int size);
 void map2check_add_store_pointer(void *var, void *value, unsigned scope,
                                  const char *name, int line,
                                  const char *function_name);
@@ -64,6 +65,8 @@ void map2check_assert(int condition, int line, const char *func_name);
 #define FN_MAIN ((void *)(GOLDEN_ARENA + 0x40)) /* address of main */
 #define BLOCK ((void *)(GOLDEN_ARENA + 0x100))  /* heap block, 16 bytes */
 #define WILD ((void *)(GOLDEN_ARENA + 0x800))   /* never allocated */
+#define SLOT_Q ((void *)(GOLDEN_ARENA + 0x8))   /* the pointer variable q */
+#define BLOCK2 ((void *)(GOLDEN_ARENA + 0x200)) /* heap block, 32 bytes */
 
 void __real_free(void *ptr);
 void __wrap_free(void *ptr) {

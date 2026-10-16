@@ -831,6 +831,54 @@ pub unsafe extern "C" fn map2check_map_calloc(
     );
 }
 
+/// Records a `posix_memalign(memptr, alignment, size)` that the program just
+/// made: `ptr_address` is `memptr`, the `void **` the block was written
+/// through. As develop's `map2check_posix` (`AnalysisModeMemtrack.c:327-333`),
+/// reads the block from `*ptr_address`, records it as `map2check_map_malloc`
+/// does, then records the store of the block into `*ptr_address` with
+/// scope 1, line 1, variable name `pointer` and function `cocoiso`, the
+/// values develop passes. A NULL `ptr_address` is ignored (SD-09); a NULL
+/// block reports `UNKNOWN` in the memtrack and memcleanup modes and records
+/// no store, as `map2check_map_malloc` does.
+///
+/// # Safety
+/// `ptr_address` must be null or point to a readable `void *`.
+#[no_mangle]
+pub unsafe extern "C" fn map2check_map_posix_memalign(
+    ptr_address: *const std::os::raw::c_void,
+    size: i32,
+) {
+    ffi_guard(
+        || {
+            if ptr_address.is_null() {
+                return;
+            }
+            let slot = ptr_address.cast::<*const std::os::raw::c_void>();
+            // SAFETY: caller guarantees a non-null `ptr_address` points to a
+            // readable `void *` (posix_memalign's `memptr`); the read is
+            // unaligned-safe.
+            let block = unsafe { slot.read_unaligned() };
+            if malloc_returned_null(block) {
+                return;
+            }
+            // SAFETY: `block` is only stored; the names are NUL-terminated
+            // byte literals (cbindgen cannot parse `c""` literals).
+            unsafe {
+                map2check_map_malloc(block, size);
+                map2check_map_store_pointer(
+                    ptr_address,
+                    block,
+                    1,
+                    b"pointer\0".as_ptr().cast(),
+                    1,
+                    b"cocoiso\0".as_ptr().cast(),
+                );
+            }
+        },
+        (),
+    );
+}
+
 /// # Safety
 /// `var_name` and `function_name` must be null or valid null-terminated C strings.
 #[no_mangle]

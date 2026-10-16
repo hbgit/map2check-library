@@ -377,6 +377,63 @@ fn map_alloca_records_static_stack_slot() {
 }
 
 #[test]
+fn posix_memalign_tracks_the_block_and_the_store_like_develop() {
+    // develop `map2check_posix` (AnalysisModeMemtrack.c:327-333): reads the
+    // block through the `void **` the program passed to posix_memalign, then
+    // `map2check_malloc(block, size)` and
+    // `map2check_add_store_pointer(slot, block, 1, "pointer", 1, "cocoiso")`.
+    let _guard = fresh();
+    let mut slot: *const c_void = addr(0x4000);
+    let slot_address = std::ptr::addr_of_mut!(slot) as usize;
+    // SAFETY: `slot` is a live `void *` for the whole call.
+    unsafe { map2check_map_posix_memalign(addr(slot_address), 64) };
+    let (malloc, store) = snapshot(|s| {
+        assert_eq!(s.memtrack.len(), 2);
+        (s.memtrack[0].clone(), s.memtrack[1].clone())
+    });
+    assert_eq!(malloc.origin, crate::memtrack::MemOrigin::Malloc);
+    assert_eq!((malloc.points_to, malloc.size_destiny), (0x4000, 64));
+    assert!(malloc.is_dynamic && !malloc.is_free);
+    assert_eq!(store.origin, crate::memtrack::MemOrigin::StorePointer);
+    assert_eq!((store.var_addr, store.points_to), (slot_address, 0x4000));
+    assert_eq!((store.scope, store.line), (1, 1));
+    assert_eq!(
+        (store.ptr_name.as_str(), store.function_name.as_str()),
+        ("pointer", "cocoiso")
+    );
+    // The block is live: a load inside it is valid, one past it is not.
+    // SAFETY: C-string literal is valid; fake addresses are never dereferenced.
+    unsafe { map2check_check_load(addr(0x4000 + 60), 2, 0, 4, c"main".as_ptr()) };
+    assert_ok();
+    // SAFETY: as above.
+    unsafe { map2check_check_load(addr(0x4000 + 64), 3, 0, 4, c"main".as_ptr()) };
+    assert_violated(ViolatedProperty::MemsafetyDeref, 3, "main");
+}
+
+#[test]
+fn posix_memalign_with_a_null_slot_is_ignored() {
+    let _guard = fresh();
+    // SAFETY: a NULL slot is never dereferenced (SD-09).
+    unsafe { map2check_map_posix_memalign(std::ptr::null(), 64) };
+    assert!(snapshot(|s| s.memtrack.is_empty()));
+    assert_ok();
+}
+
+#[test]
+fn posix_memalign_null_block_is_unknown_in_memory_modes() {
+    // As `map2check_malloc(NULL, size)` (AnalysisModeMemtrack.c:305-311):
+    // UNKNOWN, and no store follows.
+    let _guard = fresh();
+    map2check_set_mode(AnalysisMode::Memtrack as i32);
+    map2check_init();
+    let mut slot: *const c_void = std::ptr::null();
+    // SAFETY: `slot` is a live `void *` for the whole call.
+    unsafe { map2check_map_posix_memalign(std::ptr::addr_of_mut!(slot).cast(), 64) };
+    assert_violated(ViolatedProperty::Unknown, 0, "");
+    assert!(snapshot(|s| s.memtrack.is_empty()));
+}
+
+#[test]
 fn map_alloca_ignores_negative_size() {
     let _guard = fresh();
     // SAFETY: C-string literal is valid; fake address is never dereferenced.

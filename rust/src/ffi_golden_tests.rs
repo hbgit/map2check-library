@@ -31,6 +31,35 @@ const SLOT_P: usize = ARENA;
 const FN_MAIN: usize = ARENA + 0x40;
 const BLOCK: usize = ARENA + 0x100;
 const WILD: usize = ARENA + 0x800;
+const SLOT_Q: usize = ARENA + 0x8;
+const BLOCK2: usize = ARENA + 0x200;
+const ARENA_SIZE: usize = 4096;
+
+extern "C" {
+    fn mmap(addr: *mut c_void, len: usize, prot: i32, flags: i32, fd: i32, off: i64)
+        -> *mut c_void;
+}
+
+/// `golden_arena()`: maps the arena at its fixed address, for the scenarios
+/// whose export reads memory (`map2check_map_posix_memalign` reads the
+/// `void *` slot, as develop's `map2check_posix` does).
+fn map_arena() {
+    const PROT_READ_WRITE: i32 = 0x1 | 0x2;
+    const MAP_PRIVATE_ANONYMOUS_FIXED_NOREPLACE: i32 = 0x02 | 0x20 | 0x10_0000;
+    // SAFETY: an anonymous private mapping at an address that must be free
+    // (MAP_FIXED_NOREPLACE fails instead of replacing a mapping).
+    let arena = unsafe {
+        mmap(
+            ARENA as *mut c_void,
+            ARENA_SIZE,
+            PROT_READ_WRITE,
+            MAP_PRIVATE_ANONYMOUS_FIXED_NOREPLACE,
+            -1,
+            0,
+        )
+    };
+    assert_eq!(arena as usize, ARENA, "não foi possível mapear a arena");
+}
 
 fn addr(a: usize) -> *const c_void {
     a as *const c_void
@@ -314,6 +343,27 @@ fn div_by_zero_child() {
 #[test]
 fn div_by_zero_matches_c_runtime() {
     assert_matches_golden("DIVBYZERO", "div_by_zero_child");
+}
+
+#[test]
+fn posix_memalign_child() {
+    if is_child() {
+        map_arena();
+        start(AnalysisMode::Memtrack);
+        memory();
+        // SAFETY: SLOT_Q lies in the mapped arena; the names are C strings.
+        unsafe {
+            map2check_map_alloca(c"q".as_ptr(), addr(SLOT_Q), 8, 8, 15, 1);
+            (SLOT_Q as *mut usize).write(BLOCK2);
+            map2check_map_posix_memalign(addr(SLOT_Q), 32);
+        }
+        map2check_success();
+    }
+}
+
+#[test]
+fn posix_memalign_matches_c_runtime() {
+    assert_matches_golden("POSIX-MEMALIGN", "posix_memalign_child");
 }
 
 #[test]
