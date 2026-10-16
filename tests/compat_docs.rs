@@ -322,6 +322,7 @@ const CLASSIFICATIONS: &[&str] = &[
     "suspected regression",
     "pending decision",
     "fixed",
+    "C behaviour preserved on purpose",
 ];
 
 /// Problemas de uma entrada: classificação conhecida (com issue quando

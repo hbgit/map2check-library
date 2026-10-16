@@ -186,6 +186,7 @@ dependencies = [
  "mockall",
  "serde",
  "serde_json",
+ "tempfile",
  "thiserror",
 ]
 

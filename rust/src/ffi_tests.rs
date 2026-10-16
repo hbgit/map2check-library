@@ -1238,6 +1238,50 @@ fn options_survive_init_and_reset() {
 }
 
 #[test]
+fn enable_witness_is_configuration_kept_by_init_and_reset() {
+    let _guard = fresh();
+    assert!(!state::config().witness);
+    map2check_enable_witness();
+    assert!(state::config().witness);
+    map2check_init();
+    map2check_reset();
+    assert!(state::config().witness);
+    // Configuration only: it records nothing.
+    assert_ok();
+    assert_eq!(snapshot(|s| s.current_step()), 0);
+}
+
+#[test]
+fn malloc_null_reports_unknown_in_memory_modes_only() {
+    // develop: map2check_malloc with a NULL block writes
+    // map2check_property__unknown and ends the run (AnalysisModeMemtrack.c:305-311).
+    let _guard = fresh();
+    for mode in [AnalysisMode::Memtrack, AnalysisMode::Memcleanup] {
+        start(mode);
+        // SAFETY: a NULL block is only compared.
+        unsafe { map2check_map_malloc(std::ptr::null(), 4) };
+        assert_violated(ViolatedProperty::Unknown, 0, "");
+        assert!(snapshot(|s| s.memtrack.is_empty()));
+        start(mode);
+        // SAFETY: as above.
+        unsafe { map2check_map_calloc(std::ptr::null(), 2, 4) };
+        assert_violated(ViolatedProperty::Unknown, 0, "");
+    }
+    for mode in [AnalysisMode::Overflow, AnalysisMode::None] {
+        start(mode);
+        // SAFETY: as above.
+        unsafe { map2check_map_malloc(std::ptr::null(), 4) };
+        assert_ok();
+        assert_eq!(snapshot(|s| s.memtrack.len()), 1);
+    }
+    state::reset_config();
+    state::reset();
+    // SAFETY: as above.
+    unsafe { map2check_map_malloc(std::ptr::null(), 4) };
+    assert_ok();
+}
+
+#[test]
 fn options_default_off() {
     let _guard = fresh();
     assert_eq!(

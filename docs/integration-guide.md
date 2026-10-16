@@ -183,8 +183,22 @@ print:
 `property` takes one of `OVERFLOW`, `MEMSAFETY_FREE`, `MEMSAFETY_DEREF`,
 `MEMSAFETY_MEMTRACK`, `MEMSAFETY_MEMCLEANUP`, `REACHABILITY`,
 `CONCURRENCY`, `ASSERT` and `UNKNOWN`. Nondet `type` takes one of `INT`, `UINT`, `LONG`, `CHAR`,
-`FLOAT` and `DOUBLE`. The schema is not final: container and field names
-are still being reconciled with the existing consumer in #14 (SD-01).
+`FLOAT` and `DOUBLE`. Map2Check does not read this JSON: it reads the
+result files described below. The JSON is an additional channel with its
+own schema, pinned by a snapshot test (#14, SD-01).
+
+## Result files for Map2Check
+
+A Map2Check-instrumented program calls `map2check_set_mode()` before
+`map2check_init()`, and the witness binary also calls
+`map2check_enable_witness()`. With a mode set, the library writes into the
+current directory the files the Map2Check frontend reads, byte for byte as
+the C runtime of Map2Check `develop` does: `map2check_property*`, and with
+witness on `track_bb_log.st`, `heap_log.csv`, `allocation_log.csv`,
+`list_log.csv`, `klee_log.csv` and `map2check_checked_error`. The first
+violation ends the process with `abort()`; `map2check_success()` returns
+when the end-of-program verdict holds. Without a mode nothing is written
+and nothing aborts. See “Result files” in `api-deltas.md`.
 
 ## Known gaps
 
@@ -192,8 +206,6 @@ are still being reconciled with the existing consumer in #14 (SD-01).
   different symbol family (`map2check_track_bb`, `map2check_alloca`, …) and
   cannot link against this library yet. See the pass matrix in
   `api-deltas.md` and #21.
-- **Result files:** the Map2Check frontend reads `map2check_property_*`
-  files; this library only prints JSON (#19).
 - **KLEE:** no KLEE build exists yet; the decision is #20.
 - **Thread safety:** the state sits behind one global mutex. The calls are
   safe from any thread but serialise, and a callback must not re-enter the

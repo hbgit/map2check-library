@@ -1,0 +1,44 @@
+{
+  "map2check_log": {
+    "result": "FALSE",
+    "step": 3,
+    "property": "MEMSAFETY_FREE",
+    "line_number": 12,
+    "function_name": "main",
+    "Container_TrackBBLog": [
+      {
+        "step": 1,
+        "line": 5,
+        "function_name": "main"
+      }
+    ],
+    "Container_NonDetLog": [
+      {
+        "step": 1,
+        "line": 10,
+        "scope": 0,
+        "function_name": "main",
+        "value": {
+          "type": "INT",
+          "value": 42
+        }
+      }
+    ],
+    "Container_AllocationLog": [
+      {
+        "step": 2,
+        "line": 12,
+        "scope": 1,
+        "var_mem_address": 256,
+        "mem_address_points_to": 512,
+        "is_dynamic": true,
+        "is_free": false,
+        "ptr_name": "p",
+        "function_name": "main",
+        "size_destiny": 16,
+        "size_primitive": 4,
+        "is_null_valid": false
+      }
+    ]
+  }
+}

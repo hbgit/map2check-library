@@ -26,6 +26,33 @@ pub struct MemTrackEntry {
     /// Size of the primitive element.
     pub size_primitive: usize,
     pub is_null_valid: bool,
+    /// The export that recorded the entry. Only the legacy log files read it
+    /// (`output::legacy_files`); the JSON report does not carry it.
+    #[serde(skip)]
+    pub origin: MemOrigin,
+}
+
+/// Which export recorded a [`MemTrackEntry`]. The legacy log files of the
+/// Map2Check `develop` runtime keep one log per kind of call (heap log,
+/// allocation log, list log), so the replay that rebuilds them needs it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum MemOrigin {
+    /// Built without an export (unit tests); the replay infers the kind
+    /// from the flags and the size.
+    #[default]
+    Unspecified,
+    /// `map2check_map_alloca` and `map2check_map_non_static_alloca`.
+    Alloca,
+    /// `map2check_map_funct_address`.
+    Function,
+    /// `map2check_map_malloc` and `map2check_map_calloc`.
+    Malloc,
+    /// `map2check_map_store_pointer`.
+    StorePointer,
+    /// `map2check_map_free`.
+    Free,
+    /// The release recorded by `map2check_check_free_resolved_address`.
+    FreeResolved,
 }
 
 impl MemTrackEntry {
@@ -57,7 +84,14 @@ impl MemTrackEntry {
             size_destiny,
             size_primitive,
             is_null_valid,
+            origin: MemOrigin::Unspecified,
         }
+    }
+
+    /// Sets the export that recorded the entry.
+    pub fn with_origin(mut self, origin: MemOrigin) -> Self {
+        self.origin = origin;
+        self
     }
 
     pub fn set_malloc(&mut self) {

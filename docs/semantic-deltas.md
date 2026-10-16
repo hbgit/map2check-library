@@ -30,11 +30,12 @@ entry and its tests in the same change.
 | `suspected regression` | Probably wrong; an issue tracks adjudication. |
 | `pending decision` | Waits on the cited issue. |
 | `fixed` | Was a regression; the Rust library now matches the C runtime of Map2Check `develop`. The entry cites the fixing issue and the `develop` source. |
+| `C behaviour preserved on purpose` | The C runtime of Map2Check `develop` does something odd and the Rust library does the same, because a consumer depends on the exact output. |
 
 ### SD-01 — JSON report shape
 
-**Classification:** pending decision (#14)
-**Tests:** `tests/compat_docs.rs::integration_guide_json_examples_match_the_serializer`, `rust/src/output/mod.rs::output_is_valid_json`
+**Classification:** intentional (#14)
+**Tests:** `tests/compat_docs.rs::integration_guide_json_examples_match_the_serializer`, `rust/src/output/mod.rs::output_is_valid_json`, `rust/src/output/mod.rs::json_report_snapshot`
 
 **Rust:** `print_all_containers_as_json()`, `map2check_success()` and a
 failing `map2check_is_valid_assert()` print one pretty-printed JSON object
@@ -50,6 +51,12 @@ on stdout. The top-level key is `map2check_log`; `result` is `"TRUE"` or
 lists container names `container_trackbb_log`, `container_nondet_log` and
 `container_memtrack_log`, and asks whether a top-level `function_name` is
 part of the schema. Whitespace alone is not a semantic difference.
+
+**Decision (#14):** Map2Check does not read this JSON. It reads the result
+files that the library writes when an analysis mode is set (#19, see
+“Result files” in [`api-deltas.md`](api-deltas.md#result-files)). The JSON
+is an additional channel with its own schema, kept as it is and pinned by
+`json_report_snapshot`.
 
 **Reproduce:**
 
@@ -88,9 +95,10 @@ print_all_containers_as_json();   /* Container_AllocationLog present */
 **Classification:** fixed (#36)
 **Tests:** `rust/src/ffi_tests.rs::sd03_safe_check_keeps_earlier_violation`, `rust/src/ffi_tests.rs::sd03_later_violation_does_not_overwrite_first`
 
-**Rust:** a check that finds a violation records it and returns. The process
-keeps running (ending it, with the result files, is Task 2.4 of the cutover
-plan). The first recorded violation is final: `AnalysisState::set_false`
+**Rust:** with an analysis mode set (a Map2Check run), the first violation
+writes the result files and aborts, as in develop (Task 2.4, #19). With the
+mode unset, a check that finds a violation records it and returns, and the
+process keeps running. Either way the first recorded violation is final: `AnalysisState::set_false`
 ignores every later violation, whether it comes from a memory check, an
 overflow check, an assert or `set_false_result`, and the memory checks
 (`map2check_check_load`, `map2check_check_free`,
@@ -456,10 +464,13 @@ map2check_check_mem_endprog();                 /* MemsafetyMemcleanup */
 **Tests:** `rust/src/ffi_tests.rs::map2check_reach_target_records_and_returns`, `rust/src/ffi_tests.rs::reach_target_keeps_the_first_violation`, `rust/src/ffi_tests.rs::reach_target_works_in_every_mode_and_accepts_null_name`
 
 **Rust:** `map2check_reach_target(func, scope, line)` records
-`REACHABILITY` at `line` in `func` and returns. The first violation stays
-final (SD-03). It works in every mode and ignores `scope`. Ending the run
-with the result files belongs to Task 2.4 of the cutover plan; until then
-the program keeps running after the target.
+`REACHABILITY` at `line` in `func`. The first violation stays final
+(SD-03). It works in every mode and ignores `scope`. With a mode set it
+ends the run like develop: `map2check_property` gets `TARGET-REACHED`, the
+witness files are written when enabled, and the process aborts (Task 2.4,
+`rust/src/ffi_golden_tests.rs::target_reached_matches_c_runtime`). The
+limitation that remains is the unset mode, where the program keeps running
+after the target.
 
 **C runtime of Map2Check `develop`:** `map2check_target_function` writes
 `TARGET-REACHED` and calls `map2check_error()`, which ends the process
@@ -472,4 +483,75 @@ the program keeps running after the target.
 map2check_set_mode(AnalysisMode_Target);
 map2check_init();
 map2check_reach_target("reach_error", 0, 12);   /* Reachability, line 12; returns */
+```
+
+### SD-16 — UNKNOWN goes to `map2check_property__unknown`
+
+**Classification:** C behaviour preserved on purpose
+**Tests:** `rust/src/output/legacy_files.rs::unknown_uses_legacy_double_underscore_name`, `rust/src/ffi_golden_tests.rs::unknown_matches_c_runtime`
+
+**Rust:** an `UNKNOWN` verdict (`set_false_result(9, ...)`, or a NULL block
+from `map2check_map_malloc`/`_calloc` in the memtrack and memcleanup modes)
+writes `UNKNOWN\n` to `map2check_property__unknown`, with two
+underscores, and writes no `map2check_property`.
+
+**C runtime of Map2Check `develop`:** `PropertyGenerator.c:16` names the
+file `map2check_property__unknown`, and `write_property_unknown` (`:24-28`)
+is the only UNKNOWN writer that runs (`AnalysisModeMemtrack.c:305-311`).
+The frontend looks for `map2check_property_unknown`, with one underscore
+(`modules/frontend/utils/tools.cpp:114`), so it never finds the file and
+reports UNKNOWN because `map2check_property` is missing (`:98-103`). The
+verdict is the same either way; the name is kept so the bytes on disk match
+develop.
+
+**Reproduce:**
+
+```c
+map2check_set_mode(AnalysisMode_Memtrack);
+map2check_init();
+map2check_map_malloc(NULL, 4);   /* writes map2check_property__unknown, aborts */
+```
+
+### SD-17 — The memory and nondet logs are rebuilt from this library's records
+
+**Classification:** accepted limitation
+**Tests:** `rust/src/ffi_golden_tests.rs::false_free_matches_c_runtime`, `rust/src/ffi_golden_tests.rs::none_matches_c_runtime`, `rust/src/ffi_golden_tests.rs::false_memtrack_matches_c_runtime`, `rust/src/output/legacy_files.rs::nondet_rows_use_develop_types_and_value_formats`
+
+**Rust:** `heap_log.csv`, `allocation_log.csv`, `list_log.csv` and
+`klee_log.csv` are rebuilt at the end of the run by replaying the memory
+and nondet records in order with the rules of `AnalysisModeMemtrack.c`,
+including develop's own step counter. For the calls of
+`tests/legacy_golden/drivers/` the bytes match develop. These cases
+differ:
+
+- **Pointer variable of a free.** `map2check_map_free` receives the block,
+  not the pointer variable, so the FREE row of `list_log.csv` names the
+  variable of the newest row that points to the block. Develop names the
+  variable passed to `map2check_free`.
+- **Failing `free`.** Develop's `map2check_free` appends that FREE row
+  before it checks (`AnalysisModeMemtrack.c:346-358`). Here
+  `map2check_check_free` aborts before `map2check_map_free` records it, so
+  the row is missing from `list_log.csv`.
+- **`klee_log.csv`.** Written on every violating witness run. Develop
+  writes it only with the AFL++ or KLEE generator; `NonDetGeneratorNone.c`
+  writes none (`:42`). A `float` value, which develop has no logger for, is
+  logged as a double (type 15).
+- **Long function names.** Develop copies names into `char[35]` with
+  `strncpy` (`FUNCTION_MAX_LENGTH_NAME`), which leaves names of 35 or more
+  characters unterminated; this library writes the whole name.
+- **NULL names.** Develop prints `(null)` for a NULL name; this library
+  prints an empty string, as everywhere else (SD-09).
+
+**Reproduce:**
+
+```c
+map2check_set_mode(AnalysisMode_Memtrack);
+map2check_enable_witness();
+map2check_init();
+map2check_map_malloc((void *)0x3000, 8);
+map2check_map_store_pointer((void *)0x10, (void *)0x3000, 0, "p", 1, "main");
+map2check_map_store_pointer((void *)0x20, (void *)0x3000, 0, "q", 2, "main");
+map2check_check_free("p", (void *)0x3000, 0, 3, "main");
+map2check_map_free("p", (void *)0x3000, 0, 3, "main");
+/* list_log.csv: the FREE row names 0x20 (q); develop names 0x10 (p) */
 ```

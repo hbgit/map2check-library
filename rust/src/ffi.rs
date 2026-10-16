@@ -32,10 +32,12 @@ use crate::analysismode::VccContext;
 use crate::bbtrack::BasicBlockEntry;
 use crate::caller::ViolatedProperty;
 use crate::error::Map2CheckError;
+use crate::memtrack::MemOrigin;
 use crate::memtrack::MemTrackEntry;
 use crate::nondet::NonDetEntry;
 use crate::nondet::NonDetValue;
 use crate::output;
+use crate::output::termination;
 use crate::state;
 
 // — Helpers —————————————————————————————————————————————————————————————————
@@ -58,17 +60,29 @@ fn log_error(e: &Map2CheckError) {
     eprintln!("[map2check] error: {e}");
 }
 
+/// Records a violation (the first one is final, SD-03). When it is the
+/// first and a Map2Check analysis mode is set, the run ends here as in
+/// develop's `map2check_error()`: the result files are written and the
+/// process aborts (`output::termination`). `end_of_program` marks the
+/// end-of-program verdict.
+fn record_violation(property: ViolatedProperty, line: u32, fname: &str, end_of_program: bool) {
+    match state::with_state(|s| {
+        let first = s.result.ok;
+        s.set_false(property, line, fname);
+        Ok(first)
+    }) {
+        Ok(true) => termination::on_violation(end_of_program),
+        Ok(false) => {}
+        Err(e) => log_error(&e),
+    }
+}
+
 /// Runs `checker`, records a violation if it finds one, and returns whether
 /// the check passed (`false` on a violation or an internal error).
 fn run_vcc_check(checker: impl VccChecker, ctx: &VccContext, line: u32, fname: &str) -> bool {
     match checker.check(ctx) {
         Ok(crate::analysismode::VccOutcome::Violated { property }) => {
-            if let Err(e) = state::with_state(|s| {
-                s.set_false(property, line, fname);
-                Ok(())
-            }) {
-                log_error(&e);
-            }
+            record_violation(property, line, fname, false);
             false
         }
         Ok(crate::analysismode::VccOutcome::Safe) => true,
@@ -127,9 +141,18 @@ pub(crate) fn ffi_guard<T>(f: impl FnOnce() -> T, default: T) -> T {
 // ── Initialisation ────────────────────────────────────────────────────────────
 
 /// Initialises all containers. Must be called before any tracking function.
+/// With an analysis mode set, also removes the property files
+/// (`map2check_property*`) that an earlier run left in the current
+/// directory, so they cannot be read as this run's verdict.
 #[no_mangle]
 pub extern "C" fn map2check_init() {
-    ffi_guard(state::init, ());
+    ffi_guard(
+        || {
+            state::init();
+            termination::on_init();
+        },
+        (),
+    );
 }
 
 /// Resets the global analysis state without aborting the caller.
@@ -140,13 +163,26 @@ pub extern "C" fn map2check_reset() {
 
 // ── Result management ─────────────────────────────────────────────────────────
 
-/// Records a verification success and prints the JSON report.
+/// End of the analysed program. Prints the JSON report. With an analysis
+/// mode set it is develop's `map2check_success()`
+/// (`Map2CheckFunctions.c:67-70`, `:89-102`): writes `NONE` to
+/// `map2check_property`, runs the end-of-program verdict of the mode, writes
+/// the witness files when `map2check_enable_witness()` was called, and
+/// returns; when the verdict is a violation it writes that property instead
+/// and aborts. The JSON is printed after the verdict.
 #[no_mangle]
 pub extern "C" fn map2check_success() {
     ffi_guard(
         || {
-            if let Err(e) = state::with_state(|s| output::print_json(s)) {
-                log_error(&e);
+            let print = |s: &state::AnalysisState| {
+                if let Err(e) = output::print_json(s) {
+                    log_error(&e);
+                }
+            };
+            if !termination::on_success(print) {
+                if let Err(e) = state::with_state(|s| output::print_json(s)) {
+                    log_error(&e);
+                }
             }
         },
         (),
@@ -171,12 +207,7 @@ pub unsafe extern "C" fn set_false_result(
             };
             // SAFETY: caller guarantees function_name is a valid C string or null.
             let fname = unsafe { c_str(function_name) };
-            if let Err(e) = state::with_state(|s| {
-                s.set_false(property, line_number as u32, fname);
-                Ok(())
-            }) {
-                log_error(&e);
-            }
+            record_violation(property, line_number as u32, fname, false);
         },
         (),
     );
@@ -270,6 +301,24 @@ pub extern "C" fn map2check_set_null_is_valid() {
     );
 }
 
+/// Turns on witness generation, as linking `WitnessGeneration.c` instead of
+/// `WitnessGenerationNone.c` does in develop (`caller.cpp:624-640`). Effect:
+/// when a Map2Check run ends (an analysis mode is set), the library also
+/// writes `track_bb_log.st`, `heap_log.csv`, `allocation_log.csv` and
+/// `list_log.csv` (memory modes), and on a violation `klee_log.csv` and
+/// `map2check_checked_error`. Configuration: kept by `map2check_init()` and
+/// `map2check_reset()`. The Map2Check frontend links a constructor that
+/// calls it into the witness binary.
+#[no_mangle]
+pub extern "C" fn map2check_enable_witness() {
+    ffi_guard(
+        || {
+            state::update_config(|c| c.witness = true);
+        },
+        (),
+    );
+}
+
 /// Selects the analysis mode, as the frontend of Map2Check `develop` does by
 /// linking one `AnalysisMode*.c` per run (`caller.cpp:575-612`). The
 /// instrumented program calls it before `map2check_init()` with one of the
@@ -319,12 +368,7 @@ pub(crate) unsafe fn mark_target_reached(
 ) {
     // SAFETY: caller guarantees func is a valid C string or null.
     let fname = unsafe { c_str(func) };
-    if let Err(e) = state::with_state(|s| {
-        s.set_false(ViolatedProperty::Reachability, line as u32, fname);
-        Ok(())
-    }) {
-        log_error(&e);
-    }
+    record_violation(ViolatedProperty::Reachability, line as u32, fname, false);
 }
 
 /// Called by the target pass when the target function (e.g. `reach_error`)
@@ -561,20 +605,23 @@ pub unsafe extern "C" fn map2check_map_alloca(
             let addr = ptr_address as usize;
             if let Err(e) = state::with_state(|s| {
                 let step = s.next_step();
-                s.memtrack.push(MemTrackEntry::new(
-                    step,
-                    line_number as u32,
-                    scope as u32,
-                    addr,
-                    addr,
-                    false,
-                    false,
-                    name,
-                    "",
-                    size as usize,
-                    size_primitive as usize,
-                    false,
-                ));
+                s.memtrack.push(
+                    MemTrackEntry::new(
+                        step,
+                        line_number as u32,
+                        scope as u32,
+                        addr,
+                        addr,
+                        false,
+                        false,
+                        name,
+                        "",
+                        size as usize,
+                        size_primitive as usize,
+                        false,
+                    )
+                    .with_origin(MemOrigin::Alloca),
+                );
                 Ok(())
             }) {
                 log_error(&e);
@@ -616,20 +663,23 @@ pub unsafe extern "C" fn map2check_map_non_static_alloca(
             let addr = ptr_address as usize;
             if let Err(e) = state::with_state(|s| {
                 let step = s.next_step();
-                s.memtrack.push(MemTrackEntry::new(
-                    step,
-                    line_number as u32,
-                    scope as u32,
-                    addr,
-                    addr,
-                    false,
-                    false,
-                    name,
-                    "",
-                    bytes,
-                    size_primitive as usize,
-                    false,
-                ));
+                s.memtrack.push(
+                    MemTrackEntry::new(
+                        step,
+                        line_number as u32,
+                        scope as u32,
+                        addr,
+                        addr,
+                        false,
+                        false,
+                        name,
+                        "",
+                        bytes,
+                        size_primitive as usize,
+                        false,
+                    )
+                    .with_origin(MemOrigin::Alloca),
+                );
                 Ok(())
             }) {
                 log_error(&e);
@@ -659,20 +709,23 @@ pub unsafe extern "C" fn map2check_map_funct_address(
             let pointer_width = std::mem::size_of::<*const std::os::raw::c_void>();
             if let Err(e) = state::with_state(|s| {
                 let step = s.next_step();
-                s.memtrack.push(MemTrackEntry::new(
-                    step,
-                    0,
-                    0,
-                    addr,
-                    addr,
-                    false,
-                    false,
-                    name,
-                    "",
-                    pointer_width,
-                    pointer_width,
-                    false,
-                ));
+                s.memtrack.push(
+                    MemTrackEntry::new(
+                        step,
+                        0,
+                        0,
+                        addr,
+                        addr,
+                        false,
+                        false,
+                        name,
+                        "",
+                        pointer_width,
+                        pointer_width,
+                        false,
+                    )
+                    .with_origin(MemOrigin::Function),
+                );
                 Ok(())
             }) {
                 log_error(&e);
@@ -682,6 +735,26 @@ pub unsafe extern "C" fn map2check_map_funct_address(
     );
 }
 
+/// In the memory modes, a NULL block is develop's UNKNOWN: `map2check_malloc`
+/// writes `map2check_property__unknown` and ends the run before recording
+/// anything (`AnalysisModeMemtrack.c:305-311`, `AnalysisModeMemcleanup.c:295-300`).
+/// Returns whether the call was handled that way.
+fn malloc_returned_null(ptr_address: *const std::os::raw::c_void) -> bool {
+    let memory_mode = matches!(
+        state::config().mode,
+        Some(AnalysisMode::Memtrack | AnalysisMode::Memcleanup)
+    );
+    if !(memory_mode && ptr_address.is_null()) {
+        return false;
+    }
+    record_violation(ViolatedProperty::Unknown, 0, "", false);
+    true
+}
+
+/// Records a heap allocation of `size` bytes at `ptr_address`. In the
+/// memtrack and memcleanup modes a NULL `ptr_address` reports `UNKNOWN`
+/// instead, as develop does.
+///
 /// # Safety
 /// `ptr_address` may be null (null malloc result is valid C).
 #[no_mangle]
@@ -689,6 +762,9 @@ pub unsafe extern "C" fn map2check_map_malloc(ptr_address: *const std::os::raw::
     ffi_guard(
         || {
             if size < 0 {
+                return;
+            }
+            if malloc_returned_null(ptr_address) {
                 return;
             }
             let addr = ptr_address as usize;
@@ -709,7 +785,7 @@ pub unsafe extern "C" fn map2check_map_malloc(ptr_address: *const std::os::raw::
                     false,
                 );
                 entry.set_malloc();
-                s.memtrack.push(entry);
+                s.memtrack.push(entry.with_origin(MemOrigin::Malloc));
                 Ok(())
             }) {
                 log_error(&e);
@@ -719,6 +795,10 @@ pub unsafe extern "C" fn map2check_map_malloc(ptr_address: *const std::os::raw::
     );
 }
 
+/// Records a heap allocation of `quantity * size` bytes at `ptr_address`.
+/// In the memtrack and memcleanup modes a NULL `ptr_address` reports
+/// `UNKNOWN` instead, as develop's `map2check_calloc` does.
+///
 /// # Safety
 /// `ptr_address` may be null.
 #[no_mangle]
@@ -730,6 +810,9 @@ pub unsafe extern "C" fn map2check_map_calloc(
     ffi_guard(
         || {
             if quantity < 0 || size < 0 {
+                return;
+            }
+            if malloc_returned_null(ptr_address) {
                 return;
             }
             let quantity = quantity as usize;
@@ -746,7 +829,7 @@ pub unsafe extern "C" fn map2check_map_calloc(
                 if !entry.set_calloc(quantity) {
                     return Ok(());
                 }
-                s.memtrack.push(entry);
+                s.memtrack.push(entry.with_origin(MemOrigin::Malloc));
                 Ok(())
             }) {
                 log_error(&e);
@@ -789,7 +872,7 @@ pub unsafe extern "C" fn map2check_map_free(
                     false,
                 );
                 entry.set_free();
-                s.memtrack.push(entry);
+                s.memtrack.push(entry.with_origin(MemOrigin::Free));
                 Ok(())
             }) {
                 log_error(&e);
@@ -819,20 +902,23 @@ pub unsafe extern "C" fn map2check_map_store_pointer(
             let points_to = value as usize;
             if let Err(e) = state::with_state(|s| {
                 let step = s.next_step();
-                s.memtrack.push(MemTrackEntry::new(
-                    step,
-                    line_number as u32,
-                    scope,
-                    var_addr,
-                    points_to,
-                    false,
-                    false,
-                    name,
-                    fname,
-                    0,
-                    1,
-                    false,
-                ));
+                s.memtrack.push(
+                    MemTrackEntry::new(
+                        step,
+                        line_number as u32,
+                        scope,
+                        var_addr,
+                        points_to,
+                        false,
+                        false,
+                        name,
+                        fname,
+                        0,
+                        1,
+                        false,
+                    )
+                    .with_origin(MemOrigin::StorePointer),
+                );
                 Ok(())
             }) {
                 log_error(&e);
@@ -865,11 +951,15 @@ pub unsafe extern "C" fn map2check_is_valid_assert(
             let checker = AssertChecker { expression };
             match checker.check(&ctx) {
                 Ok(crate::analysismode::VccOutcome::Violated { property }) => {
-                    if let Err(e) = state::with_state(|s| {
+                    match state::with_state(|s| {
+                        let first = s.result.ok;
                         s.set_false(property, line_number as u32, fname);
-                        output::print_json(s)
+                        output::print_json(s)?;
+                        Ok(first)
                     }) {
-                        log_error(&e);
+                        Ok(true) => termination::on_violation(false),
+                        Ok(false) => {}
+                        Err(e) => log_error(&e),
                     }
                 }
                 Ok(crate::analysismode::VccOutcome::Safe) => {}
@@ -1012,12 +1102,7 @@ pub unsafe extern "C" fn map2check_check_load(
             // SAFETY: caller guarantees function_name is valid or null.
             let fname = unsafe { c_str(function_name) };
             if size < 0 {
-                if let Err(e) = state::with_state(|s| {
-                    s.set_false(ViolatedProperty::MemsafetyDeref, line as u32, fname);
-                    Ok(())
-                }) {
-                    log_error(&e);
-                }
+                record_violation(ViolatedProperty::MemsafetyDeref, line as u32, fname, false);
                 return;
             }
             let ctx = VccContext::new(line as u32, scope, fname);
@@ -1120,7 +1205,7 @@ pub unsafe extern "C" fn map2check_check_free_resolved_address(
                     step, line, 0, addr, addr, true, false, "", fname, 0, 1, false,
                 );
                 entry.set_free();
-                s.memtrack.push(entry);
+                s.memtrack.push(entry.with_origin(MemOrigin::FreeResolved));
                 Ok(())
             }) {
                 log_error(&e);
@@ -1173,13 +1258,10 @@ pub extern "C" fn map2check_check_mem_endprog() {
     ffi_guard(
         || {
             let config = state::config();
-            if let Err(e) = state::with_state(|s| {
-                if let Some(property) = mode::analysis_is_program_correct(config, s) {
-                    s.set_false(property, 0, "end_of_program");
-                }
-                Ok(())
-            }) {
-                log_error(&e);
+            match state::with_state(|s| Ok(mode::analysis_is_program_correct(config, s))) {
+                Ok(Some(property)) => record_violation(property, 0, "end_of_program", true),
+                Ok(None) => {}
+                Err(e) => log_error(&e),
             }
         },
         (),
@@ -1189,3 +1271,7 @@ pub extern "C" fn map2check_check_mem_endprog() {
 #[cfg(test)]
 #[path = "ffi_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "ffi_golden_tests.rs"]
+mod golden_tests;

@@ -4,6 +4,9 @@
 // Replaces lib/json-maker.c and lib/to_string/ftoa.c entirely.
 // serde_json handles JSON construction and float formatting safely.
 
+pub mod legacy_files;
+pub(crate) mod termination;
+
 use serde::Serialize;
 
 use crate::{caller::ViolatedProperty, error::Map2CheckError, state::AnalysisState};
@@ -153,6 +156,28 @@ mod tests {
         let json = to_json(&state).unwrap();
         let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
         assert!(parsed["map2check_log"].is_object());
+    }
+
+    /// Snapshot of the whole report (#14): the JSON is an additional channel
+    /// with its own schema (SD-01); Map2Check reads the files of
+    /// `legacy_files`. A change to this text is a schema change.
+    #[test]
+    fn json_report_snapshot() {
+        let mut state = state_ok();
+        state.result.ok = false;
+        state.result.step = 3;
+        state.result.property = ViolatedProperty::MemsafetyFree;
+        state.result.line = 12;
+        state.result.function_name = "main".to_owned();
+        state.memtrack.push(crate::memtrack::MemTrackEntry::new(
+            2, 12, 1, 0x100, 0x200, true, false, "p", "main", 16, 4, false,
+        ));
+        let snapshot = std::fs::read_to_string(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/rust/src/output/json_report.snap"
+        ))
+        .unwrap();
+        assert_eq!(to_json(&state).unwrap() + "\n", snapshot);
     }
 
     #[test]

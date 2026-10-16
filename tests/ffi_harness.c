@@ -11,9 +11,14 @@
  * does not expand `macro_rules!`. Those are declared by hand below with the
  * exact signatures from `ffi.rs`.
  */
+#include <signal.h>
 #include <stdint.h>
 #include <stddef.h>
+#include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
+#include <sys/wait.h>
+#include <unistd.h>
 
 #include "../include/map2check.h"
 
@@ -352,63 +357,192 @@ static int test_result_and_control_flags(void) {
     return 0;
 }
 
-/* Task 2.3: the mode selected at run time gates the checks. Runs last
- * because no API returns the mode to unset. */
-static int test_analysis_modes(void) {
+/* Task 2.3 and 2.4: with a mode set, the first violation writes the result
+ * files and aborts, and map2check_success() writes NONE and returns, as the
+ * C runtime of Map2Check develop does. Each scenario therefore runs in a
+ * forked child inside its own temporary directory; the parent checks how
+ * the child ended and what it wrote. The mode stays unset in this process. */
+typedef void (*scenario_fn)(void);
+
+static const char *const result_files[] = {
+    "map2check_property", "map2check_property__unknown",
+    "map2check_property_memtrack", "map2check_property_memcleanup",
+    "map2check_property_deref", "map2check_property_free",
+    "map2check_property_overflow", "map2check_property_assert",
+    "map2check_checked_error", "track_bb_log.st", "klee_log.csv",
+    "list_log.csv", "allocation_log.csv", "heap_log.csv", NULL};
+
+/* Reads `name` from `dir` into `buf` (NUL-terminated); "" when missing. */
+static void read_result(const char *dir, const char *name, char *buf,
+                        size_t size) {
+    char path[512];
+    snprintf(path, sizeof(path), "%s/%s", dir, name);
+    buf[0] = '\0';
+    FILE *f = fopen(path, "r");
+    if (f == NULL) {
+        return;
+    }
+    size_t n = fread(buf, 1, size - 1, f);
+    buf[n] = '\0';
+    fclose(f);
+}
+
+static void remove_results(const char *dir) {
+    char path[512];
+    for (int i = 0; result_files[i] != NULL; i++) {
+        snprintf(path, sizeof(path), "%s/%s", dir, result_files[i]);
+        unlink(path);
+    }
+    rmdir(dir);
+}
+
+/* Runs `scenario` in a child. `aborts`: whether it must end with SIGABRT
+ * (otherwise exit 0). `property`: expected map2check_property content.
+ * `extra`/`extra_content`: one more file to check, or NULL. */
+static int run_mode_scenario(scenario_fn scenario, int aborts,
+                             const char *property, const char *extra,
+                             const char *extra_content) {
+    char dir[] = "/tmp/map2check-harness-XXXXXX";
+    if (mkdtemp(dir) == NULL) {
+        return 1;
+    }
+    fflush(NULL);
+    pid_t pid = fork();
+    if (pid < 0) {
+        return 1;
+    }
+    if (pid == 0) {
+        if (chdir(dir) != 0) {
+            _exit(90);
+        }
+        scenario();
+        _exit(0);
+    }
+    int status = 0;
+    int failed = waitpid(pid, &status, 0) != pid;
+    if (aborts) {
+        failed |= !(WIFSIGNALED(status) && WTERMSIG(status) == SIGABRT);
+    } else {
+        failed |= !(WIFEXITED(status) && WEXITSTATUS(status) == 0);
+    }
+    char buf[256];
+    read_result(dir, "map2check_property", buf, sizeof(buf));
+    failed |= strcmp(buf, property) != 0;
+    if (extra != NULL) {
+        read_result(dir, extra, buf, sizeof(buf));
+        failed |= strcmp(buf, extra_content) != 0;
+    }
+    remove_results(dir);
+    return failed;
+}
+
+static void scenario_none_mode(void) {
     map2check_set_mode(AnalysisMode_None);
     map2check_init();
     map2check_check_deref((void *)0xdead, 0, 1, "main");
     if (get_current_property() != None) {
-        return 1;
+        _exit(91);
     }
+    map2check_success();
+}
 
+static void scenario_memtrack_deref(void) {
     map2check_set_mode(AnalysisMode_Memtrack);
     map2check_init();
     map2check_check_deref((void *)0xdead, 0, 1, "main");
-    if (get_current_property() != MemsafetyDeref) {
-        return 2;
-    }
+}
 
+static void scenario_memtrack_deref_witness(void) {
+    map2check_enable_witness();
+    scenario_memtrack_deref();
+}
+
+static void scenario_assert_ignores_overflow(void) {
     map2check_set_mode(AnalysisMode_Assert);
     map2check_init();
     map2check_binop_add_int(2147483647, 1, 2, 0, "main");
     if (get_current_property() != None) {
-        return 3;
+        _exit(91);
     }
+    map2check_success();
+}
 
+static void scenario_target(void) {
     map2check_set_mode(AnalysisMode_Target);
     map2check_init();
     map2check_reach_target("reach_error", 0, 12);
-    if (get_current_property() != Reachability) {
-        return 4;
-    }
+}
 
-    /* Out-of-range values are ignored: the mode stays Target (I-1). */
+/* Out-of-range values are ignored: the mode stays Target (I-1). */
+static void scenario_out_of_range_keeps_target(void) {
+    map2check_set_mode(AnalysisMode_Target);
     map2check_set_mode(-1);
     map2check_set_mode(6);
     map2check_set_mode(2147483647);
     map2check_init();
     map2check_check_deref((void *)0xdead, 0, 1, "main");
     if (get_current_property() != None) {
-        return 5;
+        _exit(91);
     }
+    map2check_success();
+}
 
-    /* Memcleanup mode: only a leak still referenced by a pointer (I-2). */
+/* Memcleanup mode: an unreferenced leak gives no verdict (I-2). */
+static void scenario_memcleanup_unreferenced(void) {
     map2check_set_mode(AnalysisMode_Memcleanup);
     map2check_init();
     map2check_map_malloc((void *)0x3000, 8);
     map2check_check_mem_endprog();
     if (get_current_property() != None) {
-        return 6;
+        _exit(91);
     }
+    map2check_success();
+}
+
+static void scenario_memcleanup_referenced(void) {
+    map2check_set_mode(AnalysisMode_Memcleanup);
     map2check_init();
     map2check_map_malloc((void *)0x3000, 8);
     map2check_map_store_pointer((void *)0x10, (void *)0x3000, 0, "p", 1, "main");
     map2check_check_mem_endprog();
-    if (get_current_property() != MemsafetyMemcleanup) {
+}
+
+static int test_analysis_modes(void) {
+    if (run_mode_scenario(scenario_none_mode, 0, "NONE\n", NULL, NULL)) {
+        return 1;
+    }
+    if (run_mode_scenario(scenario_memtrack_deref, 1,
+                          "FALSE-DEREF\nLine: 1\nFunction: main\n",
+                          "map2check_checked_error", "")) {
+        return 2;
+    }
+    if (run_mode_scenario(scenario_memtrack_deref_witness, 1,
+                          "FALSE-DEREF\nLine: 1\nFunction: main\n",
+                          "map2check_checked_error", "END OF TIME\n")) {
+        return 3;
+    }
+    if (run_mode_scenario(scenario_assert_ignores_overflow, 0, "NONE\n", NULL,
+                          NULL)) {
+        return 4;
+    }
+    if (run_mode_scenario(scenario_target, 1,
+                          "TARGET-REACHED\nLine: 12\nFunction: reach_error\n",
+                          NULL, NULL)) {
+        return 5;
+    }
+    if (run_mode_scenario(scenario_out_of_range_keeps_target, 0, "NONE\n",
+                          NULL, NULL)) {
+        return 6;
+    }
+    if (run_mode_scenario(scenario_memcleanup_unreferenced, 0, "NONE\n", NULL,
+                          NULL)) {
         return 7;
     }
-    map2check_reset();
+    if (run_mode_scenario(scenario_memcleanup_referenced, 1,
+                          "FALSE-MEMCLEANUP\n", "map2check_property_memcleanup",
+                          "FALSE-MEMCLEANUP\n")) {
+        return 8;
+    }
     return 0;
 }
 
@@ -448,8 +582,13 @@ int main(void) {
         }
     }
 
-    if (test_analysis_modes() != 0) {
-        return 1;
+    {
+        int failed_mode = test_analysis_modes();
+        if (failed_mode != 0) {
+            fprintf(stderr, "test_analysis_modes: scenario %d failed\n",
+                    failed_mode);
+            return 1;
+        }
     }
 
     map2check_success();

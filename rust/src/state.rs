@@ -30,6 +30,11 @@ pub struct Config {
     pub memcleanup: bool,
     /// Set by `map2check_set_null_is_valid()`: a NULL load is safe.
     pub null_is_valid: bool,
+    /// Set by `map2check_enable_witness()`: the end of a Map2Check run also
+    /// writes the witness files (`track_bb_log.st`, the memory logs,
+    /// `klee_log.csv` and `map2check_checked_error`), as a develop binary
+    /// linked with `WitnessGeneration.c` does.
+    pub witness: bool,
 }
 
 impl Config {
@@ -38,6 +43,7 @@ impl Config {
             mode: None,
             memcleanup: false,
             null_is_valid: false,
+            witness: false,
         }
     }
 }
