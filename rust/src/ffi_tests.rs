@@ -796,6 +796,119 @@ fn sd03_later_violation_does_not_overwrite_first() {
     assert_violated(ViolatedProperty::MemsafetyDeref, 7, "first");
 }
 
+// ── #11: validity follows the latest alloc/free event ───────────────────────
+
+#[test]
+fn deref_after_free_is_invalid() {
+    let _guard = fresh();
+    map2check_init();
+    // SAFETY: C-string literals are valid; fake addresses are never dereferenced.
+    unsafe {
+        map2check_map_malloc(addr(0x2000), 16);
+        map2check_map_free(c"p".as_ptr(), addr(0x2000), 0, 9, c"main".as_ptr());
+        map2check_check_deref(addr(0x2000), 0, 10, c"main".as_ptr());
+    }
+    assert_violated(ViolatedProperty::MemsafetyDeref, 10, "main");
+}
+
+#[test]
+fn load_after_free_is_invalid() {
+    // develop: the freed row has size 0, so no live row covers the address
+    // (AllocationLog.c:127-148, AnalysisModeMemtrack.c:156-162, :360-363).
+    let _guard = fresh();
+    // SAFETY: C-string literals are valid; fake addresses are never dereferenced.
+    unsafe {
+        map2check_map_malloc(addr(0x2000), 16);
+        map2check_map_free(c"p".as_ptr(), addr(0x2000), 0, 9, c"main".as_ptr());
+        map2check_check_load(addr(0x2004), 10, 0, 4, c"main".as_ptr());
+    }
+    assert_violated(ViolatedProperty::MemsafetyDeref, 10, "main");
+}
+
+#[test]
+fn reallocation_at_same_address_is_valid_again() {
+    // develop: `map2check_malloc` revives the existing row (is_free = FALSE,
+    // new size; AnalysisModeMemtrack.c:313-317).
+    let _guard = fresh();
+    // SAFETY: C-string literals are valid; fake addresses are never dereferenced.
+    unsafe {
+        map2check_map_malloc(addr(0x2000), 16);
+        map2check_map_free(c"p".as_ptr(), addr(0x2000), 0, 9, c"main".as_ptr());
+        map2check_map_malloc(addr(0x2000), 16);
+        map2check_check_load(addr(0x2004), 10, 0, 4, c"main".as_ptr());
+        map2check_check_deref(addr(0x2000), 0, 11, c"main".as_ptr());
+        map2check_check_free(c"p".as_ptr(), addr(0x2000), 0, 12, c"main".as_ptr());
+        map2check_check_free_resolved_address(addr(0x2000), 13, c"main".as_ptr(), 0);
+    }
+    assert_ok();
+
+    // SAFETY: as above.
+    unsafe {
+        map2check_map_free(c"p".as_ptr(), addr(0x2000), 0, 14, c"main".as_ptr());
+        map2check_check_load(addr(0x2004), 15, 0, 4, c"main".as_ptr());
+    }
+    assert_violated(ViolatedProperty::MemsafetyDeref, 15, "main");
+}
+
+#[test]
+fn reallocation_with_smaller_size_shrinks_the_valid_range() {
+    let _guard = fresh();
+    // SAFETY: C-string literals are valid; fake addresses are never dereferenced.
+    unsafe {
+        map2check_map_malloc(addr(0x2000), 16);
+        map2check_map_free(c"p".as_ptr(), addr(0x2000), 0, 9, c"main".as_ptr());
+        map2check_map_malloc(addr(0x2000), 8);
+        map2check_check_load(addr(0x2004), 10, 0, 4, c"main".as_ptr());
+    }
+    assert_ok();
+    // SAFETY: as above.
+    unsafe { map2check_check_load(addr(0x2008), 11, 0, 4, c"main".as_ptr()) };
+    assert_violated(ViolatedProperty::MemsafetyDeref, 11, "main");
+}
+
+#[test]
+fn load_range_boundaries_of_a_live_allocation() {
+    let _guard = fresh();
+    // SAFETY: C-string literals are valid; fake addresses are never dereferenced.
+    unsafe {
+        map2check_map_malloc(addr(0x2000), 16);
+        map2check_check_load(addr(0x2000), 1, 0, 16, c"main".as_ptr());
+        map2check_check_load(addr(0x200c), 2, 0, 4, c"main".as_ptr());
+        map2check_check_load(addr(0x200f), 3, 0, 1, c"main".as_ptr());
+    }
+    assert_ok();
+
+    for (address, size, line) in [(0x1fff, 1, 4), (0x200d, 4, 5), (0x2010, 1, 6)] {
+        state::reset();
+        // SAFETY: as above.
+        unsafe {
+            map2check_map_malloc(addr(0x2000), 16);
+            map2check_check_load(addr(address), line, 0, size, c"main".as_ptr());
+        }
+        assert_violated(ViolatedProperty::MemsafetyDeref, line as u32, "main");
+    }
+}
+
+#[test]
+fn pointer_store_does_not_revive_a_freed_block() {
+    let _guard = fresh();
+    // SAFETY: C-string literals are valid; fake addresses are never dereferenced.
+    unsafe {
+        map2check_map_malloc(addr(0x2000), 16);
+        map2check_map_free(c"p".as_ptr(), addr(0x2000), 0, 9, c"main".as_ptr());
+        map2check_map_store_pointer(
+            addr(0x3000),
+            addr(0x2000),
+            0,
+            c"q".as_ptr(),
+            10,
+            c"main".as_ptr(),
+        );
+        map2check_check_load(addr(0x2000), 11, 0, 4, c"main".as_ptr());
+    }
+    assert_violated(ViolatedProperty::MemsafetyDeref, 11, "main");
+}
+
 #[test]
 fn check_free_accepts_live_allocation_and_null() {
     let _guard = fresh();

@@ -152,19 +152,40 @@ pub fn has_memcleanup_error(entries: &[MemTrackEntry]) -> bool {
     })
 }
 
-/// Checks whether `address` is a valid allocation (within any live allocation's range).
+/// Checks whether the `size` bytes at `address` lie outside every valid block.
 /// Replaces `is_a_invalid_address_in_cntr`.
+///
+/// Follows `map2check_load` of the Map2Check `develop` C runtime
+/// (`AnalysisModeMemtrack.c:156-162`), which accepts the access when a stack
+/// slot covers it (`is_valid_heap_address`, `HeapLog.c:37-52`) or a live heap
+/// block does (`is_valid_allocation_address`, `AllocationLog.c:127-148`):
+///
+/// - a stack slot (`map2check_map_alloca`, `_non_static_alloca`,
+///   `_funct_address`: neither dynamic nor freed, non-zero size) stays valid;
+/// - for heap blocks, only the latest alloc/free event per block address
+///   counts (#11): `develop` keeps one row per address and updates it in place
+///   on malloc and free (`AnalysisModeMemtrack.c:313-317`, `:360-363`), so a
+///   free invalidates the block and a later malloc at the same address makes
+///   it valid again, with the new size;
+/// - pointer stores (`map2check_map_store_pointer`, size 0) are not events.
 pub fn is_invalid_address(entries: &[MemTrackEntry], address: usize, size: usize) -> bool {
     let Some(address_end) = address.checked_add(size) else {
         return true;
     };
-    !entries.iter().rev().any(|entry| {
-        !entry.is_free
-            && address >= entry.points_to
+    let covers = |entry: &MemTrackEntry| {
+        address >= entry.points_to
             && entry
                 .points_to
                 .checked_add(entry.size_destiny)
                 .is_some_and(|allocation_end| address_end <= allocation_end)
+    };
+    let mut decided = HashSet::new();
+    !entries.iter().rev().any(|entry| {
+        if entry.is_dynamic || entry.is_free {
+            decided.insert(entry.points_to) && !entry.is_free && covers(entry)
+        } else {
+            entry.size_destiny > 0 && covers(entry)
+        }
     })
 }
 
@@ -322,6 +343,29 @@ mod tests {
             make_entry(0x300, 0x200, false, false, 0),
         ];
         assert!(!is_deref_error(&entries, 0x200));
+    }
+
+    #[test]
+    fn invalid_address_uses_latest_event_per_block() {
+        let malloc = make_entry(0x200, 0x200, true, false, 16);
+        let mut free = make_entry(0x200, 0x200, true, false, 16);
+        free.set_free();
+        assert!(is_invalid_address(
+            &[malloc.clone(), free.clone()],
+            0x204,
+            4
+        ));
+        let realloc = make_entry(0x200, 0x200, true, false, 8);
+        let live = [malloc, free, realloc];
+        assert!(!is_invalid_address(&live, 0x204, 4));
+        assert!(is_invalid_address(&live, 0x208, 4));
+    }
+
+    #[test]
+    fn invalid_address_keeps_stack_slots_valid() {
+        let entries = vec![make_entry(0x300, 0x300, false, false, 8)];
+        assert!(!is_invalid_address(&entries, 0x304, 4));
+        assert!(is_invalid_address(&entries, 0x306, 4));
     }
 
     #[test]
