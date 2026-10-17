@@ -153,6 +153,21 @@ A aprovação aceita a proposta junto com estas condições.
 10. **O rustc 1.72.1 (2023) fica preso ao LLVM 16.** Quando o Map2Check migrar de LLVM, o toolchain do `symex` precisa acompanhar ou ser removido pela rota C.
 11. **O programa analisado é compilado com `-fexceptions`.** Responsável: Task 3.2. Um `__VERIFIER_assume` falso dentro de uma iteração do fuzzer desenrola a pilha (`resume_unwind`) através dos frames C do programa até o `LLVMFuzzerTestOneInput`. Sem `-fexceptions`, o clang marca toda função C como `nounwind`, e desenrolar a partir de uma função `nounwind` é comportamento indefinido no IR do LLVM. Hoje funciona só porque o x86-64 Linux emite `.eh_frame` por padrão. Com `-fno-asynchronous-unwind-tables -fno-unwind-tables` o processo aborta (“failed to initiate panic, error 5”), e o AFL++ contaria isso como crash: um falso positivo. O passo que gera o bitcode do programa (`clang -emit-llvm`) tem de passar `-fexceptions`, porque os atributos viajam no bitcode que o `afl-clang-fast` recebe. Nenhuma etapa pode acrescentar `-fno-unwind-tables` ou `-fno-asynchronous-unwind-tables`. Unwind tables sozinhas (`-funwind-tables`) não bastam: fazem o desenrolar funcionar, mas o IR continua `nounwind`. Evidência: `tests/ffi_harness.c` em `-O2` com clang-16 e afl-clang-fast (`scripts/cutover/d1-remeasure/results/flags16.txt`, tabela em `docs/api-deltas.md`, “`__VERIFIER_assume` under a fuzzer”). O CI roda o harness em `-O2` com e sem `-fexceptions`.
 
+## D2
+
+**Pergunta:** o modo `--wasm` entra no cutover?
+
+**Status: recomendação do plano, executada.** O plano registra a D2 só como recomendação ("Portar"), sem aprovação explícita do mantenedor. As Tasks 2.8 e 2.8b a seguiram. Falta a aprovação formal.
+
+**Decisão (texto do plano):** portar os stubs do wasm2c para Rust, e não deixar `--wasm` fora do escopo.
+
+**Justificativa (texto do plano):** o CI do Map2Check tem o job `e2e-wasm` ativo (`ci.yml:213`). Não há base, portanto, para declarar o modo obsoleto.
+
+**Execução:**
+- Task 2.8: `rust/src/wasm.rs` (feature `wasm`), com a semântica do develop registrada no SD-19.
+- Task 2.8b: o runtime KLEE (`map2check-klee.bc`) também é construído com a feature `wasm`.
+- Task 3.3: o frontend deixa de ligar `WasmRuntimeStubs.bc`. Os testes `test_wasm_*.sh` passam com o runtime Rust, nos geradores `afl` e `symex`.
+
 ## D3
 
 **Pergunta:** a opção `--btree` (armazenamento em disco do runtime C) é portada para o runtime Rust, ou removida com justificativa.
@@ -176,3 +191,25 @@ A aprovação aceita a proposta junto com estas condições.
 **Decisão:** aceitar a razão mediana medida. O limite do critério 8 passa de 1,25 para **1,36** (medido 1,360; afl 0,99, symex 1,58). `compare.py` usa `--max-rss` 1.36 por padrão.
 
 **Causa:** o excesso sob `symex` é quase constante (cerca de +80 MB). A hipótese é que o KLEE carrega e otimiza um `map2check-klee.bc` de 2,2 MB, contra 0,13 MB dos `.bc` do runtime C. **Hipótese não perfilada.**
+
+**Perfil posterior (critério 9, 2026-10-16):** a hipótese foi medida em byte_add_bug, com KLEE rodando sozinho no `-witness-result.bc` mantido.
+- **Pico de RSS do KLEE:** C 127 MB, Rust 221 MB.
+- **Sem o simbolizador de backtrace da std:** 161 MB. Os corpos de gimli, addr2line, miniz_oxide, rustc_demangle e backtrace_rs foram removidos com `llvm-extract --delete`.
+- **Conclusão:** cerca de 60 dos 94 MB de excesso vêm desse código, que nunca roda.
+- **Detalhes:** `Map2Check-rust/tests/cutover/gate-report.md`, "Critério 9 — perfis".
+
+## D5
+
+**Pergunta:** que ABI os passes do Map2Check emitem depois do cutover.
+
+**Status: DECIDIDA pelo usuário em 2026-10-15**, na sessão que pediu o plano. O plano a registra como decidida (seção 2 e "Global Constraints").
+
+**Decisão:** sem camada de compatibilidade.
+- A biblioteca Rust não exporta os nomes nem as assinaturas do runtime C. Não há feature `compat`, módulo `compat.rs` nem aliases.
+- Os passes LLVM migram diretamente para a API núcleo, sem ABI dupla. A #23 entra no cutover (Task 3.2).
+- A #21 fecha como "won't do (D5)".
+
+**Consequências:**
+- A diferença de nomes entre o runtime C e o header Rust se resolve no que os passes emitem, com o mapeamento de `docs/cutover/abi-mapping.tsv` (Tasks 0.3 e 3.2), e não na biblioteca.
+- A Task 2.5 só acrescenta à API núcleo, com nomes núcleo, o que ainda faltava. Um teste falha se um nome do runtime C aparecer no artefato.
+- A antiga Fase 7 (aposentar a camada de compatibilidade) foi removida do plano.

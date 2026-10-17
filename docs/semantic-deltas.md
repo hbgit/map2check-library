@@ -688,3 +688,113 @@ map2check_init();
 map2check_wasm_malloc(0x10000, 16);
 map2check_wasm_check_access(0x10010, 4);   /* OVERFLOW, line 0, aborts */
 ```
+
+### SD-20 — Result files survive other KLEE states (gate ref `C-BUG-property-race`)
+
+**Classification:** intentional
+**Tests:** `rust/src/output/legacy_files.rs::concurrent_reader_never_sees_empty_or_partial_file`, `rust/src/output/legacy_files.rs::write_goes_through_a_temp_file_and_rename`, `rust/src/output/legacy_files.rs::temp_name_collisions_are_skipped`
+
+This entry covers a bug of the C runtime of Map2Check `develop` that the
+Rust library fixes. The cutover gate cites it as `C-BUG-property-race` in
+`tests/cutover/deltas-aceitos.tsv` of Map2Check `feat/rust-runtime` (10
+rows: verdict, tag, line and function of `simple-ext` and `ex01_false`
+under `unreach-call`/`symex`, plus line and function of `960521-1_1-1`
+under `valid-memsafety`/`symex`).
+
+**Rust:** every legacy result file (`map2check_property`, its `_deref`,
+`_free`, `_memtrack` and `_memcleanup` variants, and the logs) is written
+to a temporary file in the same directory and then renamed over the target
+(`write_atomic`, `6b49b82`). A reader, or another KLEE state, sees either
+the old content or the new content, never an empty file. Names, contents
+and write order are the same as develop's.
+
+**C runtime of Map2Check `develop`:** `write_property`
+(`PropertyGenerator.c:50`) does `fopen("map2check_property", "w")`, then
+`fprintf`, then `fclose`. Under KLEE with `--external-calls=all`, every
+state shares the host file. A state that later opens the file with `"w"`
+truncates what the violating state wrote. `--exit-on-error-type=Abort` then
+halts KLEE before that state writes its own content. The frontend finds a
+0-byte `map2check_property`.
+
+Effects in gate run 1 (task 4.2), deterministic in 5 of 5 C reps:
+- `simple-ext` and `ex01_false`: KLEE reaches `__VERIFIER_error`
+  (`abort.err` is written, and so is `map2check_checked_error`), but the
+  frontend reports UNKNOWN. The expected verdict is false; Rust reports
+  FAILED `TARGET-REACHED`.
+- `960521-1_1-1`: `map2check_property` and `map2check_property_deref` are
+  both 0 bytes. The frontend still says FALSE-DEREF, because the `_deref`
+  file exists, but it parses line 0 and an empty function. C under `afl`
+  reports `533 main` for the same task, and so does Rust under `symex`.
+
+The Rust library had the same race before `6b49b82` (task 3.3, "Cause B").
+
+**Reproduce:** the program is any one where KLEE forks a state that
+reaches the target and states that do not. With the C runtime:
+`map2check --debug --nondet-generator symex --target-function ex01_false.c`
+(sv-benchmarks `map2check-assert`). The kept directory has `abort.err` in
+`klee-out-0`, a 12-byte `map2check_checked_error`, and a 0-byte
+`map2check_property`. Under the Rust runtime, `tests/klee/multistate.c`
+(`tests/klee_paths.sh`) checks the opposite.
+
+```c
+/* Under KLEE: one path reaches the target, the other finishes later. */
+int main(void) {
+  int x = __VERIFIER_nondet_int();
+  if (x == 42)
+    __VERIFIER_error();   /* C: map2check_property may end up 0 bytes */
+  return 0;               /* Rust: map2check_property keeps TARGET-REACHED */
+}
+```
+
+### SD-21 — AFL++ iterations do not accumulate nondet records (gate ref `C-BUG-oom-afl-nondet`)
+
+**Classification:** intentional
+**Tests:** `rust/src/nondet/libfuzzer.rs::two_fuzzer_iterations_yield_independent_results`, `rust/src/nondet/libfuzzer.rs::fuzzer_iteration_resets_analysis_state_and_input`
+
+This entry covers a bug of the C runtime of Map2Check `develop` that the
+Rust library does not have. The cutover gate cites it as
+`C-BUG-oom-afl-nondet` (3 rows: the verdict of `standard_sentinel-2`,
+`standard_two_index_04` and `standard_two_index_05` under
+`unreach-call`/`afl`).
+
+**Rust:** `LLVMFuzzerTestOneInput` resets the analysis state, the nondet
+records included, before every iteration (SD-11). Peak RSS on the three
+tasks is about 341 MB, the AFL++ process plateau. The verdict is UNKNOWN,
+the same as C's uncapped verdict.
+
+**C runtime of Map2Check `develop`:** each of these programs reads 100 000
+`__VERIFIER_nondet_int` values per run.
+- With the gate's 3 GB container cap, C is OOM-killed in 15 of 15 reps
+  (`oom_kill` in the cgroup's `memory.events`, maxrss about 3.1 GB). The
+  runner records the verdict as `OOM`.
+- Without the cap (the committed `baseline-c.tsv`), the peak is about
+  12.8 GB, with UNKNOWN.
+
+**Cause: hypothesis, from reading the source; not profiled.**
+- `helper_map2check_nondet_append_element` (`NonDetLog.c:96-103`) `malloc`s
+  one `NONDET_CALL` per call. `append_element` (`ContainerRealloc.c:44`)
+  copies it into a `realloc`ed array. The `malloc`ed row is never freed.
+- `map2check_init`, which the pass puts at the start of the program's
+  `main`, runs once per `__AFL_LOOP(10000)` iteration
+  (`NonDetGeneratorAFL.c:171-184`). `nondet_log_init` replaces the container
+  with `new_container`, which sets `values = NULL` without freeing the
+  previous array.
+- So every iteration leaks its whole nondet log twice over, and the
+  persistent-mode process grows by about 100 000 rows × 2 per iteration
+  until the cap.
+
+**Reproduce:** with the C runtime under `docker --memory 3g`:
+`map2check --nondet-generator afl --target-function standard_sentinel-2.i`
+(sv-benchmarks `array-examples`). The container's `memory.events` shows a
+new `oom_kill`. The Rust runtime finishes with UNKNOWN and a peak of about
+341 MB.
+
+```c
+/* Every AFL++ iteration reads 100000 values. */
+int main(void) {
+  int a[100000];
+  for (int i = 0; i < 100000; i++)
+    a[i] = __VERIFIER_nondet_int();   /* C: NonDetLog grows across iterations */
+  return 0;
+}
+```
