@@ -34,15 +34,16 @@ int main(void) {
 
     /* Heap allocation: check-before-free must be safe on both free checks. */
     void *heap_ptr = (void *)0x1000; /* synthetic address, never dereferenced */
+    void *heap_var = &heap_ptr;      /* the pointer variable being freed */
     map2check_map_malloc(heap_ptr, 16);
-    map2check_check_free("heap_obj", heap_ptr, 0, 15, "main");
+    map2check_check_free("heap_obj", heap_var, heap_ptr, 0, 15, "main");
     assert(get_current_property() == None);
     map2check_check_free_resolved_address(heap_ptr, 15, "main", 0);
     assert(get_current_property() == None);
 
     /* After the free is recorded, both checks must flag the double free. */
-    map2check_map_free("heap_obj", heap_ptr, 0, 16, "main");
-    map2check_check_free("heap_obj", heap_ptr, 0, 17, "main");
+    map2check_map_free("heap_obj", heap_var, heap_ptr, 0, 16, "main");
+    map2check_check_free("heap_obj", heap_var, heap_ptr, 0, 17, "main");
     assert(get_current_property() == MemsafetyFree);
     map2check_check_free_resolved_address(heap_ptr, 17, "main", 0);
     assert(get_current_property() == MemsafetyFree);
@@ -62,15 +63,18 @@ int main(void) {
     map2check_is_valid_assert(20, "main", 1);
     assert(get_current_property() == None);
 
-    /* map2check_check_mem_endprog is a no-op until map2check_set_memcleanup()
-     * is called (see rust/src/ffi.rs). The exact leak-detection heuristic
-     * itself is adjudicated in M6, so this test only exercises the on/off
-     * plumbing, not the heuristic's outcome. */
+    /* The end-of-program leak check runs in both modes (SD-04): a leak is
+     * MemsafetyMemtrack by default and MemsafetyMemcleanup after
+     * map2check_set_memcleanup(), as in the develop C runtime. */
+    map2check_reset();
     map2check_map_malloc((void *)0x2000, 8);
     map2check_check_mem_endprog();
-    assert(get_current_property() == None);
+    assert(get_current_property() == MemsafetyMemtrack);
+    map2check_reset();
     map2check_set_memcleanup();
+    map2check_map_malloc((void *)0x2000, 8);
     map2check_check_mem_endprog();
+    assert(get_current_property() == MemsafetyMemcleanup);
     vcc_reset_meta_data();
 
     map2check_success();

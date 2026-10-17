@@ -122,26 +122,6 @@ impl VccChecker for DerefChecker {
     }
 }
 
-// ── End-of-program memory cleanup check ──────────────────────────────────────
-
-/// Checks for memory leaks at end of program.
-/// Replaces `map2check_check_mem_endprog`.
-pub struct MemCleanupChecker;
-
-impl VccChecker for MemCleanupChecker {
-    fn check(&self, _ctx: &VccContext) -> Result<VccOutcome, Map2CheckError> {
-        state::with_state(|s| {
-            if memtrack::has_memcleanup_error(&s.memtrack) {
-                Ok(VccOutcome::Violated {
-                    property: ViolatedProperty::MemsafetyMemcleanup,
-                })
-            } else {
-                Ok(VccOutcome::Safe)
-            }
-        })
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -175,7 +155,7 @@ mod tests {
 
     use crate::memtrack::MemTrackEntry;
 
-    fn ctx() -> VccContext {
+    fn ctx() -> VccContext<'static> {
         VccContext::new(1, 0, "test")
     }
 
@@ -295,11 +275,12 @@ mod tests {
                 .unwrap(),
             violated(ViolatedProperty::MemsafetyFree)
         );
+        // SD-06 / #37: an untracked address is an invalid free.
         assert_eq!(
             FreeResolvedChecker { address: 0x9999 }
                 .check(&ctx())
                 .unwrap(),
-            VccOutcome::Safe
+            violated(ViolatedProperty::MemsafetyFree)
         );
     }
 
@@ -330,24 +311,5 @@ mod tests {
             DerefChecker { address: 0x5555 }.check(&ctx()).unwrap(),
             violated(ViolatedProperty::MemsafetyDeref)
         );
-    }
-
-    #[test]
-    fn mem_cleanup_flags_leaked_allocation() {
-        let _g = with_entries(vec![stack(0x30), heap(0x10, 0x1000, 16, false)]);
-        assert_eq!(
-            MemCleanupChecker.check(&ctx()).unwrap(),
-            violated(ViolatedProperty::MemsafetyMemcleanup)
-        );
-    }
-
-    #[test]
-    fn mem_cleanup_accepts_freed_allocation_and_stack_vars() {
-        let _g = with_entries(vec![
-            stack(0x30),
-            heap(0x10, 0x1000, 16, false),
-            heap(0x10, 0x1000, 16, true),
-        ]);
-        assert_eq!(MemCleanupChecker.check(&ctx()).unwrap(), VccOutcome::Safe);
     }
 }

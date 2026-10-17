@@ -33,6 +33,16 @@ jobs:
       - name: Rodar todos os testes
         run: cargo test --all-features
 
+      # O espelho de wasm_rt_memory_t / wasm_rt_funcref_table_t (feature wasm)
+      # só é conferido contra o wasm-rt.h do wabt quando WASM_RT_INCLUDE existe.
+      - name: Conferir o layout de wasm-rt.h (wabt 1.0.41)
+        run: |
+          mkdir -p target/wabt-include
+          curl -fsSL https://raw.githubusercontent.com/WebAssembly/wabt/1.0.41/wasm2c/wasm-rt.h \
+            -o target/wabt-include/wasm-rt.h
+          WASM_RT_INCLUDE="$PWD/target/wabt-include" \
+            cargo test --features wasm --lib layout_matches_wasm_rt_h
+
       - name: Testar script de proteção de branches
         run: scripts/test-branch-protection.sh
 
@@ -83,6 +93,25 @@ jobs:
             if target/ffi_harness; then ok=1; break; fi
           done
           [ "$ok" = 1 ]
+
+      # The harness rejects inputs with __VERIFIER_assume(0), which unwinds
+      # through the C frame of its __map2check_main__ (D1 condition 11).
+      # Optimised builds are where a missing unwind path would show: once
+      # with -fexceptions, the flag the pipeline must use, and once with
+      # clang's defaults.
+      - name: Compilar e executar harness FFI em -O2 (com e sem -fexceptions)
+        run: |
+          cargo build --release --all-features
+          for flags in "-fexceptions" ""; do
+            clang -O2 $flags -fsanitize=address,undefined -fno-omit-frame-pointer \
+              tests/ffi_harness.c target/release/libmap2check.a \
+              -ldl -lpthread -lm -o target/ffi_harness_o2
+            ok=0
+            for i in 1 2 3 4 5; do
+              if target/ffi_harness_o2; then ok=1; break; fi
+            done
+            [ "$ok" = 1 ] || { echo "ffi_harness -O2 $flags falhou"; exit 1; }
+          done
 
       - name: Compilar e executar test/codeAPI_by_caller_test.c (API núcleo)
         run: |
@@ -138,3 +167,54 @@ jobs:
 
       - name: Build do Dockerfile
         run: docker build .
+  # Runtime do gerador `symex` (D1, rota A′; docs/klee-feasibility.md): as
+  # mesmas fontes compiladas por rustc 1.72.1 (LLVM 16) a partir de
+  # klee/Cargo.toml e do seu Cargo.lock v3, em bitcode que o llvm-link-16 e o
+  # KLEE 3.1 leem. O clippy em 1.82 do job acima não vê o que o 1.72 não
+  # compila (`LazyLock`, `unsafe extern`, API de std posterior a 1.72): este
+  # job é a guarda da condição 5. O KLEE em si não roda aqui (a imagem com o
+  # KLEE 3.1 é a do Map2Check); tests/klee_paths.sh roda no CI do Map2Check
+  # (Task 3.4) e localmente com Docker.
+  klee_runtime:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Baixar o código do repositório
+        uses: actions/checkout@v4
+
+      - name: Instalar as ferramentas do LLVM 16 (opt, llvm-dis, llvm-nm, llvm-as, lli)
+        run: sudo apt-get update && sudo apt-get install -y llvm-16
+
+      - name: Instalar o rustc 1.72.1 (LLVM 16) com clippy
+        run: rustup toolchain install 1.72.1 --profile minimal --component clippy
+
+      # O clippy em 1.82 do job acima não compila nondet/klee.rs (feature
+      # `klee` só existe em klee/Cargo.toml); este é o lint dele.
+      - name: Clippy do build KLEE (rustc 1.72.1, feature klee)
+        run: RUSTUP_TOOLCHAIN=1.72.1 cargo clippy --locked --manifest-path klee/Cargo.toml --features klee,wasm -- -D warnings
+
+      # O script roda os autotestes da troca de intrínsecos antes de usá-la:
+      # equivalência por lli-16 em tests/klee/lower-intrinsics.ll e recusa
+      # de tests/klee/unknown-intrinsic.ll; qualquer intrínseco que o KLEE
+      # 3.1 não execute faz o build falhar. Antes da troca, o simbolizador
+      # de backtrace do std vira stubs de abort (scripts/klee-stub-symbolizer.py,
+      # com autoteste em tests/klee/stub-symbolizer.ll), e a guarda final
+      # falha se algum corpo do simbolizador sobrar.
+      - name: Compilar o runtime KLEE em bitcode (klee/Cargo.toml, --locked)
+        run: scripts/build-klee-runtime.sh target/klee/map2check-klee.bc
+
+      - name: Verificar que o bitcode existe e é legível pelo llvm-dis-16
+        run: |
+          test -s target/klee/map2check-klee.bc
+          llvm-dis-16 target/klee/map2check-klee.bc -o /dev/null
+
+      - name: Checar dependências do lockfile KLEE (cargo-deny)
+        uses: EmbarkStudios/cargo-deny-action@v2
+        with:
+          manifest-path: ./klee/Cargo.toml
+
+      - name: Publicar o bitcode do runtime KLEE
+        uses: actions/upload-artifact@v4
+        with:
+          name: map2check-klee-bc
+          path: target/klee/map2check-klee.bc
+          if-no-files-found: error

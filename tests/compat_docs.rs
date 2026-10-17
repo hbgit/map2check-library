@@ -284,7 +284,14 @@ fn integration_guide_json_examples_match_the_serializer() {
     // SAFETY: C-string literals are valid; fake addresses are never dereferenced.
     unsafe {
         map2check_map_malloc(0x1000 as *const _, 16);
-        map2check_check_free(c"p".as_ptr(), 0x2000 as *const _, 0, 20, c"main".as_ptr());
+        map2check_check_free(
+            c"p".as_ptr(),
+            0x10 as *const _,
+            0x2000 as *const _,
+            0,
+            20,
+            c"main".as_ptr(),
+        );
     }
     assert_eq!(
         report(),
@@ -321,6 +328,8 @@ const CLASSIFICATIONS: &[&str] = &[
     "accepted limitation",
     "suspected regression",
     "pending decision",
+    "fixed",
+    "C behaviour preserved on purpose",
 ];
 
 /// Problemas de uma entrada: classificação conhecida (com issue quando
@@ -337,7 +346,7 @@ fn sd_entry_problems(id: &str, body: &str, root: &Path) -> Vec<String> {
         Some(c) => match CLASSIFICATIONS.iter().find(|k| c.starts_with(*k)) {
             None => problems.push(format!("{id}: classificação desconhecida `{c}`")),
             Some(k)
-                if matches!(*k, "suspected regression" | "pending decision")
+                if matches!(*k, "suspected regression" | "pending decision" | "fixed")
                     && !c.contains('#') =>
             {
                 problems.push(format!("{id}: `{k}` precisa citar uma issue (#N)"))

@@ -29,7 +29,7 @@ expected="$(printf '%s\n' \
   "$NAME/" "$NAME/CHANGELOG.md" "$NAME/LICENSE" \
   "$NAME/docs/" "$NAME/docs/api-deltas.md" "$NAME/docs/integration-guide.md" "$NAME/docs/semantic-deltas.md" \
   "$NAME/include/" "$NAME/include/map2check.h" \
-  "$NAME/lib/" "$NAME/lib/libmap2check.a" "$NAME/lib/libmap2check_libfuzzer.a" | LC_ALL=C sort)"
+  "$NAME/lib/" "$NAME/lib/libmap2check.a" "$NAME/lib/libmap2check_libfuzzer.a" "$NAME/lib/libmap2check_runtime.a" | LC_ALL=C sort)"
 actual="$(tar -tzf "$TMP/dist/$NAME.tar.gz" | LC_ALL=C sort)"
 if [ "$actual" = "$expected" ]; then ok "conteúdo exato"; else bad "conteúdo: $(diff <(echo "$expected") <(echo "$actual") || true)"; fi
 
@@ -43,6 +43,9 @@ core_syms="$(nm -g --defined-only "$P/lib/libmap2check.a" 2>/dev/null)"
 fuzz_syms="$(nm -g --defined-only "$P/lib/libmap2check_libfuzzer.a" 2>/dev/null)"
 if grep -q ' T map2check_init$' <<<"$core_syms" && ! grep -q ' T LLVMFuzzerTestOneInput$' <<<"$core_syms"; then ok "core sem LLVMFuzzerTestOneInput"; else bad "core: símbolos inesperados"; fi
 if grep -q ' T LLVMFuzzerTestOneInput$' <<<"$fuzz_syms"; then ok "libfuzzer define LLVMFuzzerTestOneInput"; else bad "libfuzzer sem LLVMFuzzerTestOneInput"; fi
+
+rt_syms="$(nm -g --defined-only "$P/lib/libmap2check_runtime.a" 2>/dev/null)"
+if grep -q ' T map2check_wasm_malloc$' <<<"$rt_syms" && grep -q ' T LLVMFuzzerTestOneInput$' <<<"$rt_syms"; then ok "runtime tem libfuzzer e wasm"; else bad "runtime sem libfuzzer/wasm"; fi
 
 # Um programa C comum linka e roda só com o conteúdo do pacote
 mkdir -p "$TMP/c/include" && cp "$P/include/map2check.h" "$TMP/c/include/"

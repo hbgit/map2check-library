@@ -1,0 +1,59 @@
+# SPDX-License-Identifier: GPL-3.0-only
+#
+# Second manifest: the runtime of the Map2Check `symex` generator (D1, route
+# A', docs/cutover/decisoes.md). It compiles the same sources as the main
+# build (../rust/src) with rustc 1.72.1, whose LLVM 16 writes bitcode that
+# llvm-link-16 and KLEE 3.1 read. Build it with scripts/build-klee-runtime.sh.
+#
+# Why a directory of its own and not a workspace member: a workspace shares
+# one Cargo.lock, and the main one is v4, which cargo 1.72 cannot parse; the
+# main manifest also pulls build.rs/cbindgen and mockall, whose dependency
+# graph needs edition 2024. This manifest has its own `[workspace]`, its own
+# lockfile (v3) and none of those.
+#
+# Rules for this manifest (D1 condition 5, costs (a)-(c)):
+# - no build script (`build = false`): the C header comes from the main build;
+# - no dev-dependencies;
+# - dependency caps that compile on 1.72 (thiserror 2.0.21 needs 1.77);
+# - Cargo.lock regenerated only with the MSRV-aware resolver:
+#     rustup toolchain install 1.86.0 --profile minimal
+#     CARGO_RESOLVER_INCOMPATIBLE_RUST_VERSIONS=fallback RUSTUP_TOOLCHAIN=1.86.0 \
+#       cargo generate-lockfile --manifest-path klee/Cargo.toml
+#     sed -i 's/^version = 4/version = 3/' klee/Cargo.lock
+[package]
+name = "map2check-klee-runtime"
+version = "1.1.0-rc1"
+edition = "2021"
+rust-version = "1.72"
+build = false
+publish = false
+description = "Map2Check runtime for the KLEE (symex) generator: the map2check-library sources built as LLVM 16 bitcode"
+license = "GPL-3.0-only"
+authors = ["Herbert Rocha <herberthb12@gmail.com>"]
+
+[lib]
+name = "map2check"
+crate-type = ["staticlib"]
+path = "../rust/src/lib.rs"
+
+[dependencies]
+serde = { version = ">=1.0, <=1.0.229", features = ["derive"] }
+serde_json = ">=1.0, <=1.0.154"
+thiserror = ">=2.0, <=2.0.20"
+
+[features]
+klee = []
+wasm = []
+
+# panic = "abort": nothing catches a panic under KLEE, and the unwind
+# machinery is code KLEE would have to execute. Fat LTO and one codegen unit
+# put std into the one module KLEE loads (without LTO KLEE cannot resolve
+# `__rust_no_alloc_shim_is_unstable`); D1 condition 6.
+[profile.release]
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+panic = "abort"
+debug = false
+
+[workspace]

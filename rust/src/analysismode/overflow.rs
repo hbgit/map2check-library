@@ -187,12 +187,79 @@ impl VccChecker for MulI64 {
     }
 }
 
+// ── Signed binops at the operation's width (AnalysisModeOverflow.c) ──────────
+
+/// The signed operation a [`SignedBinop`] checks.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SignedOp {
+    Add,
+    Sub,
+    Mul,
+    Div,
+    Rem,
+}
+
+/// One signed binop of the Map2Check `develop` C runtime
+/// (`map2check_binop_{add,sub,mul,sdiv,srem}`, `AnalysisModeOverflow.c:197-276`):
+/// both operands sign-extended to 64 bits, `bits` the width of the
+/// operation's result type.
+pub struct SignedBinop {
+    pub op: SignedOp,
+    pub lhs: i64,
+    pub rhs: i64,
+    pub bits: u32,
+}
+
+/// `signed_min_for_width` / `signed_max_for_width` (`:111-124`): a width of
+/// 0 or 64 and more means 64 bits.
+fn signed_bounds(bits: u32) -> (i64, i64) {
+    if bits == 0 || bits >= 64 {
+        (i64::MIN, i64::MAX)
+    } else {
+        (-(1i64 << (bits - 1)), (1i64 << (bits - 1)) - 1)
+    }
+}
+
+impl SignedBinop {
+    /// The develop verdict: `None` when the operation is safe.
+    pub fn violation(&self) -> Option<ViolatedProperty> {
+        let (min, max) = signed_bounds(self.bits);
+        let (a, b) = (self.lhs, self.rhs);
+        // `:126-134` after the 64-bit predicates of `:141-183`: the exact
+        // result must exist in 64 bits and fit the width.
+        let fits = |exact: Option<i64>| exact.is_some_and(|v| (min..=max).contains(&v));
+        let safe = match self.op {
+            SignedOp::Add => fits(a.checked_add(b)),
+            SignedOp::Sub => fits(a.checked_sub(b)),
+            SignedOp::Mul => fits(a.checked_mul(b)),
+            // `:250-276`: a zero divisor is FALSE_DIVBYZERO; only MIN / -1
+            // of the width overflows, and MIN % -1 is undefined in C.
+            SignedOp::Div | SignedOp::Rem => {
+                if b == 0 {
+                    return Some(ViolatedProperty::DivByZero);
+                }
+                !(a == min && b == -1)
+            }
+        };
+        (!safe).then_some(ViolatedProperty::Overflow)
+    }
+}
+
+impl VccChecker for SignedBinop {
+    fn check(&self, _ctx: &VccContext) -> Result<VccOutcome, Map2CheckError> {
+        Ok(match self.violation() {
+            Some(property) => VccOutcome::Violated { property },
+            None => VccOutcome::Safe,
+        })
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::analysismode::VccContext;
 
-    fn ctx() -> VccContext {
+    fn ctx() -> VccContext<'static> {
         VccContext::new(1, 0, "test")
     }
 

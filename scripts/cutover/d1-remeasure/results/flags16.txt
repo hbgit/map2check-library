@@ -1,0 +1,13 @@
+    Finished `release` profile [optimized] target(s) in 16.94s
+clang-16 [default] main attrs: nounwind uwtable | rc=0 
+clang-16 [-fexceptions] main attrs: uwtable | rc=0 
+clang-16 [-funwind-tables] main attrs: nounwind uwtable | rc=0 
+/bench/flags16.sh: line 9:   809 Aborted                 (core dumped) ./h > /dev/null 2> h.err
+clang-16 [-fno-asynchronous-unwind-tables -fno-unwind-tables] main attrs: nounwind | rc=134 fatal runtime error: failed to initiate panic, error 5
+clang-16 [-fexceptions -fno-asynchronous-unwind-tables -fno-unwind-tables] main attrs: | rc=0 
+afl-clang-fast [default] main attrs: nounwind uwtable | rc=0 
+afl-clang-fast [-fexceptions] main attrs: uwtable | rc=0 
+afl-clang-fast [-funwind-tables] main attrs: nounwind uwtable | rc=0 
+/bench/flags16.sh: line 9:   919 Aborted                 (core dumped) ./h > /dev/null 2> h.err
+afl-clang-fast [-fno-asynchronous-unwind-tables -fno-unwind-tables] main attrs: nounwind | rc=134 fatal runtime error: failed to initiate panic, error 5
+afl-clang-fast [-fexceptions -fno-asynchronous-unwind-tables -fno-unwind-tables] main attrs: | rc=0 

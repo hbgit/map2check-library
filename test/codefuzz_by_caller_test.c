@@ -7,6 +7,8 @@
 #include <assert.h>
 #include <stddef.h>
 #include <stdint.h>
+#include <stdlib.h>
+#include <unistd.h>
 
 #include "../include/map2check.h"
 
@@ -16,7 +18,26 @@
  * codegen-units = 1, so linking any symbol from it pulls in
  * LLVMFuzzerTestOneInput's unresolved reference to __map2check_main__ too —
  * see the same requirement documented in tests/ffi_harness.c). */
+/* Set by main for the iterations whose program rejects the input. */
+static int reject_input = 0;
+static int ran_past_assume = 0;
+static int completed = 0;
+
+/* An exit(0) in place of the unwind would also end with status 0. */
+static void require_completion(void) {
+    if (!completed) {
+        _exit(97);
+    }
+}
+
 int __map2check_main__(void) {
+    if (reject_input) {
+        /* A failed assume abandons this input and unwinds out of this C
+         * frame back to LLVMFuzzerTestOneInput (develop: nondet_cancel). */
+        __VERIFIER_assume(__VERIFIER_nondet_int() == 42);
+        ran_past_assume++;
+        return 0;
+    }
     (void)__VERIFIER_nondet_bool();
     (void)__VERIFIER_nondet_char();
     (void)__VERIFIER_nondet_uchar();
@@ -30,10 +51,12 @@ int __map2check_main__(void) {
     (void)__VERIFIER_nondet_double();
     (void)__VERIFIER_nondet_size_t();
     (void)__VERIFIER_nondet_pointer();
+    (void)__VERIFIER_nondet_loff_t();
+    (void)__VERIFIER_nondet_sector_t();
+    free(__VERIFIER_nondet_pchar());
 
-    /* Only truthy conditions here: a falsy one calls exit(0)/abort() by
-     * design (see rust/src/nondet/libfuzzer.rs), which would end this
-     * process instead of just this check. */
+    /* Truthy conditions here; the falsy assume runs in the iterations of
+     * main below. A falsy assert aborts by design. */
     __VERIFIER_assume(1);
     __VERIFIER_assert(1);
     map2check_fuzzer_assume(1);
@@ -51,6 +74,22 @@ int main(void) {
     const uint8_t second_input[] = {0xa0, 0xb0};
     rc = LLVMFuzzerTestOneInput(second_input, sizeof(second_input));
     assert(rc == 0);
+
+    /* Input "A": develop's reader rewinds, so x == 0x41414141, not 0, and
+     * the assume rejects it; the four bytes of 42 pass. */
+    atexit(require_completion);
+    reject_input = 1;
+    const uint8_t seed_a[] = {'A'};
+    const uint8_t forty_two[] = {0x2a, 0x00, 0x00, 0x00};
+    for (int i = 0; i < 10; i++) {
+        rc = LLVMFuzzerTestOneInput(seed_a, sizeof(seed_a));
+        assert(rc == 0);
+    }
+    assert(ran_past_assume == 0);
+    rc = LLVMFuzzerTestOneInput(forty_two, sizeof(forty_two));
+    assert(rc == 0);
+    assert(ran_past_assume == 1);
+    completed = 1;
 
     return rc;
 }

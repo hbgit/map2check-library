@@ -8,7 +8,9 @@ documentation_style = "doxy"
 
 [export]
 prefix = ""
-include = []
+# `map2check_set_mode` takes an `int32_t`; export the enum so the header
+# still names the mode values.
+include = ["AnalysisMode"]
 exclude = []
 
 [parse]

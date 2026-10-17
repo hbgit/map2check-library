@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #![deny(unsafe_code)]
 
-use std::sync::{LazyLock, Mutex};
+use std::sync::{Mutex, OnceLock};
 
 use crate::{
+    analysismode::mode::AnalysisMode,
     bbtrack::BasicBlockEntry,
     caller::{AnalysisResult, ViolatedProperty},
     error::Map2CheckError,
@@ -11,21 +12,85 @@ use crate::{
     nondet::NonDetEntry,
 };
 
-static ANALYSIS_STATE: LazyLock<Mutex<AnalysisState>> =
-    LazyLock::new(|| Mutex::new(AnalysisState::default()));
+// `OnceLock` and not `LazyLock`: the KLEE runtime compiles this file with
+// rustc 1.72 (D1 condition 5, klee/Cargo.toml), where `LazyLock` is unstable.
+static ANALYSIS_STATE: OnceLock<Mutex<AnalysisState>> = OnceLock::new();
+
+static CONFIG: Mutex<Config> = Mutex::new(Config::new());
+
+/// Run configuration, kept apart from the analysis state: it changes only
+/// through its setters, so `map2check_init()` and `map2check_reset()` never
+/// clear it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Config {
+    /// Set by `map2check_set_mode()`. `None` means unset: every check is
+    /// active and the leak tag follows `memcleanup`, as before Task 2.3.
+    pub mode: Option<AnalysisMode>,
+    /// Set by `map2check_set_memcleanup()`: a leak at exit is reported as
+    /// `MemsafetyMemcleanup` instead of `MemsafetyMemtrack`.
+    pub memcleanup: bool,
+    /// Set by `map2check_set_null_is_valid()`: a NULL load is safe.
+    pub null_is_valid: bool,
+    /// Set by `map2check_enable_witness()`: the end of a Map2Check run also
+    /// writes the witness files (`track_bb_log.st`, the memory logs,
+    /// `klee_log.csv` and `map2check_checked_error`), as a develop binary
+    /// linked with `WitnessGeneration.c` does.
+    pub witness: bool,
+}
+
+impl Config {
+    pub const fn new() -> Self {
+        Self {
+            mode: None,
+            memcleanup: false,
+            null_is_valid: false,
+            witness: false,
+        }
+    }
+}
+
+impl Default for Config {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Returns a copy of the current configuration.
+pub fn config() -> Config {
+    *CONFIG
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+}
+
+/// Changes the configuration. Only the option setters call this.
+pub fn update_config(f: impl FnOnce(&mut Config)) {
+    f(&mut CONFIG
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner));
+}
+
+/// Restores the default configuration (tests only; the library never does).
+#[cfg(test)]
+pub(crate) fn reset_config() {
+    update_config(|c| *c = Config::new());
+}
 
 #[derive(Debug, Default)]
 pub struct AnalysisState {
     pub result: AnalysisResult,
     pub nondets: Vec<NonDetEntry>,
     pub memtrack: Vec<MemTrackEntry>,
+    /// The offset-keyed allocation table of the wasm2c runtime
+    /// (`map2check_wasm_*`, Task 2.8).
+    pub wasm_allocs: Vec<crate::memtrack::WasmAlloc>,
     pub bbtrack: Vec<BasicBlockEntry>,
-    /// Set by `map2check_set_null_is_valid()`; read by `map2check_check_load`.
-    pub null_is_valid: bool,
-    /// Set by `map2check_set_memcleanup()`; read by `map2check_check_mem_endprog`.
-    pub memcleanup_enabled: bool,
     pub legacy_nondet_logs: Vec<Box<crate::ffi::non_det_log_t>>,
     pub legacy_bbtrack_logs: Vec<Box<crate::ffi::bbtrack_log_t>>,
+    /// The free that `map2check_check_free` found invalid, when it is the
+    /// first violation. Develop's `map2check_free` appends its FREE row to
+    /// the list log before it checks (`AnalysisModeMemtrack.c:346-358`), so
+    /// the legacy logs keep it; it is not a release and no check reads it.
+    pub failed_free: Option<MemTrackEntry>,
 }
 
 impl AnalysisState {
@@ -33,7 +98,16 @@ impl AnalysisState {
         *self = Self::default();
     }
 
+    /// Records a violation unless one is already recorded (#36, SD-03).
+    ///
+    /// The first violation is final: in the C runtime of Map2Check every
+    /// violation ends the process through `map2check_error()`, so nothing can
+    /// replace it. This library keeps running instead, so a later violation is
+    /// ignored rather than overwriting the first.
     pub fn set_false(&mut self, property: ViolatedProperty, line: u32, function_name: &str) {
+        if !self.result.ok {
+            return;
+        }
         self.result.ok = false;
         self.result.property = property;
         self.result.line = line;
@@ -51,20 +125,36 @@ impl AnalysisState {
 }
 
 fn ensure_state() -> &'static Mutex<AnalysisState> {
-    &ANALYSIS_STATE
+    ANALYSIS_STATE.get_or_init(|| Mutex::new(AnalysisState::default()))
 }
 
+/// Starts a fresh analysis: forces the singleton into existence and runs the
+/// `analysis_init` of the selected mode, which clears every counter,
+/// container, result and flag, so a second `map2check_init()` in the same
+/// process never sees data from an earlier analysis. The configuration,
+/// including the mode, is kept.
 pub fn init() {
-    let _ = ensure_state();
+    let mode = config().mode;
+    with_state_recovering(|s| crate::analysismode::mode::analysis_init(mode, s));
 }
 
 pub fn reset() {
+    with_state_recovering(AnalysisState::reset);
+}
+
+/// Applies `f` to the state, recovering the lock if an earlier panic
+/// poisoned it.
+fn with_state_recovering(f: impl FnOnce(&mut AnalysisState)) {
     let state = ensure_state();
     match state.lock() {
-        Ok(mut guard) => guard.reset(),
+        Ok(mut guard) => f(&mut guard),
         Err(poisoned) => {
             let mut guard = poisoned.into_inner();
-            guard.reset();
+            f(&mut guard);
+            // `Mutex::clear_poison` is unstable in rustc 1.72, which builds
+            // the KLEE runtime. That build has `panic = "abort"`, so no
+            // caught panic can poison the lock there (D1, "Custo do pin").
+            #[cfg(not(feature = "klee"))]
             state.clear_poison();
         }
     }

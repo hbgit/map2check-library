@@ -17,8 +17,9 @@ pub struct AssertChecker {
 impl VccChecker for AssertChecker {
     fn check(&self, _ctx: &VccContext) -> Result<VccOutcome, Map2CheckError> {
         if self.expression == 0 {
+            // develop: map2check_assert writes ASSERT (AnalysisModeAssert.c:18-23).
             Ok(VccOutcome::Violated {
-                property: ViolatedProperty::Reachability,
+                property: ViolatedProperty::Assert,
             })
         } else {
             Ok(VccOutcome::Safe)
@@ -31,18 +32,18 @@ mod tests {
     use super::*;
     use crate::analysismode::VccContext;
 
-    fn ctx() -> VccContext {
+    fn ctx() -> VccContext<'static> {
         VccContext::new(12, 0, "foo")
     }
 
     #[test]
-    fn false_expression_yields_reachability_violation() {
+    fn false_expression_yields_assert_violation() {
         let checker = AssertChecker { expression: 0 };
         let outcome = checker.check(&ctx()).unwrap();
         assert_eq!(
             outcome,
             VccOutcome::Violated {
-                property: ViolatedProperty::Reachability
+                property: ViolatedProperty::Assert
             }
         );
     }

@@ -4,6 +4,9 @@
 // Replaces lib/json-maker.c and lib/to_string/ftoa.c entirely.
 // serde_json handles JSON construction and float formatting safely.
 
+pub mod legacy_files;
+pub(crate) mod termination;
+
 use serde::Serialize;
 
 use crate::{caller::ViolatedProperty, error::Map2CheckError, state::AnalysisState};
@@ -76,11 +79,48 @@ pub fn to_json(state: &AnalysisState) -> Result<String, Map2CheckError> {
     serde_json::to_string_pretty(&log).map_err(Map2CheckError::from)
 }
 
-/// Print the JSON report to stdout, as the C library did.
+/// Makes the state safe to format, right before a report or a log file is
+/// written from it. Under KLEE (feature `klee`) values the program made
+/// symbolic are replaced by concrete values of the current path, so that
+/// formatting them does not fork KLEE (D1 condition 7); elsewhere it does
+/// nothing.
+pub(crate) fn prepare_for_output(state: &mut AnalysisState) {
+    #[cfg(feature = "klee")]
+    crate::nondet::klee::concretize(state);
+    #[cfg(not(feature = "klee"))]
+    let _ = state;
+}
+
+/// Print the JSON report to stdout, as the C library did. A failed write
+/// (closed stdout, EPIPE) is reported on stderr instead of panicking.
 pub fn print_json(state: &AnalysisState) -> Result<(), Map2CheckError> {
-    let json = to_json(state)?;
-    println!("{json}");
+    write_report(&to_json(state)?);
     Ok(())
+}
+
+fn write_report(json: &str) {
+    use std::io::Write as _;
+    if let Err(e) = writeln!(std::io::stdout().lock(), "{json}") {
+        eprintln!("[map2check] cannot print the JSON report: {e}");
+    }
+}
+
+/// The JSON report channel of the exports (#14). Prints only when no
+/// analysis mode is set: a Map2Check run reports through the result files
+/// and keeps the analysed program's stdout clean, as develop does. The
+/// report is serialised under the state lock and written after the lock is
+/// released, so stdout can never affect the state or the verdict.
+pub fn print_report_unless_mode_set() {
+    if crate::state::config().mode.is_some() {
+        return;
+    }
+    match crate::state::with_state(|s| {
+        prepare_for_output(s);
+        to_json(s)
+    }) {
+        Ok(json) => write_report(&json),
+        Err(e) => eprintln!("[map2check] error: {e}"),
+    }
 }
 
 #[cfg(test)]
@@ -153,6 +193,28 @@ mod tests {
         let json = to_json(&state).unwrap();
         let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
         assert!(parsed["map2check_log"].is_object());
+    }
+
+    /// Snapshot of the whole report (#14): the JSON is an additional channel
+    /// with its own schema (SD-01); Map2Check reads the files of
+    /// `legacy_files`. A change to this text is a schema change.
+    #[test]
+    fn json_report_snapshot() {
+        let mut state = state_ok();
+        state.result.ok = false;
+        state.result.step = 3;
+        state.result.property = ViolatedProperty::MemsafetyFree;
+        state.result.line = 12;
+        state.result.function_name = "main".to_owned();
+        state.memtrack.push(crate::memtrack::MemTrackEntry::new(
+            2, 12, 1, 0x100, 0x200, true, false, "p", "main", 16, 4, false,
+        ));
+        let snapshot = std::fs::read_to_string(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/rust/src/output/json_report.snap"
+        ))
+        .unwrap();
+        assert_eq!(to_json(&state).unwrap() + "\n", snapshot);
     }
 
     #[test]
