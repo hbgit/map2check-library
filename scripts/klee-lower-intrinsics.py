@@ -57,13 +57,10 @@ vastart
 """.split()
 
 # Declared but accepted although KLEE 3.1 cannot run them, each with why it
-# is never executed by the runtime.
-ACCEPTED = {
-    # miniz_oxide, reached only by std's backtrace printing, which
-    # panic = "abort" never runs. KLEE warns "unsupported intrinsic" at
-    # load; KLEE's --optimize folds any scalar version back into it.
-    "bitreverse": "backtrace symbolisation only",
-}
+# is never executed by the runtime. Empty: `llvm.bitreverse` (miniz_oxide)
+# was here until scripts/klee-stub-symbolizer.py removed the backtrace
+# symbolizer, which was its only user, before this script runs.
+ACCEPTED = {}
 
 
 def unsupported(names):

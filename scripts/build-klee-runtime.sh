@@ -6,9 +6,11 @@
 #
 #   rustc 1.72.1 (LLVM 16) on klee/Cargo.toml with its own Cargo.lock,
 #   features `klee,wasm`, panic = abort, fat LTO, codegen-units = 1,
-#   --emit=llvm-bc, then `opt-16 --strip-debug` (condition 6), then the
-#   vector intrinsics KLEE cannot run lowered to scalar code
-#   (scripts/klee-lower-intrinsics.py), then a read-back with `llvm-dis-16`.
+#   --emit=llvm-bc, then `opt-16 --strip-debug` (condition 6), then std's
+#   backtrace symbolizer stubbed out (scripts/klee-stub-symbolizer.py,
+#   `opt-16 -passes=globaldce`), then the vector intrinsics KLEE cannot run
+#   lowered to scalar code (scripts/klee-lower-intrinsics.py), then a
+#   read-back with `llvm-dis-16` and the symbolizer guard.
 #
 # Usage: scripts/build-klee-runtime.sh <out.bc>
 #
@@ -108,8 +110,34 @@ mapfile -t modules < <(find "$deps" -maxdepth 1 -name 'map2check-*.bc')
 # program keeps its -g.
 # Everything is built in $work and moved to $out only at the end, so a
 # failed step never leaves a bitcode behind.
+fixtures="$ROOT/tests/klee"
 "$OPT" --strip-debug "${modules[0]}" -o "$work/stripped.bc" || die "$OPT --strip-debug failed"
 "$LLVM_DIS" "$work/stripped.bc" -o "$work/stripped.ll" || die "$LLVM_DIS cannot read the stripped module"
+
+# std's backtrace symbolizer (gimli, addr2line, miniz_oxide, rustc_demangle,
+# backtrace_rs) is about half of the module and only runs when a panic
+# prints a backtrace; KLEE spent about 1.6 s and 60 MB per run loading and
+# re-optimising it (task 4.3, criterion 9). Its bodies become a call to
+# abort, so a path that reaches them still ends as an abort and no symbol
+# is left undefined; globaldce then drops what only they used. The self-test runs first: a body
+# the remaining code shares must keep working, the printer path must abort,
+# and the guard must reject the fixture before the rewrite.
+stub="$ROOT/scripts/klee-stub-symbolizer.py"
+"$LLI" "$fixtures/stub-symbolizer.ll" >/dev/null 2>&1 && rc=0 || rc=$?
+[ "$rc" = 42 ] || die "$LLI: the stub fixture returned $rc, not 42"
+python3 -I "$stub" "$fixtures/stub-symbolizer.ll" "$work/stub-fixture.ll" >/dev/null ||
+  die "the stub self-test fixture was rejected"
+"$LLI" "$work/stub-fixture.ll" >/dev/null 2>&1 && rc=0 || rc=$?
+[ "$rc" = 42 ] || die "the stub rewrite broke a shared body: the fixture returned $rc, not 42"
+"$LLI" "$work/stub-fixture.ll" backtrace >/dev/null 2>&1 && rc=0 || rc=$?
+[ "$rc" = 134 ] || die "the stubbed printer path did not abort: the fixture returned $rc, not 134"
+if python3 -I "$stub" --check "$fixtures/stub-symbolizer.ll" >/dev/null 2>&1; then
+  die "the symbolizer guard accepted a module that still has the symbolizer (stub-symbolizer.ll)"
+fi
+python3 -I "$stub" "$work/stripped.ll" "$work/stubbed.ll" || die "stubbing the backtrace symbolizer failed"
+"$LLVM_AS" "$work/stubbed.ll" -o "$work/stubbed.bc" || die "$LLVM_AS rejected the stubbed module"
+"$OPT" -passes=globaldce "$work/stubbed.bc" -o "$work/dce.bc" || die "$OPT -passes=globaldce failed"
+"$LLVM_DIS" "$work/dce.bc" -o "$work/dce.ll" || die "$LLVM_DIS cannot read the module after globaldce"
 
 # KLEE 3.1 cannot execute the vector/x86 intrinsics of the precompiled std
 # ("unimplemented intrinsic" in core::fmt padding): replace them by scalar
@@ -118,7 +146,6 @@ mapfile -t modules < <(find "$deps" -maxdepth 1 -name 'map2check-*.bc')
 # what the intrinsics compute (lli-16), and an unknown intrinsic must be
 # rejected.
 lower="$ROOT/scripts/klee-lower-intrinsics.py"
-fixtures="$ROOT/tests/klee"
 python3 -I "$lower" "$fixtures/lower-intrinsics.ll" "$work/fixture.ll" >/dev/null ||
   die "the lowering self-test fixture was rejected"
 expected="$("$LLI" "$fixtures/lower-intrinsics.ll")" || die "$LLI failed on the fixture"
@@ -128,10 +155,14 @@ got="$("$LLI" "$work/fixture.ll")" || die "$LLI failed on the lowered fixture"
 if python3 -I "$lower" "$fixtures/unknown-intrinsic.ll" "$work/unknown.ll" >/dev/null 2>&1; then
   die "the lowering accepted an intrinsic KLEE 3.1 cannot execute (unknown-intrinsic.ll)"
 fi
-python3 -I "$lower" "$work/stripped.ll" "$work/lowered.ll" ||
+python3 -I "$lower" "$work/dce.ll" "$work/lowered.ll" ||
   die "lowering the intrinsics failed"
 "$LLVM_AS" "$work/lowered.ll" -o "$work/runtime.bc" || die "$LLVM_AS rejected the lowered module"
-"$LLVM_DIS" "$work/runtime.bc" -o /dev/null || die "$LLVM_DIS cannot read the lowered module"
+"$LLVM_DIS" "$work/runtime.bc" -o "$work/runtime.ll" || die "$LLVM_DIS cannot read the lowered module"
+# Guard: no symbolizer function that only the backtrace printer reaches may
+# keep a body. The shared bodies it prints are kept on purpose (see the
+# script).
+python3 -I "$stub" --check "$work/runtime.ll" || die "the backtrace symbolizer is still in the module"
 
 # The module must define what the symex pipeline links against, and leave
 # the KLEE intrinsics to KLEE.

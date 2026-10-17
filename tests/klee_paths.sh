@@ -72,6 +72,8 @@ fail() {
 # --max-time keeps a path blow-up from hanging the test.
 KLEE_FLAGS=(--external-calls=all --optimize --use-cex-cache
   --solver-backend=z3 --libc=uclibc --max-time=300s)
+# Extra environment of KLEE, which passes its own to the program.
+KLEE_ENV=(RUST_BACKTRACE=0)
 
 # The lowering's self-tests (lli-16 equivalence on tests/klee/
 # lower-intrinsics.ll, rejection of tests/klee/unknown-intrinsic.ll) run
@@ -126,6 +128,8 @@ run_klee() {
     cflags=(-DM2C_DEVELOP)
     rtbc="$W/dev-$mode.bc"
     [ -f "$rtbc" ] || develop_runtime "$mode" "$rtbc"
+  elif [ "$rt" = rustpanic ]; then
+    rtbc="$W/rust-rt-panic.bc"
   else
     rtbc="$W/rust-rt.bc"
   fi
@@ -139,8 +143,12 @@ run_klee() {
   llvm-link-16 "${progs[@]}" "$rtbc" -o "$dir/linked.bc"
   local extra=()
   [ "$kind" = frontend ] && extra=(--exit-on-error-type=Abort)
-  (cd "$dir" && klee "${KLEE_FLAGS[@]}" "${extra[@]}" --output-dir=klee-out linked.bc \
+  local start end
+  start="$(date +%s%N)"
+  (cd "$dir" && env "${KLEE_ENV[@]}" klee "${KLEE_FLAGS[@]}" "${extra[@]}" --output-dir=klee-out linked.bc \
     >klee.log 2>&1) || true
+  end="$(date +%s%N)"
+  KLEE_WALL_MS=$(((end - start) / 1000000))
   PATHS_COMPLETED="$(sed -n 's/.*KLEE: done: completed paths = \([0-9]*\).*/\1/p' "$dir/klee.log")"
   PATHS_PARTIAL="$(sed -n 's/.*KLEE: done: partially completed paths = \([0-9]*\).*/\1/p' "$dir/klee.log")"
   PATHS_COMPLETED="${PATHS_COMPLETED:-?}"
@@ -166,6 +174,7 @@ count() { COUNT["$1/$2"]="$PATHS_COMPLETED+$PATHS_PARTIAL"; }
 echo "== prog.c"
 run_klee prog rust full
 count prog rust
+PROG_WALL_MS="$KLEE_WALL_MS"
 if [ "$PATHS_COMPLETED" = 2 ]; then
   pass "prog.c: KLEE: done: completed paths = 2"
 else
@@ -409,6 +418,61 @@ if [ -s "$W/layout.seed" ]; then
 else
   fail "layout.c: no seed from KLEE"
 fi
+
+# ── the backtrace symbolizer is out of the module (task 2.8c) ────────────────
+# scripts/klee-stub-symbolizer.py turns std's symbolizer into abort stubs
+# and the build's guard checks it. The bound is on the IR KLEE has to load
+# and re-optimise, not on time: the module had 125 829 instruction lines
+# with the symbolizer and about 52 600 without; KLEE's start-up follows it
+# (3.1 s -> about 1.5 s on byte_add_bug), but a wall-clock bound would fail
+# on a loaded host.
+echo "== the KLEE runtime without the backtrace symbolizer"
+llvm-dis-16 "$W/rust-rt.bc" -o "$W/rust-rt.ll"
+lines="$(awk '/^define/{f=1; next} f&&/^}/{f=0; next} f{n++} END{print n+0}' "$W/rust-rt.ll")"
+if [ "$lines" -lt 80000 ]; then
+  pass "the runtime module has $lines instruction lines (< 80000; 125829 with the symbolizer)"
+else
+  fail "the runtime module has $lines instruction lines, expected < 80000: is the symbolizer back?"
+fi
+if python3 -I "$ROOT/scripts/klee-stub-symbolizer.py" --check "$W/rust-rt.ll" >/dev/null; then
+  pass "no symbolizer function that only the backtrace printer reaches has a body"
+else
+  fail "the backtrace symbolizer is in the module"
+fi
+if grep -q 'llvm\.bitreverse' "$W/rust-rt.ll"; then
+  fail "llvm.bitreverse (miniz_oxide) is still declared"
+else
+  pass "llvm.bitreverse, which only miniz_oxide used, is gone"
+fi
+
+# A panic must still end the path with a KLEE error (no hang, no
+# symbolizer code run), with or without RUST_BACKTRACE, which sends std's
+# default hook toward the stubbed printer. tests/klee/panic_shim.py gives a
+# copy of the runtime a C entry point that panics. Under KLEE 3.1 std's
+# panic hook dies before printing anything, as it did before the stubs
+# (task 2.8c): "invalid function pointer" (RUST_BACKTRACE=0) or "illegal
+# instruction" (full) in rust_panic_with_hook, an exec error rather than an
+# abort; the test accepts any error there and checks it is the x = 7 path.
+echo "== panic.c"
+python3 -I "$T/panic_shim.py" "$W/rust-rt.ll" "$W/rust-rt-panic.ll"
+llvm-as-16 "$W/rust-rt-panic.ll" -o "$W/rust-rt-panic.bc"
+for bt in 0 full; do
+  KLEE_ENV=(RUST_BACKTRACE="$bt")
+  run_klee panic rustpanic full
+  d="$W/panic-rustpanic-full"
+  err="$(find "$d/klee-out" -name '*.err' | sort | head -n 1)"
+  if [ "$PATHS_COMPLETED" = 1 ] && [ "$PATHS_PARTIAL" = 1 ] && [ -n "$err" ] &&
+    ktest_objects "${err%.*.err}.ktest" "$W/seed.tmp" | grep -qx 'non_det_int 4 07000000' &&
+    grep -q 'panicking' "$err" &&
+    ! grep -Eq 'gimli|addr2line|miniz_oxide|rustc_demangle|backtrace_rs' "$err"; then
+    pass "panic.c (RUST_BACKTRACE=$bt): the panic (x = 7) ends its path with a KLEE error in std's panic code ($(head -n 1 "$err")); the other path completes"
+  else
+    fail "panic.c (RUST_BACKTRACE=$bt): $PATHS_COMPLETED+$PATHS_PARTIAL paths, error '$err', see $d/klee.log"
+  fi
+  mv "$d" "$d-$bt"
+done
+KLEE_ENV=(RUST_BACKTRACE=0)
+echo "KLEE wall on prog.c (frontend flags, information only): ${PROG_WALL_MS:-?} ms"
 
 # ── develop's C runtime, same programs ────────────────────────────────────────
 if [ -n "${DEVELOP_SRC:-}" ]; then

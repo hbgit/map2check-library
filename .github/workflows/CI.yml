@@ -195,7 +195,10 @@ jobs:
       # O script roda os autotestes da troca de intrínsecos antes de usá-la:
       # equivalência por lli-16 em tests/klee/lower-intrinsics.ll e recusa
       # de tests/klee/unknown-intrinsic.ll; qualquer intrínseco que o KLEE
-      # 3.1 não execute faz o build falhar.
+      # 3.1 não execute faz o build falhar. Antes da troca, o simbolizador
+      # de backtrace do std vira stubs de abort (scripts/klee-stub-symbolizer.py,
+      # com autoteste em tests/klee/stub-symbolizer.ll), e a guarda final
+      # falha se algum corpo do simbolizador sobrar.
       - name: Compilar o runtime KLEE em bitcode (klee/Cargo.toml, --locked)
         run: scripts/build-klee-runtime.sh target/klee/map2check-klee.bc
 
