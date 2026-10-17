@@ -15,7 +15,7 @@ the C ABI or the JSON report must update them.
 
 ## [Unreleased]
 
-## [1.1.0-rc1] - Unreleased
+## [1.1.0-rc1] - 2026-10-17
 
 Release candidate of the cutover work: the library becomes the runtime of
 Map2Check (Tasks 1.2, 2.1-2.5, 2.7 and 2.8 of the cutover plan). Read the
@@ -88,9 +88,26 @@ breaking changes first.
   `cargo tarpaulin` adds it itself, and `scripts/build-klee-runtime.sh`
   rejects it). On list-ext the runtime spends about 4 times fewer KLEE
   instructions per path and finds the FALSE-DEREF that it missed before.
+- The legacy result files are written to a temporary file and renamed, so
+  KLEE states that run in the same directory no longer truncate each other's
+  `map2check_property` (SD-20 records the C runtime's behaviour).
+- A NULL block from `malloc`/`calloc` is reported as UNKNOWN before its size
+  is checked, as develop does. Before, a negative size was checked first and
+  on lis_unsafe (`symex`) KLEE grew to 4.4 GB.
+- The KLEE runtime bitcode no longer carries std's backtrace symbolizer
+  (gimli, addr2line, miniz_oxide, rustc_demangle): `scripts/build-klee-runtime.sh`
+  replaces those bodies with an abort and fails the build if one is still
+  reachable. The bitcode drops from 2.30 MB to 1.24 MB, and KLEE start-up per
+  task from about 3.1 s to 1.3 s.
+- The test stage of the `Dockerfile` copies the files the tests read
+  (`tests/`, `docs/`, `CHANGELOG.md`, `Dockerfile`).
 
 ### Changed
 
+- The KLEE runtime bitcode includes the wasm2c runtime, so `--wasm` works
+  with the `symex` generator.
+- cbindgen is 0.28, which drops the unsound `atty` dependency
+  (RUSTSEC-2021-0145).
 - `develop` replaces `feature/rust` as the integration branch: CI runs on
   pushes and pull requests to `main`, `develop` and `release/**`, and
   `scripts/branch-protection.sh` protects `develop` instead of
