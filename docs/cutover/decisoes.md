@@ -157,7 +157,7 @@ A aprovação aceita a proposta junto com estas condições.
 
 **Pergunta:** o modo `--wasm` entra no cutover?
 
-**Status: recomendação do plano, executada.** O plano registra a D2 só como recomendação ("Portar"), sem aprovação explícita do mantenedor. As Tasks 2.8 e 2.8b a seguiram. Falta a aprovação formal.
+**Status: APROVADA em 2026-10-16** pelo mantenedor, depois de executada nas Tasks 2.8, 2.8b e 3.3 a partir da recomendação do plano ("Portar").
 
 **Decisão (texto do plano):** portar os stubs do wasm2c para Rust, e não deixar `--wasm` fora do escopo.
 
