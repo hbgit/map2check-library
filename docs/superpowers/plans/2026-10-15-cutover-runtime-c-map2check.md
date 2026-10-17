@@ -100,7 +100,7 @@ Os critérios são medidos pelo gate da Task 4.2 sobre o corpus `tests/regressio
 **Desempenho:**
 6. A mediana, entre tarefas, da razão `wall_rust / wall_c` é ≤ 1,10. **Bloqueia.**
 7. A contagem de TIMEOUT por gerador não aumenta. **Bloqueia.**
-8. A mediana da razão de pico de RSS é ≤ 1,25 (D4). **Bloqueia** depois de aprovado; antes disso, só alerta.
+8. A mediana da razão de pico de RSS é ≤ 1,36 (D4, aprovada em 2026-10-16; era 1,25 pendente de aprovação). **Bloqueia.**
 9. Uma tarefa isolada com razão > 1,5 não bloqueia se os critérios 6 e 7 passarem, mas exige perfil registrado em `docs/cutover/perf.md`.
 
 **Qualidade da biblioteca (já existentes; continuam obrigatórios):** `cargo test --all-features`, `cargo clippy -- -D warnings`, `cargo fmt --check`, `cargo deny check`, gate de cobertura e `tests/ffi_harness.c` sob ASan/UBSan sem achados.
@@ -936,6 +936,8 @@ fn posix_memalign_is_tracked_like_malloc() {
 - [ ] **Step 3:** Caso contrário, abrir um plano próprio para portar o armazenamento em disco e só seguir para a Fase 5 com ele pronto.
 
 **Critério de conclusão:** D3 registrada com números, e a implementação ou o no-op testado.
+
+**Resultado (2026-10-16):** D3 aprovada. `--btree` não é portada e fica como no-op com aviso. A condição literal do Step 2 não foi atendida (Rust acima do C-btree em 30 de 30 tarefas `symex`), e o mantenedor aprovou o desvio: o `--btree` do C dá SUCCEEDED errado em `lis_unsafe`, `memleaks_test1-1` e `memleaks_test17_2-1`, então não é referência válida (ver `docs/cutover/decisoes.md`).
 
 ### Task 2.7: Gerador KLEE — #20
 

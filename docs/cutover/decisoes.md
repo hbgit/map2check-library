@@ -152,3 +152,27 @@ A aprovação aceita a proposta junto com estas condições.
    **Status, lado KLEE: ATENDIDA (Task 2.7, 2026-10-16).** O gerador KLEE do Rust nomeia os objetos `non_det_<t>`, como `develop`, com `sizeof(tipo)` bytes. Em `layout.c` (`char`, `short`, `ushort`, `int`, `uint`, `long`, `ulong`, `uchar`), o ktest do caminho de erro tem os oito objetos em ordem e little-endian. Convertido em semente como `ktestToFuzzerBytes` faz (30 bytes concatenados) e rodado como argumento pelo leitor libFuzzer do Rust (`--features libfuzzer`, perfil `runtime`), ele chega ao mesmo erro (`TARGET-REACHED`). Uma semente de zeros do mesmo tamanho não chega. O `pchar` do KLEE passou a limitar o comprimento a 4096, como o leitor AFL++, para que o replay gere a mesma string.
 10. **O rustc 1.72.1 (2023) fica preso ao LLVM 16.** Quando o Map2Check migrar de LLVM, o toolchain do `symex` precisa acompanhar ou ser removido pela rota C.
 11. **O programa analisado é compilado com `-fexceptions`.** Responsável: Task 3.2. Um `__VERIFIER_assume` falso dentro de uma iteração do fuzzer desenrola a pilha (`resume_unwind`) através dos frames C do programa até o `LLVMFuzzerTestOneInput`. Sem `-fexceptions`, o clang marca toda função C como `nounwind`, e desenrolar a partir de uma função `nounwind` é comportamento indefinido no IR do LLVM. Hoje funciona só porque o x86-64 Linux emite `.eh_frame` por padrão. Com `-fno-asynchronous-unwind-tables -fno-unwind-tables` o processo aborta (“failed to initiate panic, error 5”), e o AFL++ contaria isso como crash: um falso positivo. O passo que gera o bitcode do programa (`clang -emit-llvm`) tem de passar `-fexceptions`, porque os atributos viajam no bitcode que o `afl-clang-fast` recebe. Nenhuma etapa pode acrescentar `-fno-unwind-tables` ou `-fno-asynchronous-unwind-tables`. Unwind tables sozinhas (`-funwind-tables`) não bastam: fazem o desenrolar funcionar, mas o IR continua `nounwind`. Evidência: `tests/ffi_harness.c` em `-O2` com clang-16 e afl-clang-fast (`scripts/cutover/d1-remeasure/results/flags16.txt`, tabela em `docs/api-deltas.md`, “`__VERIFIER_assume` under a fuzzer”). O CI roda o harness em `-O2` com e sem `-fexceptions`.
+
+## D3
+
+**Pergunta:** a opção `--btree` (armazenamento em disco do runtime C) é portada para o runtime Rust, ou removida com justificativa.
+
+**Status: APROVADA pelo mantenedor em 2026-10-16** (Task 4.3, gate 4.2 execução 1; `Map2Check-rust/tests/cutover/gate-report.md`)
+
+**Decisão:** `--btree` **não é portada**. Continua um no-op com aviso (comportamento atual do frontend Rust).
+
+**Justificativa:**
+- O `--btree` do C não é referência válida. Sob `symex`, dá SUCCEEDED errado em 3 tarefas cujo veredito esperado é falso: `lis_unsafe`, `memleaks_test1-1` e `memleaks_test17_2-1`. Também perde `list-ext` (FAILED → UNKNOWN, nos dois geradores).
+- Números de pico de RSS (mediana, 30 tarefas `valid-memsafety`): symex C-btree 136,3 MB contra Rust 221,2 MB; afl C-btree 94,3 MB contra Rust 92,3 MB. O maior pico do Rust é 472 MB.
+
+**Desvio da condição literal da Task 2.6:** a condição (RSS do Rust ≤ o do C com `--btree` em todas as tarefas) **não** é atendida: sob `symex` o Rust fica acima em 30 de 30 tarefas, por um excesso fixo de cerca de 80 MB. O mantenedor aprovou explicitamente se afastar dela, pelo motivo acima.
+
+## D4
+
+**Pergunta:** limite do pico de RSS do runtime Rust em relação ao C.
+
+**Status: APROVADA pelo mantenedor em 2026-10-16**
+
+**Decisão:** aceitar a razão mediana medida. O limite do critério 8 passa de 1,25 para **1,36** (medido 1,360; afl 0,99, symex 1,58). `compare.py` usa `--max-rss` 1.36 por padrão.
+
+**Causa:** o excesso sob `symex` é quase constante (cerca de +80 MB). A hipótese é que o KLEE carrega e otimiza um `map2check-klee.bc` de 2,2 MB, contra 0,13 MB dos `.bc` do runtime C. **Hipótese não perfilada.**
