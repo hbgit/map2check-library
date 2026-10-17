@@ -228,8 +228,8 @@ The C tests drove internal containers with no Rust export, so each assertion goe
 | AllocationLogTest.MarkDeallocShouldIncreaseSize | allocation_log_mark_dealloc_increases_size | via `map2check_map_free` |
 | AllocationLogTest.MemoryAddressStatusCaseDynamic | allocation_log_address_status_dynamic | status observed as free validity |
 | AllocationLogTest.MemoryAddressStatusCaseFree | allocation_log_address_status_free | invalid free |
-| AllocationLogTest.MemoryAddressStatusCaseEmpty | allocation_log_address_status_empty_is_static | SD-06 (unknown address is an invalid free) |
-| AllocationLogTest.MemoryAddressStatusCaseStatic | allocation_log_address_status_static_when_another_address_is_tracked | SD-06 |
+| AllocationLogTest.MemoryAddressStatusCaseEmpty | allocation_log_address_status_empty_is_static | sem export para o enum de status; o STATIC é observado pelo veredito de free inválido do SD-06 |
+| AllocationLogTest.MemoryAddressStatusCaseStatic | allocation_log_address_status_static_when_another_address_is_tracked | sem export para o enum de status; o STATIC é observado pelo veredito de free inválido do SD-06 |
 | AllocationLogTest.IfAddressIsReleasedThenAllocationLogIsValid | allocation_log_released_address_leaves_no_leak | via `map2check_check_mem_endprog` |
 | AllocationLogTest.IfAddressIsNotReleasedThenAllocationLogIsInvalid | allocation_log_unreleased_address_is_a_leak | |
 | AllocationLogTest.AddressIsInAllocationLog | allocation_log_address_is_in_allocation_log | via `map2check_check_load` |

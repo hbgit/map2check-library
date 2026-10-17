@@ -2857,7 +2857,9 @@ fn allocation_log_address_status_free() {
     assert_violated(ViolatedProperty::MemsafetyFree, 7, "main");
 }
 
-// SD-06: an address with no record is an invalid free, as C's STATIC status.
+// No export reads C's address status enum, so its STATIC value is
+// observed through the SD-06 verdict: an address with no record is an
+// invalid free.
 #[test]
 fn allocation_log_address_status_empty_is_static() {
     let _guard = fresh();
