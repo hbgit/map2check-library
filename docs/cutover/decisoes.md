@@ -248,3 +248,9 @@ The C tests drove internal containers with no Rust export, so each assertion goe
 | BTreeTest.AddItem | not ported | D3 |
 | BTreeTest.AddItemShouldSetValue | not ported | D3 |
 | BTreeTest.AddMultipleItems | not ported | D3 |
+
+## Release 1.1.0-rc1: exceção de assinatura em `main`
+
+**2026-10-17.** O PR #44 (`develop` → `main`) trazia 5 commits de outro colaborador sem assinatura: 1acb208, 67f6a19, 346271f, a0f494d e a951802 (3/set a 2/out, anteriores ao cutover). O mantenedor escolheu uma exceção única em vez de reescrever o `develop`: desativou "Require signed commits" em `main`, mergeou o PR com merge commit (49a25e4) e reativou a regra. Nenhum commit foi reescrito; os próximos PRs `develop` → `main` não têm commits sem assinatura.
+
+A tag assinada `v1.1.0-rc1` aponta para 49a25e4. O release (pre-release) traz `map2check-library-1.1.0-rc1-x86_64-unknown-linux-gnu.tar.gz`, SHA-256 `dd90e8885288a0de03d4d2b8624b6cb4a8ebee9f53ed9adcbf42501910209666`.
