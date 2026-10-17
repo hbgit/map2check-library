@@ -120,8 +120,9 @@ fixtures="$ROOT/tests/klee"
 # re-optimising it (task 4.3, criterion 9). Its bodies become a call to
 # abort, so a path that reaches them still ends as an abort and no symbol
 # is left undefined; globaldce then drops what only they used. The self-test runs first: a body
-# the remaining code shares must keep working, the printer path must abort,
-# and the guard must reject the fixture before the rewrite.
+# the remaining code shares must keep working (a printer-named one too),
+# the printer path must abort, and the guard must reject the fixture before
+# the rewrite and a stub that live code calls.
 stub="$ROOT/scripts/klee-stub-symbolizer.py"
 "$LLI" "$fixtures/stub-symbolizer.ll" >/dev/null 2>&1 && rc=0 || rc=$?
 [ "$rc" = 42 ] || die "$LLI: the stub fixture returned $rc, not 42"
@@ -133,6 +134,11 @@ python3 -I "$stub" "$fixtures/stub-symbolizer.ll" "$work/stub-fixture.ll" >/dev/
 [ "$rc" = 134 ] || die "the stubbed printer path did not abort: the fixture returned $rc, not 134"
 if python3 -I "$stub" --check "$fixtures/stub-symbolizer.ll" >/dev/null 2>&1; then
   die "the symbolizer guard accepted a module that still has the symbolizer (stub-symbolizer.ll)"
+fi
+python3 -I "$stub" --check "$work/stub-fixture.ll" >/dev/null ||
+  die "the symbolizer guard rejected the rewritten fixture"
+if python3 -I "$stub" --check "$fixtures/stub-symbolizer-live.ll" >/dev/null 2>&1; then
+  die "the symbolizer guard accepted a stub that live code calls (stub-symbolizer-live.ll)"
 fi
 python3 -I "$stub" "$work/stripped.ll" "$work/stubbed.ll" || die "stubbing the backtrace symbolizer failed"
 "$LLVM_AS" "$work/stubbed.ll" -o "$work/stubbed.bc" || die "$LLVM_AS rejected the stubbed module"

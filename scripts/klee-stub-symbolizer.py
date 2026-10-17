@@ -23,32 +23,40 @@ decompression tables).
 
 Shared bodies are kept. rustc merges identical functions, so one body named
 after a symbolizer type (`drop_in_place<RawVec<(usize, backtrace_rs::..)>>`)
-is also the one `alloc::fmt::format` calls to free a `String`. The printer
-entry points (PRINTER below) are always stubbed; any other candidate is
-stubbed only if the code that stays cannot reach it: a walk from every
+is also the one `alloc::fmt::format` calls to free a `String`. A candidate
+is stubbed only if the code that stays cannot reach it: a walk from every
 symbol with external linkage (`main`, the C API, `llvm.used`), through the
-bodies and initialisers of everything it reaches except the printer, marks
-the candidates it meets as shared, and those keep their bodies.
+bodies and initialisers of everything it reaches, stopping only at the
+printer's entry (ENTRY below, the call std's default hook makes when a
+backtrace is asked for), marks the candidates it meets as shared, and those
+keep their bodies.
 
 Usage:
   klee-stub-symbolizer.py <in.ll> <out.ll>   rewrite
   klee-stub-symbolizer.py --check <in.ll>    fail if a candidate that only
                                              symbolizer code reaches still
-                                             has a real body"""
+                                             has a real body, or if one that
+                                             live code reaches is a stub"""
 import re
 import sys
 
 # A candidate is a function whose (mangled) name names one of these crates
 # or std's copy of backtrace-rs ...
 SYMBOLIZER = re.compile(r"gimli|addr2line|miniz_oxide|rustc_demangle|backtrace_rs")
-# ... or std's backtrace printer, which calls the symbolizer and is reached
-# only from the panic hook when a backtrace is asked for. The short-backtrace
-# markers (`__rust_{begin,end}_short_backtrace`), on every panic path, are
-# not candidates.
+# ... or std's backtrace printer, which calls the symbolizer. The
+# short-backtrace markers (`__rust_{begin,end}_short_backtrace`), on every
+# panic path, are not candidates.
 PRINTER = re.compile(
     r"sys_common9backtrace5print|sys_common9backtrace10_print_fmt"
     r"|sys_common9backtrace15output_filename|sys_common\.\.backtrace\.\._print"
 )
+# The one edge the walk does not follow: `std::sys_common::backtrace::print`,
+# the printer's entry, which std's default panic hook calls only when a
+# backtrace is asked for. Every other printer function (its closures, the
+# `drop_in_place` of its closure, which is a plain buffer drop rustc may
+# merge with a `String` drop) is an ordinary candidate, kept when the walk
+# reaches it.
+ENTRY = re.compile(r"^_ZN3std10sys_common9backtrace5print17h[0-9a-f]{16}E$")
 
 NAME = r'@(?:"(?P<q>(?:[^"\\]|\\.)*)"|(?P<n>[-\w.$]+))'
 DEFINE = re.compile(r"^define [^\n]*?" + NAME + r"\(", re.M)
@@ -92,16 +100,18 @@ def parse(ir):
 
 
 def stub_set(defs, refs, roots):
-    """The candidates the code that stays cannot reach: a walk from the
-    roots that does not enter the printer."""
-    seen, todo = set(), [r for r in roots if not PRINTER.search(r)]
+    """The candidates the code that stays cannot reach (a walk from the
+    roots that does not enter the printer's entry), and the candidates it
+    reaches."""
+    seen, todo = set(), [r for r in roots if not ENTRY.match(r)]
     while todo:
         name = todo.pop()
         if name in seen:
             continue
         seen.add(name)
-        todo.extend(r for r in refs.get(name, ()) if r not in seen and not PRINTER.search(r))
-    return {n for n in defs if candidate(n) and n not in seen}
+        todo.extend(r for r in refs.get(name, ()) if r not in seen and not ENTRY.match(r))
+    stub = {n for n in defs if candidate(n) and n not in seen}
+    return stub, {n for n in defs if candidate(n) and n in seen}
 
 
 def stub_header(header, group):
@@ -114,7 +124,7 @@ def stub_header(header, group):
 
 def rewrite(ir):
     defs, refs, roots = parse(ir)
-    stub = stub_set(defs, refs, roots)
+    stub, _ = stub_set(defs, refs, roots)
     groups = [int(g) for g in re.findall(r"^attributes #(\d+) ", ir, re.M)]
     group = max(groups, default=-1) + 1
     out, last = [], 0
@@ -142,27 +152,32 @@ def is_stub(ir, start, end):
 
 def check(ir):
     """The candidates that only symbolizer code reaches but that still have
-    a real body, and the kept (shared) candidates with their sizes."""
+    a real body, the candidates that live code reaches but that are stubs
+    (live code would abort), and the kept (shared) candidates with their
+    sizes."""
     defs, refs, roots = parse(ir)
-    stub = stub_set(defs, refs, roots)
+    stub, live = stub_set(defs, refs, roots)
     bad = sorted(n for n in stub if not is_stub(ir, *defs[n]))
-    kept = {
-        n: ir[s:e].count("\n") - 2
-        for n, (s, e) in defs.items()
-        if candidate(n) and n not in stub and not is_stub(ir, s, e)
-    }
-    return bad, kept
+    dead = sorted(n for n in live if is_stub(ir, *defs[n]))
+    kept = {n: ir[defs[n][0] : defs[n][1]].count("\n") - 2 for n in live if n not in dead}
+    return bad, dead, kept
 
 
 def main():
     if len(sys.argv) == 3 and sys.argv[1] == "--check":
         with open(sys.argv[2]) as f:
-            bad, kept = check(f.read())
+            bad, dead, kept = check(f.read())
         if bad:
             sys.exit(
                 "klee-stub-symbolizer: backtrace symbolizer code is still in the module: "
                 + ", ".join(bad[:10])
                 + (f" (and {len(bad) - 10} more)" if len(bad) > 10 else "")
+            )
+        if dead:
+            sys.exit(
+                "klee-stub-symbolizer: code outside the backtrace printer calls an abort stub: "
+                + ", ".join(dead[:10])
+                + (f" (and {len(dead) - 10} more)" if len(dead) > 10 else "")
             )
         for name, size in sorted(kept.items()):
             print(f"klee-stub-symbolizer: shared body kept ({size} lines): {name}")
