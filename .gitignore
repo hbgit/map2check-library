@@ -2,11 +2,7 @@
 build/*
 release-library/*
 
-# LLVM bitcode (gerados por llvm-link)
-codeklee_by_caller_test.bc
-fullprogram_2.bc
-libmap2check_klee.bc
-libmap2check_libfuzzer.bc
+# LLVM bitcode artifacts
 *.bc
 
 # Rust / Cargo build artifacts
@@ -21,3 +17,6 @@ tarpaulin-report.html
 
 # Header C gerado por cbindgen
 map2check.h
+
+# Arquivos de release (scripts/package-release.sh)
+dist/

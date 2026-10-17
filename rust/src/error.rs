@@ -32,3 +32,24 @@ impl<T> From<std::sync::PoisonError<T>> for Map2CheckError {
         Self::LockPoisoned(e.to_string())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn poison_error_converts_to_lock_poisoned() {
+        let mutex = std::sync::Mutex::new(0_u8);
+        std::thread::scope(|scope| {
+            let _ = scope
+                .spawn(|| {
+                    let _held = mutex.lock().unwrap();
+                    panic!("poison the mutex on purpose");
+                })
+                .join();
+        });
+        let err: Map2CheckError = mutex.lock().unwrap_err().into();
+        assert!(matches!(err, Map2CheckError::LockPoisoned(_)));
+        assert!(err.to_string().starts_with("lock poisoned"));
+    }
+}

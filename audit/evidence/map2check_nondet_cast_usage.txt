@@ -1,0 +1,1 @@
+/tmp/claude-1000/-home-rock-Documents-Dev-map2check-library/bebe49e7-bdb8-4d51-a37a-11f8904d7334/scratchpad/Map2Check/modules/backend/pass/NonDetPass.cpp:247:    Twine bitcast("map2check_nondet_cast_" #type);                           \

@@ -4,63 +4,72 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Map2Check-Library is a Rust library (crate `map2check-library`, lib name `map2check`) that supports the Map2Check program verification tool. It tracks memory, basic blocks, and nondeterministic values, and checks safety properties (overflow, memory safety, assert reachability) in programs analyzed by KLEE or LibFuzzer. It is built as a static library (`libmap2check.a`) plus an `rlib`, and exposes a C ABI consumed by LLVM instrumentation. The original C/CMake implementation was removed; the Rust port is still reaching parity with it (see [TODO.md](TODO.md) and [docs/plano_map2check_library_rust.md](docs/plano_map2check_library_rust.md)).
+Map2Check-Library is a Rust library with a C ABI for the Map2Check program verification tool. It tracks memory, basic blocks, and nondeterministic values, and checks safety properties (overflow, memory safety, assert reachability) in programs analyzed by LibFuzzer. The build produces the static library (`libmap2check.a`) and generates `include/map2check.h`. Remaining parity work with the legacy C implementation is tracked in [TODO.md](TODO.md).
 
-## Build, Test and Lint
+## Build Commands
 
-Run from the repo root. The toolchain (Rust 1.82.0, with clippy and rustfmt) is pinned by `rust-toolchain.toml`.
+The project uses the Rust toolchain pinned in `rust-toolchain.toml`. Run Cargo commands from the repository root.
 
 ```sh
+# Debug build
+cargo build
+
+# Release build
 cargo build --release
-cargo test --all-features
-cargo test --all-features analysismode::overflow::tests::add_i32_overflow_detected   # single test (name filter)
-cargo fmt --check
-cargo clippy --all-targets --all-features -- -D warnings
-cargo audit
-cargo deny check
-docker build .
+
+# Generate the C header and build all features
+cargo build --all-features
 ```
 
-CI (`.github/workflows/CI.yml`) runs formatting, Clippy, release build, all-feature tests, dependency checks, and the Docker build. The Dockerfile also has a KLEE bitcode stage (`--features klee`) and a tarpaulin coverage stage that excludes `rust/src/ffi.rs`. `run_klee_test.sh` is the KLEE integration check (expects `build/fullprogram_2.bc` and Docker).
+## Running Tests
 
-Cargo features: `klee` and `libfuzzer` select the analysis mode.
+```sh
+# Run all Rust unit tests
+cargo test --all-features
+
+# Lint and dependency checks (also run in CI)
+cargo fmt --check
+cargo clippy --all-targets --all-features -- -D warnings
+cargo deny check
+
+# Exercise the C ABI with ASan and UBSan (requires clang)
+cargo build --release --all-features
+clang -fsanitize=address,undefined -fno-omit-frame-pointer \
+  tests/ffi_harness.c target/release/libmap2check.a \
+  -ldl -lpthread -lm -o target/ffi_harness
+target/ffi_harness
+```
 
 ## Architecture
 
 ### Source Layout
 
-- [rust/src/lib.rs](rust/src/lib.rs) — crate root (`[lib] path` in `Cargo.toml`)
-- [rust/src/ffi.rs](rust/src/ffi.rs) — all `extern "C"` exports; the only place with `unsafe`
-- [rust/src/state.rs](rust/src/state.rs) — global `AnalysisState`, accessed via `state::with_state`
-- [rust/src/error.rs](rust/src/error.rs) — `Map2CheckError` (thiserror)
-- [include/map2check.h](include/map2check.h) — **generated** C header; do not edit
-- [test/](test/) — C sample programs (`codeAPI_by_caller_test.c`, `codeklee_by_caller_test.c`, `codefuzz_by_caller_test.c`) used for KLEE/LibFuzzer integration; unit tests live inline in the Rust modules
-- [docs/](docs/) — Rust migration plan, Doxyfile, UML diagrams
+- [rust/src/](rust/src/) — Rust implementation and C FFI
+- [tests/ffi_harness.c](tests/ffi_harness.c) — C ABI stress harness
 
-### Modules (`rust/src/`)
+### Module Packages
 
-| Module | Purpose |
+Each package lives in a subdirectory of `rust/src/`:
+
+| Package | Purpose |
 |---|---|
-| `caller/` | C-represented violated property and result metadata |
-| `nondet/` | Nondeterministic value tracking; `libfuzzer.rs` (feature `libfuzzer`) has the LibFuzzer callback and input generators |
-| `memtrack/` | Allocation tracking (alloca/malloc/calloc/free, pointer stores) and memory-safety lookups |
-| `bbtrack/` | Basic-block execution path records |
-| `analysismode/` | Verification condition checkers (`assert`, `overflow`, `memory`) behind the `VccChecker` trait |
-| `output/` | Serializes state to the JSON report on stdout (serde_json) |
+| `caller/` | Result and violated-property types, global step counter. |
+| `nondet/` | Typed nondeterministic values and LibFuzzer generators. |
+| `memtrack/` | Memory allocation tracking and memory-safety checks. |
+| `bbtrack/` | Basic-block entries and lookup. |
+| `analysismode/` | Verification condition checkers: `analysis_assert` (assert reachability), `analysis_overflow` (arithmetic overflow), `analysis_memory` (memory safety). |
 
-Checkers use `VccContext` for source location and return `Result<VccOutcome, Map2CheckError>`; `VccOutcome` is `Safe` or a violated property. The FFI layer records violations in the shared state.
+### Container Pattern
 
-### Key Design Decisions
+Analysis records are stored in vectors in the process-wide `AnalysisState`, protected by a mutex and reset by `map2check_reset()`.
 
-- Global state is a single `OnceLock<Arc<Mutex<AnalysisState>>>`; don't create parallel globals for existing logs/results.
-- `unsafe` is confined to `ffi.rs`; other modules use `#![deny(unsafe_code)]`. Every unsafe block at an FFI boundary needs a `// SAFETY:` comment.
-- Exports use `#[unsafe(no_mangle)]` and `#[repr(C)]` for types crossing the ABI.
-- Verification rules go in `analysismode`; reusable tracking/query logic goes in `bbtrack`, `nondet`, or `memtrack`.
-- JSON field names and omission rules are part of the output contract — update the focused tests in `output/mod.rs` when changing them.
+### Output Format
+
+At analysis end, `print_all_containers_as_json()` serializes the state to RFC 8259 JSON on stdout using `serde_json`.
 
 ### Generated Header
 
-`build.rs` runs `cbindgen` (config in `cbindgen.toml`) on every build and rewrites `include/map2check.h`. Change Rust exports or `cbindgen.toml`, never the header.
+`build.rs` runs `cbindgen` (config in `cbindgen.toml`) and rewrites `include/map2check.h`. Change Rust exports or `cbindgen.toml`, never the header.
 
 ## Repository Conventions
 
@@ -68,11 +77,9 @@ Checkers use `VccContext` for source location and return `Result<VccOutcome, Map
 - Never add AI attributions (e.g. "Co-authored-by", "Generated with ...") to commits or PR descriptions.
 - See [.github/copilot-instructions.md](.github/copilot-instructions.md) for the same conventions in more detail.
 
-## Key Entry Points (C ABI)
+## Key Entry Points
 
-- `map2check_init()` — initialize state; call before any tracking
+- `map2check_init()` — initializes the global analysis state
 - `map2check_success()` / `set_false_result(prp, line, func)` — set final verification result
-- `print_all_containers_as_json()` — emit the JSON report
-- `map2check_is_valid_assert()`, `map2check_map_malloc()`, `map2check_map_free()`, `map2check_save_nondet_log_*` — called by Map2Check's LLVM instrumentation passes
-
-Some legacy C entry points (`get_next_step`, `map2check_map_non_static_alloca`, `map2check_map_funct_address`, `map2check_check_free_resolved_address`) and the C signatures of `map2check_save_nondet_log_*` are not yet matched in Rust; see TODO.md.
+- `print_all_containers_as_json()` — emits the JSON result report
+- `map2check_is_valid_assert()`, `map2check_map_malloc()`, `map2check_map_free()` etc. — called by LLVM instrumentation passes in the Map2Check tool

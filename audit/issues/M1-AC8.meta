@@ -1,0 +1,5 @@
+ACTION=create
+NUMBER=
+TITLE=ci: run cargo-tarpaulin in CI and enforce coverage gate outside ffi*.rs
+MILESTONE=M1 — Restaurar build, CI e higiene
+LABELS=area:ci,kind:test

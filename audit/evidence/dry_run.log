@@ -1,0 +1,31 @@
+DRY-RUN: gh api repos/hbgit/map2check-library/milestones -f title=M1\ —\ Restaurar\ build\,\ CI\ e\ higiene --silent
+DRY-RUN: gh api repos/hbgit/map2check-library/milestones -f title=M2\ —\ Endurecer\ a\ fronteira\ FFI --silent
+DRY-RUN: gh api repos/hbgit/map2check-library/milestones -f title=M3\ —\ Completar\ paridade\ da\ API\ núcleo --silent
+DRY-RUN: gh api repos/hbgit/map2check-library/milestones -f title=M4\ —\ Spike\ KLEE\ \(gate\ go/no-go\) --silent
+DRY-RUN: gh api repos/hbgit/map2check-library/milestones -f title=M5\ —\ Camada\ de\ compatibilidade\ com\ passes\ do\ Map2Check --silent
+DRY-RUN: gh api repos/hbgit/map2check-library/milestones -f title=M6\ —\ Testes\ diferenciais\ e\ desempenho --silent
+DRY-RUN: gh api repos/hbgit/map2check-library/milestones -f title=M7\ —\ Integração\ no\ CMake\ do\ Map2Check\ sob\ flag --silent
+DRY-RUN: gh api repos/hbgit/map2check-library/milestones -f title=M8\ —\ Promoção\ a\ default\ e\ aposentadoria\ do\ compat --silent
+DRY-RUN: gh label create area:ffi -R hbgit/map2check-library
+DRY-RUN: gh label create area:build -R hbgit/map2check-library
+DRY-RUN: gh label create area:ci -R hbgit/map2check-library
+DRY-RUN: gh label create area:klee -R hbgit/map2check-library
+DRY-RUN: gh label create area:fuzzing -R hbgit/map2check-library
+DRY-RUN: gh label create area:memtrack -R hbgit/map2check-library
+DRY-RUN: gh label create area:integration -R hbgit/map2check-library
+DRY-RUN: gh label create kind:bug -R hbgit/map2check-library
+DRY-RUN: gh label create kind:feature -R hbgit/map2check-library
+DRY-RUN: gh label create kind:test -R hbgit/map2check-library
+DRY-RUN: gh label create kind:docs -R hbgit/map2check-library
+DRY-RUN: gh label create prio:critical -R hbgit/map2check-library
+DRY-RUN: gh issue create -R hbgit/map2check-library -t ci:\ run\ cargo-tarpaulin\ in\ CI\ and\ enforce\ coverage\ gate\ outside\ ffi\*.rs -m M1\ —\ Restaurar\ build\,\ CI\ e\ higiene -l area:ci\,kind:test -F /home/rock/Documents/Dev/map2check-library/audit/issues/M1-AC8.md
+DRY-RUN: gh issue create -R hbgit/map2check-library -t ci:\ protect\ feature/rust\ and\ require\ green\ CI\ on\ PRs -m M1\ —\ Restaurar\ build\,\ CI\ e\ higiene -l area:ci -F /home/rock/Documents/Dev/map2check-library/audit/issues/M1-DoD2.md
+DRY-RUN: gh issue comment 16 -R hbgit/map2check-library -F /home/rock/Documents/Dev/map2check-library/audit/issues/M1-I4.md
+DRY-RUN: gh issue create -R hbgit/map2check-library -t chore:\ remove\ C-era\ dead\ artifacts\ \(.clangd\,\ compile_commands.json\,\ .travis.yml\,\ .vscode\,\ stale\ docs\) -m M1\ —\ Restaurar\ build\,\ CI\ e\ higiene -l kind:feature -F /home/rock/Documents/Dev/map2check-library/audit/issues/M1-I5.md
+DRY-RUN: gh issue comment 9 -R hbgit/map2check-library -F /home/rock/Documents/Dev/map2check-library/audit/issues/M2-AC2.md
+DRY-RUN: gh issue comment 8 -R hbgit/map2check-library -F /home/rock/Documents/Dev/map2check-library/audit/issues/M2-I6.md
+DRY-RUN: gh issue comment 13 -R hbgit/map2check-library -F /home/rock/Documents/Dev/map2check-library/audit/issues/M3-AC1.md
+DRY-RUN: gh issue create -R hbgit/map2check-library -t build:\ version\ the\ C\ header\ and\ crate\ as\ v1.0.0-rc1 -m M3\ —\ Completar\ paridade\ da\ API\ núcleo -l area:build -F /home/rock/Documents/Dev/map2check-library/audit/issues/M3-DoD1.md
+DRY-RUN: gh issue create -R hbgit/map2check-library -t test:\ add\ Rust\ unit\ tests\ for\ each\ exported\ FFI\ symbol -m M3\ —\ Completar\ paridade\ da\ API\ núcleo -l kind:test -F /home/rock/Documents/Dev/map2check-library/audit/issues/M3-E3.md
+DRY-RUN: gh issue comment 11 -R hbgit/map2check-library -F /home/rock/Documents/Dev/map2check-library/audit/issues/M6-I2.md
+DRY-RUN: gh issue comment 15 -R hbgit/map2check-library -F /home/rock/Documents/Dev/map2check-library/audit/issues/M6-I3.md

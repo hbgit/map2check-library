@@ -1,0 +1,6 @@
+    Finished `runtime` profile [optimized] target(s) in 16.29s
+1	b0	prog42	yes	114823.24	id:000000,sig:06,src:000000,time:102,execs:1267,op:havoc,rep:7
+2	b0	prog42	yes	114983.23	id:000000,sig:06,src:000000,time:749,execs:79386,op:havoc,rep:29
+3	b0	prog42	yes	115866.54	id:000000,sig:06,src:000000,time:2845,execs:337103,op:havoc,rep:53
+4	b0	prog42	yes	116179.86	id:000000,sig:06,src:000000,time:115,execs:4871,op:havoc,rep:8
+5	b0	prog42	yes	116893.17	id:000000,sig:06,src:000000,time:1083,execs:122295,op:havoc,rep:51

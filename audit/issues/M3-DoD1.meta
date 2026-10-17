@@ -1,0 +1,5 @@
+ACTION=create
+NUMBER=
+TITLE=build: version the C header and crate as v1.0.0-rc1
+MILESTONE=M3 — Completar paridade da API núcleo
+LABELS=area:build

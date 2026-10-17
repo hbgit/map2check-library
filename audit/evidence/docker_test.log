@@ -1,0 +1,72 @@
+#0 building with "default" instance using docker driver
+
+#1 [internal] load build definition from Dockerfile
+#1 transferring dockerfile: 2.21kB done
+#1 DONE 0.0s
+
+#2 [internal] load metadata for docker.io/library/rust:1.82-slim-bookworm
+#2 DONE 1.8s
+
+#3 [internal] load .dockerignore
+#3 transferring context: 2B done
+#3 DONE 0.0s
+
+#4 [builder  1/11] FROM docker.io/library/rust:1.82-slim-bookworm@sha256:1111c28d995d06a7863ba6cea3b3dcb87bebe65af8ec5517caaf2c8c26f38010
+#4 resolve docker.io/library/rust:1.82-slim-bookworm@sha256:1111c28d995d06a7863ba6cea3b3dcb87bebe65af8ec5517caaf2c8c26f38010 done
+#4 DONE 0.0s
+
+#5 [internal] load build context
+#5 transferring context: 3.19kB 0.0s done
+#5 DONE 0.0s
+
+#6 [builder 11/11] RUN mkdir -p include && cargo build --release
+#6 CACHED
+
+#7 [builder  3/11] RUN curl -sL https://github.com/xd009642/tarpaulin/releases/download/0.31.3/cargo-tarpaulin-x86_64-unknown-linux-musl.tar.gz | tar -xz -C /usr/local/cargo/bin
+#7 CACHED
+
+#8 [builder  6/11] COPY clippy.toml deny.toml cbindgen.toml ./
+#8 CACHED
+
+#9 [builder  8/11] COPY rust/ ./rust/
+#9 CACHED
+
+#10 [builder 10/11] RUN cargo fetch
+#10 CACHED
+
+#11 [test 2/3] RUN cargo test --all-features 2>&1 | tee /tmp/test-results.txt
+#11 CACHED
+
+#12 [builder  7/11] COPY rust-toolchain.toml ./
+#12 CACHED
+
+#13 [builder  2/11] RUN apt-get update && apt-get install -y --no-install-recommends     cmake make git curl ca-certificates     && rm -rf /var/lib/apt/lists/*
+#13 CACHED
+
+#14 [builder  4/11] WORKDIR /build
+#14 CACHED
+
+#15 [test 1/3] COPY test/ ./test/
+#15 CACHED
+
+#16 [builder  5/11] COPY Cargo.toml Cargo.lock* ./
+#16 CACHED
+
+#17 [builder  9/11] COPY build.rs ./
+#17 CACHED
+
+#18 [test 3/3] RUN cargo tarpaulin     --engine llvm     --out Lcov     --output-dir /coverage     --all-features     --exclude-files "rust/src/ffi.rs" || mkdir -p /coverage
+#18 CACHED
+
+#19 exporting to image
+#19 exporting layers
+#19 exporting layers 14.7s done
+#19 exporting manifest sha256:3bb0841222d3fb8917c4b08dde4f8e242ecc26d8554118ec54d9f8a603c96f6a done
+#19 exporting config sha256:fc4c9cfddf97c4d49414140fdb434b863afc89da3fdf91d71c2d46a799cd4704 done
+#19 exporting attestation manifest sha256:bd70481f4eecb47fac0a4e0cfab98fb3e9ac8c27b9e0feb5d339a39dfd545a19 done
+#19 exporting manifest list sha256:841f5478eafd520f5b28837433749eac9bc3819cc80f068d28e27165ab896c6d done
+#19 naming to moby-dangling@sha256:841f5478eafd520f5b28837433749eac9bc3819cc80f068d28e27165ab896c6d done
+#19 unpacking to moby-dangling@sha256:841f5478eafd520f5b28837433749eac9bc3819cc80f068d28e27165ab896c6d
+#19 unpacking to moby-dangling@sha256:841f5478eafd520f5b28837433749eac9bc3819cc80f068d28e27165ab896c6d 11.4s done
+#19 DONE 26.2s
+rc=0

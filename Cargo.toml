@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: GPL-3.0-only
 [package]
 name = "map2check-library"
-version = "1.0.0"
+version = "1.1.0-rc1"
 edition = "2021"
 description = "Rust library to support Map2Check tool: tracks memory, basic blocks, and nondeterministic values, and checks safety properties"
 license = "GPL-3.0-only"
@@ -19,20 +19,36 @@ thiserror = "2"
 
 [dev-dependencies]
 mockall = "0.13"
+tempfile = "3"
 
 [features]
 libfuzzer = []
-klee = []
+# The wasm2c runtime of Map2Check's `--wasm` mode (D2): the `wasm_rt_*` stubs,
+# `w2c_wasi__snapshot__preview1_proc_exit` and the `map2check_wasm_*` checks.
+wasm = []
+# The `klee` feature (the KLEE runtime) lives in klee/Cargo.toml, the
+# manifest of the rustc 1.72.1 bitcode build (D1, route A'). It is not a
+# feature here: `--all-features` would link it with `libfuzzer` (both define
+# `__VERIFIER_nondet_*`) and against KLEE intrinsics no host binary has.
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(feature, values("klee"))'] }
 
 [profile.release]
 opt-level = 3
 lto = true
 codegen-units = 1
-panic = "abort"
 
 [profile.dev]
 opt-level = 0
 debug = true
 
+# Unwind e não abort: ffi_guard (rust/src/ffi.rs) recupera panics com
+# catch_unwind, e um abort sob AFL++ persistente pareceria crash do programa
+# analisado. O build KLEE usa panic = "abort" separadamente.
+[profile.runtime]
+inherits = "release"
+panic = "unwind"
+
 [build-dependencies]
-cbindgen = "0.26.0"
+cbindgen = { version = "0.28.0", default-features = false }

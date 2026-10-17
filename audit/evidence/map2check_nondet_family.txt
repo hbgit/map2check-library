@@ -1,0 +1,17 @@
+map2check_non_det_bool
+map2check_non_det_char
+map2check_non_det_double
+map2check_non_det_int
+map2check_non_det_loff_t
+map2check_non_det_long
+map2check_non_det_pchar
+map2check_non_det_pointer
+map2check_non_det_sector_t
+map2check_non_det_short
+map2check_non_det_size_t
+map2check_non_det_uchar
+map2check_non_det_uint
+map2check_non_det_ulong
+map2check_non_det_unsigned
+map2check_non_det_ushort
+map2check_pointer_cast

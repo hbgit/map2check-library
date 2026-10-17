@@ -1,0 +1,17 @@
+build_and_test	Auditoria de segurança (cargo-audit)	﻿2026-10-14T20:32:05.1268651Z ##[group]Run rustsec/audit-check@v2
+build_and_test	Auditoria de segurança (cargo-audit)	2026-10-14T20:32:05.1268896Z with:
+build_and_test	Auditoria de segurança (cargo-audit)	2026-10-14T20:32:05.1271425Z   token: ***
+build_and_test	Auditoria de segurança (cargo-audit)	2026-10-14T20:32:05.1271614Z   working-directory: .
+build_and_test	Auditoria de segurança (cargo-audit)	2026-10-14T20:32:05.1271800Z env:
+build_and_test	Auditoria de segurança (cargo-audit)	2026-10-14T20:32:05.1271964Z   CARGO_HOME: /home/runner/.cargo
+build_and_test	Auditoria de segurança (cargo-audit)	2026-10-14T20:32:05.1272170Z   CARGO_INCREMENTAL: 0
+build_and_test	Auditoria de segurança (cargo-audit)	2026-10-14T20:32:05.1272349Z   CARGO_TERM_COLOR: always
+build_and_test	Auditoria de segurança (cargo-audit)	2026-10-14T20:32:05.1272533Z ##[endgroup]
+build_and_test	Auditoria de segurança (cargo-audit)	2026-10-14T20:32:05.2423200Z cargo-audit is not installed, installing it now
+build_and_test	Auditoria de segurança (cargo-audit)	2026-10-14T20:32:05.2437029Z ##[group]Installing "cargo-audit = latest"
+build_and_test	Auditoria de segurança (cargo-audit)	2026-10-14T20:32:05.2437543Z [command]/home/runner/.cargo/bin/cargo install cargo-audit
+build_and_test	Auditoria de segurança (cargo-audit)	2026-10-14T20:32:05.2812852Z [1m[32m    Updating[0m crates.io index
+build_and_test	Auditoria de segurança (cargo-audit)	2026-10-14T20:32:05.3190624Z [1m[31merror[0m[1m:[0m cannot install package `cargo-audit 0.22.2`, it requires rustc 1.88 or newer, while the currently active rustc version is 1.82.0
+build_and_test	Auditoria de segurança (cargo-audit)	2026-10-14T20:32:05.3191397Z `cargo-audit 0.21.2` supports rustc 1.81.0
+build_and_test	Auditoria de segurança (cargo-audit)	2026-10-14T20:32:05.3209290Z ##[endgroup]
+build_and_test	Auditoria de segurança (cargo-audit)	2026-10-14T20:32:05.3227192Z ##[error]The process '/home/runner/.cargo/bin/cargo' failed with exit code 101
