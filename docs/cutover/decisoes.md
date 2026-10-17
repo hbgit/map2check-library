@@ -213,3 +213,38 @@ A aprovação aceita a proposta junto com estas condições.
 - A diferença de nomes entre o runtime C e o header Rust se resolve no que os passes emitem, com o mapeamento de `docs/cutover/abi-mapping.tsv` (Tasks 0.3 e 3.2), e não na biblioteca.
 - A Task 2.5 só acrescenta à API núcleo, com nomes núcleo, o que ainda faltava. Um teste falha se um nome do runtime C aparecer no artefato.
 - A antiga Fase 7 (aposentar a camada de compatibilidade) foi removida do plano.
+
+## Task 5.2 — C unit test assertions ported to Rust
+
+The C tests drove internal containers with no Rust export, so each assertion goes through the export that feeds the same record. 24 ported, 4 covered by D3 (`--btree` is not ported).
+
+| C TEST | Rust `#[test]` (`rust/src/ffi_tests.rs`) | Note |
+|---|---|---|
+| ContainerTest.IsEmptyInitially | container_is_empty_initially | via `map2check_init` |
+| ContainerTest.AddItemShouldIncreaseSize | container_add_item_increases_size | via `map2check_map_malloc` |
+| ContainerTest.AddedItemShouldBeSetted | container_added_item_is_set | |
+| ContainerTest.MultipleItemsAddedShouldNotBreak | container_multiple_items_added_do_not_break | 10000 items, order kept |
+| AllocationLogTest.MarkAllocShouldIncreaseSize | allocation_log_mark_alloc_increases_size | |
+| AllocationLogTest.MarkDeallocShouldIncreaseSize | allocation_log_mark_dealloc_increases_size | via `map2check_map_free` |
+| AllocationLogTest.MemoryAddressStatusCaseDynamic | allocation_log_address_status_dynamic | status observed as free validity |
+| AllocationLogTest.MemoryAddressStatusCaseFree | allocation_log_address_status_free | invalid free |
+| AllocationLogTest.MemoryAddressStatusCaseEmpty | allocation_log_address_status_empty_is_static | sem export para o enum de status; o STATIC é observado pelo veredito de free inválido do SD-06 |
+| AllocationLogTest.MemoryAddressStatusCaseStatic | allocation_log_address_status_static_when_another_address_is_tracked | sem export para o enum de status; o STATIC é observado pelo veredito de free inválido do SD-06 |
+| AllocationLogTest.IfAddressIsReleasedThenAllocationLogIsValid | allocation_log_released_address_leaves_no_leak | via `map2check_check_mem_endprog` |
+| AllocationLogTest.IfAddressIsNotReleasedThenAllocationLogIsInvalid | allocation_log_unreleased_address_is_a_leak | |
+| AllocationLogTest.AddressIsInAllocationLog | allocation_log_address_is_in_allocation_log | via `map2check_check_load` |
+| AllocationLogTest.AddressIsNotInAllocationLog | allocation_log_address_is_not_in_allocation_log | |
+| HeapLogTest.MarkHeapShouldIncreaseSize | heap_log_mark_heap_increases_size | via `map2check_map_alloca` |
+| HeapLogTest.ValidPrimitive | heap_log_valid_primitive | |
+| HeapLogTest.InvalidPrimitive | heap_log_invalid_primitive | |
+| HeapLogTest.ValidArray | heap_log_valid_array | |
+| HeapLogTest.InvalidArray | heap_log_invalid_array | |
+| MemoryTrackTest.DefaultIsOk | memtrack_default_program_is_correct | memtrack mode |
+| MemoryTrackTest.MallocShouldGenerateMemleak | memtrack_malloc_generates_memleak | |
+| MemoryTrackTest.CallocShouldGenerateMemleak | memtrack_calloc_generates_memleak | |
+| MemoryTrackTest.AfterReleaseMalloc | memtrack_release_after_malloc_leaves_no_leak | |
+| MemoryTrackTest.AfterReleaseCalloc | memtrack_release_after_calloc_leaves_no_leak | |
+| BTreeTest.ConstructorShouldBeSettedRight | not ported | D3 |
+| BTreeTest.AddItem | not ported | D3 |
+| BTreeTest.AddItemShouldSetValue | not ported | D3 |
+| BTreeTest.AddMultipleItems | not ported | D3 |

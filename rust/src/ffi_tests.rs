@@ -2751,3 +2751,250 @@ mod wasm {
         unsafe { w2c_wasi__snapshot__preview1_proc_exit(std::ptr::null_mut(), 7) };
     }
 }
+
+// ── Ported assertions of the legacy C runtime unit tests ───────────────────
+//
+// Port of `tests/unit/backend-library/{Container,AllocationLog,HeapLog,
+// MemTrack}Test.cpp` (legacy/c-runtime-final). The C tests drove internal
+// containers that have no export here, so each assertion goes through the
+// export that feeds the same record. The C TEST -> Rust test table is in
+// `docs/cutover/decisoes.md` (Task 5.2). `BTreeTest` is not ported (D3).
+
+fn free_resolved(address: usize) {
+    // SAFETY: C-string literal is valid; the address is never dereferenced.
+    unsafe { map2check_check_free_resolved_address(addr(address), 7, c"main".as_ptr(), 0) };
+}
+
+fn malloc_of(address: usize, size: i32) {
+    // SAFETY: fake address is never dereferenced.
+    unsafe { map2check_map_malloc(addr(address), size) };
+}
+
+fn load_of(address: usize, size: i32) {
+    // SAFETY: C-string literal is valid; the address is never dereferenced.
+    unsafe { map2check_check_load(addr(address), 9, 0, size, c"main".as_ptr()) };
+}
+
+fn alloca_of(address: usize, size: i32, primitive: i32) {
+    // SAFETY: C-string literal is valid; the address is never dereferenced.
+    unsafe { map2check_map_alloca(c"var".as_ptr(), addr(address), size, primitive, 3, 1) };
+}
+
+// ContainerTest
+
+#[test]
+fn container_is_empty_initially() {
+    let _guard = fresh();
+    map2check_init();
+    assert_eq!(snapshot(|s| s.memtrack.len()), 0);
+}
+
+#[test]
+fn container_add_item_increases_size() {
+    let _guard = fresh();
+    map2check_init();
+    malloc_of(0x1000, 4);
+    assert_eq!(snapshot(|s| s.memtrack.len()), 1);
+}
+
+#[test]
+fn container_added_item_is_set() {
+    let _guard = fresh();
+    map2check_init();
+    malloc_of(42, 4);
+    assert_eq!(only_memtrack().points_to, 42);
+}
+
+#[test]
+fn container_multiple_items_added_do_not_break() {
+    let _guard = fresh();
+    map2check_init();
+    let n = 10_000usize;
+    for i in 0..n {
+        malloc_of(n - i, 4);
+    }
+    snapshot(|s| {
+        assert_eq!(s.memtrack.len(), n);
+        for (i, entry) in s.memtrack.iter().enumerate() {
+            assert_eq!(entry.points_to, n - i);
+        }
+    });
+}
+
+// AllocationLogTest
+
+#[test]
+fn allocation_log_mark_alloc_increases_size() {
+    let _guard = fresh();
+    malloc_of(42, 4);
+    assert_eq!(snapshot(|s| s.memtrack.len()), 1);
+}
+
+#[test]
+fn allocation_log_mark_dealloc_increases_size() {
+    let _guard = fresh();
+    // SAFETY: C-string literals are valid; fake addresses are never dereferenced.
+    unsafe { map2check_map_free(c"p".as_ptr(), addr(0x10), addr(42), 0, 5, c"main".as_ptr()) };
+    let entry = only_memtrack();
+    assert!(entry.is_free);
+    assert_eq!(entry.points_to, 42);
+}
+
+#[test]
+fn allocation_log_address_status_dynamic() {
+    let _guard = fresh();
+    malloc_of(42, 4);
+    free_resolved(42);
+    assert_ok();
+}
+
+#[test]
+fn allocation_log_address_status_free() {
+    let _guard = fresh();
+    // SAFETY: C-string literals are valid; fake addresses are never dereferenced.
+    unsafe { map2check_map_free(c"p".as_ptr(), addr(0x10), addr(42), 0, 5, c"main".as_ptr()) };
+    free_resolved(42);
+    assert_violated(ViolatedProperty::MemsafetyFree, 7, "main");
+}
+
+// No export reads C's address status enum, so its STATIC value is
+// observed through the SD-06 verdict: an address with no record is an
+// invalid free.
+#[test]
+fn allocation_log_address_status_empty_is_static() {
+    let _guard = fresh();
+    free_resolved(72);
+    assert_violated(ViolatedProperty::MemsafetyFree, 7, "main");
+}
+
+#[test]
+fn allocation_log_address_status_static_when_another_address_is_tracked() {
+    let _guard = fresh();
+    malloc_of(42, 4);
+    free_resolved(72);
+    assert_violated(ViolatedProperty::MemsafetyFree, 7, "main");
+}
+
+#[test]
+fn allocation_log_released_address_leaves_no_leak() {
+    let _guard = fresh();
+    malloc_of(42, 4);
+    free_resolved(42);
+    map2check_check_mem_endprog();
+    assert_ok();
+}
+
+#[test]
+fn allocation_log_unreleased_address_is_a_leak() {
+    let _guard = fresh();
+    malloc_of(0x1000, 4);
+    map2check_check_mem_endprog();
+    assert_violated(ViolatedProperty::MemsafetyMemtrack, 0, "end_of_program");
+}
+
+#[test]
+fn allocation_log_address_is_in_allocation_log() {
+    let _guard = fresh();
+    malloc_of(0x1000, 4);
+    load_of(0x1000, 4);
+    assert_ok();
+}
+
+#[test]
+fn allocation_log_address_is_not_in_allocation_log() {
+    let _guard = fresh();
+    malloc_of(0x1000, 4);
+    load_of(0x1000, 8);
+    assert_violated(ViolatedProperty::MemsafetyDeref, 9, "main");
+}
+
+// HeapLogTest
+
+#[test]
+fn heap_log_mark_heap_increases_size() {
+    let _guard = fresh();
+    alloca_of(0x2000, 4, 4);
+    assert_eq!(snapshot(|s| s.memtrack.len()), 1);
+}
+
+#[test]
+fn heap_log_valid_primitive() {
+    let _guard = fresh();
+    alloca_of(0x2000, 4, 4);
+    load_of(0x2000, 4);
+    assert_ok();
+}
+
+#[test]
+fn heap_log_invalid_primitive() {
+    let _guard = fresh();
+    alloca_of(0x2000, 4, 4);
+    load_of(0x3000, 4);
+    assert_violated(ViolatedProperty::MemsafetyDeref, 9, "main");
+}
+
+#[test]
+fn heap_log_valid_array() {
+    let _guard = fresh();
+    alloca_of(0x2000, 8, 4);
+    load_of(0x2004, 4);
+    assert_ok();
+}
+
+#[test]
+fn heap_log_invalid_array() {
+    let _guard = fresh();
+    alloca_of(0x2000, 8, 4);
+    load_of(0x2008, 4);
+    assert_violated(ViolatedProperty::MemsafetyDeref, 9, "main");
+}
+
+// MemoryTrackTest (the C test analyses in the memtrack mode)
+
+#[test]
+fn memtrack_default_program_is_correct() {
+    let _guard = fresh();
+    start(AnalysisMode::Memtrack);
+    map2check_check_mem_endprog();
+    assert_ok();
+}
+
+#[test]
+fn memtrack_malloc_generates_memleak() {
+    let _guard = fresh();
+    start(AnalysisMode::Memtrack);
+    malloc_of(0x1000, 32);
+    map2check_check_mem_endprog();
+    assert_violated(ViolatedProperty::MemsafetyMemtrack, 0, "end_of_program");
+}
+
+#[test]
+fn memtrack_calloc_generates_memleak() {
+    let _guard = fresh();
+    start(AnalysisMode::Memtrack);
+    // SAFETY: fake address is never dereferenced.
+    unsafe { map2check_map_calloc(addr(0x1000), 10, 32) };
+    map2check_check_mem_endprog();
+    assert_violated(ViolatedProperty::MemsafetyMemtrack, 0, "end_of_program");
+}
+
+#[test]
+fn memtrack_release_after_malloc_leaves_no_leak() {
+    let _guard = fresh();
+    start(AnalysisMode::Memtrack);
+    malloc_of(0x1000, 32);
+    free_resolved(0x1000);
+    map2check_check_mem_endprog();
+    assert_ok();
+}
+
+#[test]
+fn memtrack_release_after_calloc_leaves_no_leak() {
+    let _guard = fresh();
+    start(AnalysisMode::Memtrack);
+    // SAFETY: fake address is never dereferenced.
+    unsafe { map2check_map_calloc(addr(0x1000), 10, 32) };
+    free_resolved(0x1000);
+    map2check_check_mem_endprog();
+    assert_ok();
+}
