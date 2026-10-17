@@ -28,6 +28,11 @@ RUN mkdir -p include && cargo build --release
 FROM builder AS test
 
 COPY test/ ./test/
+# Os testes leem os goldens do runtime C, os docs de compatibilidade, o
+# CHANGELOG, o mapa de ABI e o próprio Dockerfile (label de versão).
+COPY tests/ ./tests/
+COPY docs/ ./docs/
+COPY CHANGELOG.md Dockerfile ./
 COPY scripts/coverage.sh ./scripts/coverage.sh
 
 RUN cargo test --all-features 2>&1 | tee /tmp/test-results.txt
