@@ -86,9 +86,22 @@ fn write_aux_files(dir: &Path, config: Config, s: &AnalysisState, end_of_program
         );
         report(legacy_files::LIST_LOG_FILE, logs.write_list_log(dir));
     }
-    if !s.result.ok && nondet_log_fits(s) {
+    if (!s.result.ok || seed_replay()) && nondet_log_fits(s) {
         report(legacy_files::NONDET_LOG_FILE, logs.write_nondet_log(dir));
     }
+}
+
+/// Map2Check 9.0's seed exchange replays the fuzzer's non-violating queue
+/// entries through the witness binary to learn their typed vectors, and asks
+/// for the nondet log with `MAP2CHECK_SEED_REPLAY` (`WitnessGeneration.c`).
+/// Only that replay sets it, and it runs the native witness binary, so the
+/// KLEE build never reads the environment: its forked states must not
+/// clobber the violating state's log.
+fn seed_replay() -> bool {
+    #[cfg(not(feature = "klee"))]
+    return std::env::var_os("MAP2CHECK_SEED_REPLAY").is_some();
+    #[cfg(feature = "klee")]
+    false
 }
 
 /// Under KLEE a log longer than `KLEE_LOG_MAX_ROWS` is not written (nor

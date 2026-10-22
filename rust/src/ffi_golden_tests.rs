@@ -487,6 +487,47 @@ fn nondet_types_match_c_runtime() {
     assert_matches_golden("NONDET-TYPES", "nondet_types_child");
 }
 
+/// A run with no violation: one nondet value, then success. Writes
+/// `klee_log.csv` only when `MAP2CHECK_SEED_REPLAY` asks for it, as Map2Check
+/// 9.0's seed exchange does when it replays a fuzzer queue entry.
+fn no_violation_with_one_nondet(seed_replay: bool) {
+    if seed_replay {
+        std::env::set_var("MAP2CHECK_SEED_REPLAY", "1");
+    }
+    start(AnalysisMode::Assert);
+    let mut value: i32 = 42;
+    // SAFETY: `value` outlives the call; `f` is a C-string literal.
+    unsafe { map2check_save_nondet_log_int(30, 1, 0, &mut value, c"f".as_ptr()) };
+    map2check_success();
+}
+
+#[test]
+fn seed_replay_child() {
+    if is_child() {
+        no_violation_with_one_nondet(true);
+    }
+}
+
+#[test]
+fn no_seed_replay_child() {
+    if is_child() {
+        no_violation_with_one_nondet(false);
+    }
+}
+
+#[test]
+fn seed_replay_writes_the_nondet_log_without_a_violation() {
+    let dir = tempfile::tempdir().unwrap();
+    run_child("seed_replay_child", dir.path());
+    let log = std::fs::read_to_string(dir.path().join("klee_log.csv")).unwrap();
+    // After the rows `tracking()` logs, the program's own value.
+    assert!(log.ends_with(";30;1;f;5;42;0\n"), "{log}");
+
+    let dir = tempfile::tempdir().unwrap();
+    run_child("no_seed_replay_child", dir.path());
+    assert!(!dir.path().join("klee_log.csv").exists());
+}
+
 // ── Without witness: property files only (WitnessGenerationNone.c) ──────────
 
 #[test]
