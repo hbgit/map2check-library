@@ -1443,6 +1443,52 @@ pub unsafe extern "C" fn map2check_check_load(
     );
 }
 
+/// Checks every byte a `%s` or `puts` will read from `string`, up to its
+/// terminator, as Map2Check 9.0's `map2check_check_cstring`: each must lie
+/// in a live allocation. KLEE's uClibc declares `printf` without defining it,
+/// so KLEE runs it as a native external call and whatever it reads is read
+/// outside every check (Juliet's CWE121 CWE193 "cpy" tasks came back TRUE).
+/// The pass emits it only under `MAP2CHECK_CHECK_CSTRINGS=1`.
+///
+/// Stops at the first invalid byte, before reading it: the load check of that
+/// byte records the violation (and, with a mode set, aborts).
+///
+/// # Safety
+/// `function_name` must be null or a valid null-terminated C string;
+/// `string` may be null or point anywhere: no byte is read before its check.
+#[no_mangle]
+pub unsafe extern "C" fn map2check_check_cstring(
+    string: *const std::os::raw::c_char,
+    line: i32,
+    scope: u32,
+    function_name: *const std::os::raw::c_char,
+) {
+    ffi_guard(
+        || {
+            if string.is_null() || !check_active(Check::Load) {
+                return;
+            }
+            let violated = || state::with_state(|s| Ok(!s.result.ok)).unwrap_or(true);
+            let mut i = 0_usize;
+            loop {
+                let byte = string.wrapping_add(i);
+                // SAFETY: as this function's contract.
+                unsafe { map2check_check_load(byte.cast(), line, scope, 1, function_name) };
+                if violated() {
+                    return;
+                }
+                // SAFETY: the load check just found this byte in a live
+                // allocation.
+                if unsafe { *byte } == 0 {
+                    return;
+                }
+                i += 1;
+            }
+        },
+        (),
+    );
+}
+
 /// Checks whether `free(p)` of the heap block `ptr` is valid, where
 /// `var_address` is the address of the pointer variable `p` (the same
 /// arguments as `map2check_map_free`, which the pass calls after it).

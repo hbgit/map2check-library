@@ -15,6 +15,34 @@ the C ABI or the JSON report must update them.
 
 ## [Unreleased]
 
+Parity with the C runtime of Map2Check 9.0 (`feat/map2check-9.0`, PR #73 of
+Map2Check), which changed after the cutover snapshot. Each item is a 9.0 fix
+the Rust runtime did not have.
+
+### Added
+
+- `__VERIFIER_nondet_longlong`, `_ulonglong`, `_u8`, `_u16`, `_u32` and
+  `__VERIFIER_nondet_memory(p, n)`, for both features, with their loggers
+  `map2check_save_nondet_log_<t>` and the `enum NONDET_TYPE` numbers 17-22 of
+  9.0 (`MEMORY_BYTE` 22, one row per byte).
+- `map2check_check_cstring(string, line, scope, function_name)`: a 1-byte
+  load check of every byte up to the terminator. The Map2Check pass emits it
+  only under `MAP2CHECK_CHECK_CSTRINGS=1`.
+- The witness writes `klee_log.csv` without a violation when
+  `MAP2CHECK_SEED_REPLAY` is set (native builds only).
+
+### Changed
+
+- `float` rows are `FLOAT` 16 printed with `%.9g` (were `DOUBLE` 15 with
+  `%lf`, which prints 1e-30 as 0).
+- Under KLEE a failed `__VERIFIER_assume` ends the path with `_exit(0)` and a
+  `map2check_pruned` marker object, so KLEE writes a `.ktest` instead of a
+  "provably false" error.
+- Past the end of the fuzzer input every byte is 0 (was a rewind to
+  `data[0]`, SD-18).
+- Under KLEE a nondet log longer than 1024 rows is neither concretised nor
+  written; the frontend falls back to the state's `.ktest`.
+
 ## [1.1.0-rc1] - 2026-10-17
 
 Release candidate of the cutover work: the library becomes the runtime of
