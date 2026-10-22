@@ -159,7 +159,14 @@ fn property_text(result: &AnalysisResult) -> (Option<String>, Option<&'static st
             Some("FALSE-MEMCLEANUP\n".to_owned()),
             Some("map2check_property_memcleanup"),
         ),
-        ViolatedProperty::Reachability => (Some(located("TARGET-REACHED")), None),
+        // Map2Check reads `map2check_property_target` first: no state that
+        // ends normally writes it, while under KLEE such a state can write
+        // NONE over `map2check_property` before the violating state's abort
+        // halts the search.
+        ViolatedProperty::Reachability => (
+            Some(located("TARGET-REACHED")),
+            Some("map2check_property_target"),
+        ),
         // `:98-102`: no per-property file.
         ViolatedProperty::DivByZero => (Some(located("FALSE-DIVBYZERO")), None),
         // The only UNKNOWN the C runtime reports is `write_property_unknown`
@@ -782,7 +789,7 @@ mod tests {
     }
 
     #[test]
-    fn target_reached_and_none_write_only_map2check_property() {
+    fn target_reached_and_none_write_map2check_property() {
         for (tag, result) in [
             (
                 "TARGET-REACHED",
@@ -797,7 +804,20 @@ mod tests {
                 golden(tag, "map2check_property"),
                 "{tag}"
             );
-            assert_eq!(std::fs::read_dir(dir.path()).unwrap().count(), 1, "{tag}");
+            // TARGET-REACHED also gets its own file (SD-20): no state that
+            // ends normally writes it.
+            let own = tag == "TARGET-REACHED";
+            assert_eq!(
+                std::fs::read_dir(dir.path()).unwrap().count(),
+                1 + usize::from(own),
+                "{tag}"
+            );
+            if own {
+                assert_eq!(
+                    std::fs::read(dir.path().join("map2check_property_target")).unwrap(),
+                    golden(tag, "map2check_property_target"),
+                );
+            }
         }
     }
 
