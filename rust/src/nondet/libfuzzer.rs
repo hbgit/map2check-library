@@ -546,6 +546,57 @@ mod tests {
         layout_cases!(nondet_float_bits, u32);
         layout_cases!(nondet_double_bits, u64);
         layout_cases!(nondet_pointer_bits, usize);
+        // Map2Check 9.0's generators (issue #74).
+        layout_cases!(__VERIFIER_nondet_longlong, i64);
+        layout_cases!(__VERIFIER_nondet_ulonglong, u64);
+        layout_cases!(__VERIFIER_nondet_u8, u8);
+        layout_cases!(__VERIFIER_nondet_u16, u16);
+        layout_cases!(__VERIFIER_nondet_u32, u32);
+    }
+
+    #[test]
+    fn map2check_9_generators_read_their_width_little_endian() {
+        let bytes = [1_u8, 2, 3, 4, 5, 6, 7, 8];
+        with_input(&bytes, || {
+            assert_eq!(__VERIFIER_nondet_longlong(), 0x0807_0605_0403_0201)
+        });
+        with_input(&[0xff; 8], || {
+            assert_eq!(__VERIFIER_nondet_ulonglong(), u64::MAX)
+        });
+        with_input(&bytes, || assert_eq!(__VERIFIER_nondet_u16(), 0x0201));
+        with_input(&bytes, || assert_eq!(__VERIFIER_nondet_u32(), 0x0403_0201));
+    }
+
+    #[test]
+    fn nondet_memory_fills_its_bytes_and_logs_one_memory_byte_row_each() {
+        with_input(&[1, 2, 3, 9], || {
+            crate::state::reset();
+            let mut buffer = [0_u8; 3];
+            // SAFETY: `buffer` holds the 3 bytes passed.
+            unsafe { __VERIFIER_nondet_memory(buffer.as_mut_ptr().cast(), buffer.len()) };
+            assert_eq!(buffer, [1, 2, 3]);
+            assert_eq!(
+                __VERIFIER_nondet_u8(),
+                9,
+                "the next value follows the memory"
+            );
+            let rows = crate::state::with_state(|s| {
+                Ok(s.nondets
+                    .iter()
+                    .map(|e| e.value.clone())
+                    .collect::<Vec<_>>())
+            })
+            .unwrap();
+            assert_eq!(
+                rows,
+                [1, 2, 3]
+                    .map(crate::nondet::NonDetValue::MemoryByte)
+                    .to_vec()
+            );
+            // A null destination is a no-op.
+            // SAFETY: null is accepted.
+            unsafe { __VERIFIER_nondet_memory(std::ptr::null_mut(), 4) };
+        });
     }
 
     fn nondet_float_bits() -> u32 {

@@ -388,6 +388,42 @@ save_nondet_test!(
     NonDetValue::SectorT(0x1_0000_0009),
     |p| map2check_save_nondet_log_sector_t(10, 2, 9, p, c"f".as_ptr())
 );
+// Map2Check 9.0's loggers (issue #74): full width, no truncation.
+save_nondet_test!(
+    save_nondet_log_longlong_records_value,
+    std::os::raw::c_longlong,
+    i64::MIN,
+    NonDetValue::LongLong(i64::MIN),
+    |p| map2check_save_nondet_log_longlong(10, 2, 9, p, c"f".as_ptr())
+);
+save_nondet_test!(
+    save_nondet_log_ulonglong_records_value,
+    std::os::raw::c_ulonglong,
+    u64::MAX,
+    NonDetValue::ULongLong(u64::MAX),
+    |p| map2check_save_nondet_log_ulonglong(10, 2, 9, p, c"f".as_ptr())
+);
+save_nondet_test!(
+    save_nondet_log_u8_records_value,
+    u8,
+    255,
+    NonDetValue::U8(255),
+    |p| map2check_save_nondet_log_u8(10, 2, 9, p, c"f".as_ptr())
+);
+save_nondet_test!(
+    save_nondet_log_u16_records_value,
+    u16,
+    65535,
+    NonDetValue::U16(65535),
+    |p| map2check_save_nondet_log_u16(10, 2, 9, p, c"f".as_ptr())
+);
+save_nondet_test!(
+    save_nondet_log_u32_records_value,
+    u32,
+    u32::MAX,
+    NonDetValue::U32(u32::MAX),
+    |p| map2check_save_nondet_log_u32(10, 2, 9, p, c"f".as_ptr())
+);
 save_nondet_test!(
     save_nondet_log_pointer_records_address,
     *mut c_void,
@@ -1763,6 +1799,12 @@ fn macro_generated_exports_match_the_hand_written_header_declarations() {
     let _: NonDet<c_ulong> = map2check_save_nondet_log_sector_t; // unsigned long *value
     let _: NonDet<*mut c_void> = map2check_save_nondet_log_pointer; // void **value
     let _: NonDet<*mut c_char> = map2check_save_nondet_log_pchar; // char **value
+    use std::os::raw::c_ulonglong;
+    let _: NonDet<c_longlong> = map2check_save_nondet_log_longlong; // long long *value
+    let _: NonDet<c_ulonglong> = map2check_save_nondet_log_ulonglong; // unsigned long long *value
+    let _: NonDet<u8> = map2check_save_nondet_log_u8; // unsigned char *value
+    let _: NonDet<u16> = map2check_save_nondet_log_u16; // unsigned short *value
+    let _: NonDet<u32> = map2check_save_nondet_log_u32; // unsigned int *value
     let _: BinOp<i32> = map2check_binop_add_int;
     let _: BinOp<i32> = map2check_binop_sub_int;
     let _: BinOp<i32> = map2check_binop_mul_int;
