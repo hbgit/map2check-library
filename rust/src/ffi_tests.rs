@@ -549,6 +549,34 @@ fn posix_memalign_tracks_the_block_and_the_store_like_develop() {
     assert_violated(ViolatedProperty::MemsafetyDeref, 3, "main");
 }
 
+/// `map2check_check_cstring` (Map2Check 9.0): every byte up to the
+/// terminator must lie in a live block. A terminated string inside its block
+/// is valid; an unterminated one is a dereference violation at the first byte
+/// past the block, which is never read.
+#[test]
+fn check_cstring_checks_every_byte_to_the_terminator() {
+    let _guard = fresh();
+    let terminated = *b"abc\0";
+    // SAFETY: the address of a live local array, mapped as a 4-byte block.
+    unsafe { map2check_map_malloc(terminated.as_ptr().cast(), 4) };
+    // SAFETY: `terminated` is live and NUL-terminated; literals are valid.
+    unsafe { map2check_check_cstring(terminated.as_ptr().cast(), 7, 0, c"main".as_ptr()) };
+    assert_ok();
+    // SAFETY: null is accepted.
+    unsafe { map2check_check_cstring(std::ptr::null(), 7, 0, c"main".as_ptr()) };
+    assert_ok();
+
+    state::reset();
+    state::reset_config();
+    // Eight bytes, only the first four mapped: the check stops at byte 4.
+    let unterminated = *b"abcdabc\0";
+    // SAFETY: as above, a 4-byte block over the first half.
+    unsafe { map2check_map_malloc(unterminated.as_ptr().cast(), 4) };
+    // SAFETY: `unterminated` is live for 8 bytes; only checked bytes are read.
+    unsafe { map2check_check_cstring(unterminated.as_ptr().cast(), 8, 0, c"main".as_ptr()) };
+    assert_violated(ViolatedProperty::MemsafetyDeref, 8, "main");
+}
+
 #[test]
 fn posix_memalign_with_a_null_slot_is_ignored() {
     let _guard = fresh();
