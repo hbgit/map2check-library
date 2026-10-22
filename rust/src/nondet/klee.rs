@@ -383,8 +383,17 @@ pub(crate) const KLEE_LOG_MAX_ROWS: usize = 1024;
 /// memory records, which a symbolic size or index reaches) by a concrete
 /// value of the current path. Called right before the witness logs or the
 /// JSON report are written (`output::prepare_for_output`).
+///
+/// The nondet values are pinned only when something will format them: the
+/// nondet log, which is written on a violation, and the JSON report, which is
+/// printed when no analysis mode is set. Map2Check 9.0 pins them only on the
+/// violating path too (`nondet_generate_aux_witness_files`). Pinning on every
+/// path that ends normally costs a solver query per value per path: on
+/// loop-acceleration/array_3-2 (1024 reads) KLEE completed 1 path where the
+/// 9.0 C runtime completed 263, and lost a target 9.0 finds every time.
 pub(crate) fn concretize(state: &mut AnalysisState) {
-    if state.nondets.len() <= KLEE_LOG_MAX_ROWS {
+    let formatted = !state.result.ok || crate::state::config().mode.is_none();
+    if formatted && state.nondets.len() <= KLEE_LOG_MAX_ROWS {
         for entry in &mut state.nondets {
             entry.value = concrete_value(&entry.value);
         }
