@@ -368,14 +368,26 @@ fn concretize_memtrack(entry: &mut crate::memtrack::MemTrackEntry) {
     entry.size_primitive = concrete_usize(entry.size_primitive);
 }
 
+/// Past this many nondet rows the log is neither concretised nor written, as
+/// in Map2Check 9.0 (`MAP2CHECK_KLEE_LOG_MAX_ROWS`, issue #75). Pinning costs
+/// a solver query per row and the equalities pile up: with 1,000 rows the
+/// violating path took 6 s, with 10,000 it never reached its abort -- the
+/// target found, KLEE's timer expiring mid-log. The violating state's
+/// `.ktest`, which KLEE solves in one query when the state ends, carries the
+/// same vector in the same order, and the frontend reads it whenever
+/// `klee_log.csv` is missing.
+pub(crate) const KLEE_LOG_MAX_ROWS: usize = 1024;
+
 /// Replaces every value of the state that the output formats and that the
 /// program can make symbolic (nondet values; addresses and sizes of the
 /// memory records, which a symbolic size or index reaches) by a concrete
 /// value of the current path. Called right before the witness logs or the
 /// JSON report are written (`output::prepare_for_output`).
 pub(crate) fn concretize(state: &mut AnalysisState) {
-    for entry in &mut state.nondets {
-        entry.value = concrete_value(&entry.value);
+    if state.nondets.len() <= KLEE_LOG_MAX_ROWS {
+        for entry in &mut state.nondets {
+            entry.value = concrete_value(&entry.value);
+        }
     }
     for entry in &mut state.memtrack {
         concretize_memtrack(entry);

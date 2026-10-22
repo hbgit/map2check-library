@@ -86,8 +86,21 @@ fn write_aux_files(dir: &Path, config: Config, s: &AnalysisState, end_of_program
         );
         report(legacy_files::LIST_LOG_FILE, logs.write_list_log(dir));
     }
-    if !s.result.ok {
+    if !s.result.ok && nondet_log_fits(s) {
         report(legacy_files::NONDET_LOG_FILE, logs.write_nondet_log(dir));
+    }
+}
+
+/// Under KLEE a log longer than `KLEE_LOG_MAX_ROWS` is not written (nor
+/// concretised): the frontend falls back to the state's `.ktest`, as with
+/// Map2Check 9.0 (issue #75). Elsewhere every log is written.
+fn nondet_log_fits(s: &AnalysisState) -> bool {
+    #[cfg(feature = "klee")]
+    return s.nondets.len() <= crate::nondet::klee::KLEE_LOG_MAX_ROWS;
+    #[cfg(not(feature = "klee"))]
+    {
+        let _ = s;
+        true
     }
 }
 
