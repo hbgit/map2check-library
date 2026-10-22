@@ -20,7 +20,9 @@
 //   (`ktestToFuzzerBytes`): `sizeof(type)` bytes per value, in order, in
 //   memory order (little-endian on x86-64), which is exactly what the
 //   AFL++/libFuzzer reader of `libfuzzer.rs` consumes (D1 condition 9);
-// - `__VERIFIER_assume` is `klee_assume`;
+// - `__VERIFIER_assume` prunes a failed assumption with `_exit(0)` and a
+//   `map2check_pruned` marker, as Map2Check 9.0 does (not develop's
+//   `klee_assume`, see [`__VERIFIER_assume`]);
 // - `main` calls the analysed program's renamed `main`
 //   (`NonDetGeneratorKlee.c:16`);
 // - values that reach the output (the witness logs, the JSON report) are
@@ -177,15 +179,34 @@ pub extern "C" fn __VERIFIER_nondet_pchar() -> *mut c_char {
 
 // ── SV-COMP verifier primitives ──────────────────────────────────────────────
 
-/// `nondet_assume` of develop's KLEE generator: `klee_assume(expr)`. A
-/// false condition ends the path (KLEE stops exploring it); one that is
-/// provably false is a KLEE user error, as in develop.
+/// `nondet_assume` of Map2Check 9.0's KLEE generator: a failed assumption
+/// ends the path as a normal exit.
+///
+/// develop's `klee_assume(expr)` turned a condition already false on the
+/// path into a KLEE error ("invalid klee_assume call (provably false)", a
+/// `.user.err`), and the frontend reads every KLEE error as a dropped path
+/// (`kleeDroppedPaths`), which made every program with an
+/// `assume_abort_if_not` unprovable. `klee_silent_exit` avoids the error but
+/// writes no test, so a program whose every path meets a failed assumption
+/// (most of XCSP) got an empty Cover-Branches suite. `_exit` ends the path
+/// normally, so KLEE writes its `.ktest`, and skips the exit handlers: a path
+/// the program declared infeasible reports no leak.
+///
+/// The one-byte `map2check_pruned` object marks the path's test, which goes
+/// after every unpruned one in a Cover-Branches suite (`readKtestVectors`).
+/// The reader strips it; it is never an input.
 #[no_mangle]
 pub extern "C" fn __VERIFIER_assume(condition: i32) {
+    extern "C" {
+        fn _exit(status: c_int) -> !;
+    }
     crate::ffi::ffi_guard(
         || {
-            // SAFETY: KLEE intrinsic, takes the condition by value.
-            unsafe { klee_assume(usize::from(condition != 0)) }
+            if condition == 0 {
+                let _marker = symbolic::<u8>(b"map2check_pruned\0");
+                // SAFETY: ends the KLEE state; nothing after it runs.
+                unsafe { _exit(0) }
+            }
         },
         (),
     );
