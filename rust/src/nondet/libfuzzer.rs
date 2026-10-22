@@ -12,9 +12,9 @@
 //   into the value in memory order (`get_bytes_from_afl`, :67-74, and the
 //   generators, :76-99): little-endian on x86-64, the layout KLEE writes
 //   into a `.ktest` for `klee_make_symbolic(&v, sizeof v)`;
-// - past the end of the input the reader rewinds (`get_next_input_from_afl`,
-//   :55-62): the read that finds the index at the end returns `data[0]`
-//   without advancing, so after every wrap `data[0]` is read twice;
+// - past the end of the input every byte is 0, as in Map2Check 9.0
+//   (develop rewound to `data[0]`, `get_next_input_from_afl` :55-62, see
+//   [`read_value`]);
 // - `pchar` reads an `unsigned` length, returns NULL for 0, caps it at 4096,
 //   and fills `length - 1` chars plus a NUL (:101-118);
 // - a failed `__VERIFIER_assume` abandons the current input and the loop
@@ -99,6 +99,13 @@ pub unsafe extern "C" fn LLVMFuzzerTestOneInput(data: *const u8, size: usize) ->
 /// one `get_next_input_from_afl` per byte. With no input (no iteration, or an
 /// empty one) every byte is 0: develop would read `data[0]` of an empty
 /// buffer, out of bounds.
+///
+/// Past the end of the input every byte is 0, as in Map2Check 9.0
+/// (`NonDetGeneratorAFL.c`, c3d2bbe47). develop started over from the first
+/// byte, so `while (__VERIFIER_nondet_int())` fed by the placeholder seed
+/// never ended: afl-fuzz's dry run timed out on it and the fuzzer aborted
+/// before its first execution. Zero ends such a loop, and it is what the
+/// witness replay logs, so the suite built from that log stays exact.
 fn read_value<const N: usize>() -> [u8; N] {
     let mut out = [0_u8; N];
     let ptr = FUZZER_DATA.load(Ordering::Relaxed);
@@ -114,9 +121,6 @@ fn read_value<const N: usize>() -> [u8; N] {
         if index < size {
             *byte = data[index];
             index += 1;
-        } else {
-            index = 0;
-            *byte = data[0];
         }
     }
     FUZZER_CURSOR.store(index, Ordering::Relaxed);
@@ -457,32 +461,22 @@ mod tests {
     // develop's NonDetGeneratorAFL.c copies sizeof(type) bytes per value, in
     // memory order, into the value (`get_bytes_from_afl`, :67-74; the
     // generators, :76-99), so a value is the little-endian reading of its
-    // bytes on x86-64. Past the end of the input `get_next_input_from_afl`
-    // (:55-62) rewinds: the read that finds the index at the end returns
-    // data[0] WITHOUT advancing, so data[0] is read twice after every wrap.
+    // bytes on x86-64. Past the end of the input every byte is 0, as in
+    // Map2Check 9.0's `get_next_input_from_afl` (develop rewound).
 
-    /// develop's `get_next_input_from_afl`, transcribed: the bytes `count`
-    /// reads return from a fresh input.
+    /// Map2Check 9.0's `get_next_input_from_afl`, transcribed: the bytes
+    /// `count` reads return from a fresh input.
     fn develop_stream(data: &[u8], count: usize) -> Vec<u8> {
-        let mut index = 0;
         (0..count)
-            .map(|_| {
-                if index < data.len() {
-                    index += 1;
-                    data[index - 1]
-                } else {
-                    index = 0;
-                    data[0]
-                }
-            })
+            .map(|i| data.get(i).copied().unwrap_or(0))
             .collect()
     }
 
     #[test]
-    fn develop_stream_model_rewinds_and_repeats_the_first_byte() {
-        // Hand-checked against NonDetGeneratorAFL.c:55-62.
-        assert_eq!(develop_stream(&[1, 2], 7), [1, 2, 1, 1, 2, 1, 1]);
-        assert_eq!(develop_stream(&[0x41], 4), [0x41; 4]);
+    fn develop_stream_model_reads_zeros_past_the_end() {
+        // Hand-checked against Map2Check 9.0's NonDetGeneratorAFL.c.
+        assert_eq!(develop_stream(&[1, 2], 7), [1, 2, 0, 0, 0, 0, 0]);
+        assert_eq!(develop_stream(&[0x41], 4), [0x41, 0, 0, 0]);
     }
 
     /// Reads two values with `$gen` from `data` and checks them against the
@@ -525,13 +519,13 @@ mod tests {
             layout_case!($gen, $ty, &bytes[..size.saturating_sub(1).max(1)]);
             // exactly the type: the second value is all wrap
             layout_case!($gen, $ty, &bytes[..size]);
-            // the second value starts inside the input and wraps
+            // the second value starts inside the input and runs past its end
             layout_case!($gen, $ty, &bytes[..size + size / 2 + 1]);
         }};
     }
 
     #[test]
-    fn every_generator_reads_sizeof_type_bytes_and_wraps_like_develop() {
+    fn every_generator_reads_sizeof_type_bytes_then_zeros_like_map2check_9() {
         layout_cases!(__VERIFIER_nondet_char, i8);
         layout_cases!(__VERIFIER_nondet_uchar, u8);
         layout_cases!(__VERIFIER_nondet_short, i16);
@@ -612,10 +606,13 @@ mod tests {
     }
 
     #[test]
-    fn seed_a_reads_0x41414141_like_develop() {
-        // The spike's seed (`printf A`): develop reads x = 0x41414141, which
-        // CmpLog can match against the input (D1 condition 4).
-        with_input(b"A", || assert_eq!(__VERIFIER_nondet_int(), 0x4141_4141));
+    fn seed_a_reads_0x41_like_map2check_9() {
+        // The one-byte seed `A`: develop rewound and read 0x41414141; past the
+        // end of the input Map2Check 9.0 reads zeros, so x = 0x41. The
+        // frontend's placeholder seed is kAflSeedMinBytes long, so CmpLog
+        // still finds a whole operand in it (D1 condition 4).
+        with_input(b"A", || assert_eq!(__VERIFIER_nondet_int(), 0x41));
+        with_input(b"AAAA", || assert_eq!(__VERIFIER_nondet_int(), 0x4141_4141));
         with_input(&[0x2a, 0, 0, 0], || assert_eq!(__VERIFIER_nondet_int(), 42));
     }
 
@@ -626,7 +623,7 @@ mod tests {
             assert!(__VERIFIER_nondet_bool()); // 0x00000100: low byte 0, int != 0
             assert_eq!(__VERIFIER_nondet_uchar(), 7); // the ninth byte
         });
-        // short inputs wrap: 00 00 00 00 and 00 01 00 00
+        // short inputs end in zeros: 00 00 00 00 and 00 01 00 00
         with_input(&[0], || assert!(!__VERIFIER_nondet_bool()));
         with_input(&[0, 1], || assert!(__VERIFIER_nondet_bool()));
     }
@@ -715,12 +712,12 @@ mod tests {
     }
 
     #[test]
-    fn pchar_caps_the_length_at_4096_and_wraps_for_its_chars() {
-        // length 0x41414141 > 4096: capped to 4096, 4095 chars of 'A'.
-        with_input(b"A", || {
-            let s = take_pchar(__VERIFIER_nondet_pchar()).unwrap();
-            assert_eq!(s.len(), 4095);
-            assert!(s.iter().all(|&c| c == b'A'));
+    fn pchar_caps_the_length_at_4096_and_reads_zeros_past_the_end() {
+        // length 0x41414141 > 4096: capped to 4096; one 'A' left in the
+        // input, then the chars past its end are 0 (Map2Check 9.0), so the
+        // C string is "A".
+        with_input(b"AAAAA", || {
+            assert_eq!(take_pchar(__VERIFIER_nondet_pchar()), Some(b"A".to_vec()));
         });
     }
 
