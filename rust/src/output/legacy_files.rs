@@ -77,6 +77,52 @@ pub fn c_double(value: f64) -> String {
     }
 }
 
+/// `%.9g` of glibc for a `float`, as Map2Check 9.0's `NonDetLog.c` prints a
+/// `FLOAT` row: nine significant digits round-trip any `f32`, where `%lf`'s
+/// six fixed decimals print 1e-30 as 0, a different input. The test-suite
+/// writer copies the value column verbatim into `<input>`, so the text must
+/// be one a validator's `scanf` reads back as the same float.
+pub fn c_float(value: f32) -> String {
+    /// Drops the trailing zeros of a fraction, and its point if nothing is
+    /// left, as `%g` does.
+    fn strip(digits: &str) -> &str {
+        if digits.contains('.') {
+            digits.trim_end_matches('0').trim_end_matches('.')
+        } else {
+            digits
+        }
+    }
+    let sign = if value.is_sign_negative() { "-" } else { "" };
+    if value.is_nan() {
+        return format!("{sign}nan");
+    }
+    if value.is_infinite() {
+        return format!("{sign}inf");
+    }
+    let magnitude = f64::from(value.abs());
+    if magnitude == 0.0 {
+        return format!("{sign}0");
+    }
+    // %g picks the style from the exponent X of the value rounded to nine
+    // significant digits (C11 7.21.6.1): exponential when X < -4 or X >= 9.
+    let scientific = format!("{magnitude:.8e}");
+    // `{:e}` always writes `<mantissa>e<decimal exponent>`.
+    let Some((mantissa, exponent)) = scientific.split_once('e') else {
+        return format!("{sign}{scientific}");
+    };
+    let Ok(exponent) = exponent.parse::<i32>() else {
+        return format!("{sign}{scientific}");
+    };
+    let body = if !(-4..9).contains(&exponent) {
+        let mark = if exponent < 0 { '-' } else { '+' };
+        format!("{}e{mark}{:02}", strip(mantissa), exponent.abs())
+    } else {
+        let fixed = format!("{magnitude:.*}", (8 - exponent) as usize);
+        strip(&fixed).to_owned()
+    };
+    format!("{sign}{body}")
+}
+
 /// Text of the verdict, as `write_property` prints it
 /// (`PropertyGenerator.c:50-106`), and the extra per-property file the C
 /// runtime writes next to `map2check_property`. `line` is printed with
@@ -225,8 +271,8 @@ pub fn write_trackbb_log(dir: &Path, rows: &[BasicBlockEntry]) -> io::Result<()>
 /// through `CreatePtrToInt(v, i32)` (`:224-238`, `:291-292`), the low 32
 /// bits of the address. `nondet_log_to_file` then prints `UNSIGNED` with
 /// `%u`, `DOUBLE` with `%lf` and every other type with `%d`
-/// (`NonDetLog.c:45-54`). `float` has no develop counterpart and is logged as
-/// a double.
+/// (`NonDetLog.c:45-54`). `float` has no develop counterpart; it is logged
+/// as Map2Check 9.0 logs it, `FLOAT` 16 with `%.9g` ([`c_float`]).
 pub fn nondet_value_and_type(value: &NonDetValue) -> (String, i32) {
     /// `trunc` to `i32`, as `CreateIntegerCast` narrows a wide integer.
     fn low32(v: u64) -> String {
@@ -248,7 +294,9 @@ pub fn nondet_value_and_type(value: &NonDetValue) -> (String, i32) {
         NonDetValue::SectorT(v) => (low32(v), 12),
         NonDetValue::UInt(v) => ((v as i32).to_string(), 13),
         NonDetValue::Short(v) => ((v as u16).to_string(), 14),
-        NonDetValue::Float(v) => (c_double(f64::from(v)), 15),
+        // Map2Check 9.0 gave `float` its own type, `FLOAT` 16, printed with
+        // %.9g (`NonDetLog.c`, issue #74).
+        NonDetValue::Float(v) => (c_float(v), 16),
         NonDetValue::Double(v) => (c_double(v), 15),
     }
 }
@@ -910,6 +958,38 @@ mod tests {
         assert_eq!(c_double(-f64::NAN), "-nan");
     }
 
+    /// `printf("%.9g", f)` of glibc 2.35 for each bit pattern.
+    #[test]
+    fn c_float_matches_glibc_g9() {
+        let golden: &[(u32, &str)] = &[
+            (0x0000_0000, "0"),
+            (0x8000_0000, "-0"),
+            (0x0da2_4260, "1e-30"),
+            (0xbfb3_1773, "-1.39915311"),
+            (0x3dcc_cccd, "0.100000001"),
+            (0x4ceb_79a3, "123456792"),
+            (0x4e6e_6b28, "1e+09"),
+            (0x38d1_b717, "9.99999975e-05"),
+            (0x3727_c5ac, "9.99999975e-06"),
+            (0x4b80_0000, "16777216"),
+            (0x7f7f_ffff, "3.40282347e+38"),
+            (0x0080_0000, "1.17549435e-38"),
+            (0x0000_0001, "1.40129846e-45"),
+            (0x4cbe_bc20, "100000000"),
+            (0x3f00_0000, "0.5"),
+            (0xc020_0000, "-2.5"),
+            (0x3eaa_aaab, "0.333333343"),
+            (0x7fc0_0000, "nan"),
+            (0xffc0_0000, "-nan"),
+            (0x7f80_0000, "inf"),
+            (0xff80_0000, "-inf"),
+            (0x42f6_e979, "123.456001"),
+        ];
+        for &(bits, text) in golden {
+            assert_eq!(c_float(f32::from_bits(bits)), text, "bits {bits:#010x}");
+        }
+    }
+
     #[test]
     fn nondet_rows_use_develop_types_and_value_formats() {
         use crate::nondet::NonDetValue as V;
@@ -928,7 +1008,7 @@ mod tests {
         );
         assert_eq!(
             nondet_value_and_type(&V::Float(0.5)),
-            ("0.500000".into(), 15)
+            ("0.5".into(), 16)
         );
         assert_eq!(
             nondet_value_and_type(&V::Double(2.5)),
