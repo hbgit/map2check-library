@@ -600,14 +600,13 @@ map2check_binop_add_signed(INT64_MAX, 1, 64, 1, "main");
 ### SD-18 — Nondet values: develop's AFL++ input layout and log format, with three differences
 
 **Classification:** intentional
-**Tests:** `rust/src/nondet/libfuzzer.rs::every_generator_reads_sizeof_type_bytes_and_wraps_like_develop`, `rust/src/nondet/libfuzzer.rs::seed_a_reads_0x41414141_like_develop`, `rust/src/nondet/libfuzzer.rs::bool_consumes_four_bytes_and_is_the_int_converted_to_bool`, `rust/src/nondet/libfuzzer.rs::empty_input_yields_zero`, `rust/src/nondet/libfuzzer.rs::without_an_iteration_every_generator_yields_zero`, `rust/src/nondet/libfuzzer.rs::pchar_reads_an_unsigned_length_then_length_minus_one_chars`, `rust/src/ffi_golden_tests.rs::nondet_types_match_c_runtime`
+**Tests:** `rust/src/nondet/libfuzzer.rs::every_generator_reads_sizeof_type_bytes_then_zeros_like_map2check_9`, `rust/src/nondet/libfuzzer.rs::seed_a_reads_0x41_like_map2check_9`, `rust/src/nondet/libfuzzer.rs::bool_consumes_four_bytes_and_is_the_int_converted_to_bool`, `rust/src/nondet/libfuzzer.rs::empty_input_yields_zero`, `rust/src/nondet/libfuzzer.rs::without_an_iteration_every_generator_yields_zero`, `rust/src/nondet/libfuzzer.rs::pchar_reads_an_unsigned_length_then_length_minus_one_chars`, `rust/src/ffi_golden_tests.rs::nondet_types_match_c_runtime`
 
 **Rust:** the `__VERIFIER_nondet_<t>` generators read the fuzzer input as
 develop's `NonDetGeneratorAFL.c` does: `sizeof(type)` bytes per value, in
-order, copied in memory order (little-endian on x86-64; `:67-99`), and past
-the end of the input the reader rewinds, returning `data[0]` once without
-advancing (`get_next_input_from_afl`, `:55-62`). With the 1-byte seed `A`
-an `int` is `0x41414141`, as in develop. `pchar` reads an `unsigned`
+order, copied in memory order (little-endian on x86-64; `:67-99`). Past
+the end of the input every byte is 0, as in Map2Check 9.0 (see the
+differences). With the 1-byte seed `A` an `int` is `0x41`. `pchar` reads an `unsigned`
 length, returns NULL for 0, caps it at 4096 and reads `length - 1` chars
 (`:101-118`); the string comes from the C `malloc`. The
 `map2check_save_nondet_log_<t>` exports write the `klee_log.csv` row
@@ -626,7 +625,14 @@ narrow types, so a `char` -3 is `253` and a `short` -2 is `65534`; the low
   reads the same four bytes and returns that `int` converted to `_Bool`
   (`!= 0`).
 - **`float`.** Develop has no `float` generator or logger. The library
-  reads four bytes for it and logs it as a double (SD-17).
+  reads four bytes for it and logs it as Map2Check 9.0 does, `FLOAT` 16
+  printed with `%.9g`.
+- **Past the end of the input.** Develop rewinds, returning `data[0]` once
+  without advancing (`get_next_input_from_afl`, `:55-62`), so
+  `while (__VERIFIER_nondet_int())` fed by the placeholder seed never ends:
+  afl-fuzz's dry run times out on it and the fuzzer aborts before its first
+  execution. The library reads zeros, as Map2Check 9.0 does (c3d2bbe47):
+  zero ends such a loop, and it is what the witness replay logs.
 
 **Reproduce (link with `--features libfuzzer`):**
 
