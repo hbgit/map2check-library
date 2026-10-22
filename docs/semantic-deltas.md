@@ -698,7 +698,7 @@ map2check_wasm_check_access(0x10010, 4);   /* OVERFLOW, line 0, aborts */
 ### SD-20 — Result files survive other KLEE states (gate ref `C-BUG-property-race`)
 
 **Classification:** intentional
-**Tests:** `rust/src/output/legacy_files.rs::concurrent_reader_never_sees_empty_or_partial_file`, `rust/src/output/legacy_files.rs::write_goes_through_a_temp_file_and_rename`, `rust/src/output/legacy_files.rs::temp_name_collisions_are_skipped`
+**Tests:** `rust/src/output/legacy_files.rs::target_reached_and_none_write_map2check_property`, `rust/src/output/legacy_files.rs::concurrent_reader_never_sees_empty_or_partial_file`, `rust/src/output/legacy_files.rs::write_goes_through_a_temp_file_and_rename`, `rust/src/output/legacy_files.rs::temp_name_collisions_are_skipped`
 
 This entry covers a bug of the C runtime of Map2Check `develop` that the
 Rust library fixes. The cutover gate cites it as `C-BUG-property-race` in
@@ -733,6 +733,21 @@ Effects in gate run 1 (task 4.2), deterministic in 5 of 5 C reps:
   reports `533 main` for the same task, and so does Rust under `symex`.
 
 The Rust library had the same race before `6b49b82` (task 3.3, "Cause B").
+
+**A second race, and `map2check_property_target`.** The rename keeps the
+file whole, not the violation: a state that ends normally while the
+violating state is still writing its aux files renames its own `NONE` over
+`TARGET-REACHED`, and the frontend reads `NONE`. KLEE switches states
+between batches of instructions, and the violating state formats its logs
+and the witness files before its abort halts the search, so the window is
+wide (Map2Check 9.0's integration section 13, a two-step reactive loop:
+UNKNOWN in every run, traced with strace). The other violations were already
+read from a file of their own (`_deref`, `_free`, `_assert`, `_overflow`,
+...), which no state that ends normally writes. `TARGET-REACHED` now has one
+too, `map2check_property_target`, with the same text, and Map2Check reads it
+before `map2check_property` (hbgit/Map2Check `port/target-property-file`).
+This is a difference from the C runtime, which writes no such file; the
+`TARGET-REACHED` golden lists it.
 
 **Reproduce:** the program is any one where KLEE forks a state that
 reaches the target and states that do not. With the C runtime:
