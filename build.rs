@@ -68,6 +68,11 @@ non_det_log_t *map2check_save_nondet_log_loff_t(int line, int scope, int type_va
 non_det_log_t *map2check_save_nondet_log_sector_t(int line, int scope, int type_var, unsigned long *value, const char *function_name);
 non_det_log_t *map2check_save_nondet_log_pointer(int line, int scope, int type_var, void **value, const char *function_name);
 non_det_log_t *map2check_save_nondet_log_pchar(int line, int scope, int type_var, char **value, const char *function_name);
+non_det_log_t *map2check_save_nondet_log_longlong(int line, int scope, int type_var, long long *value, const char *function_name);
+non_det_log_t *map2check_save_nondet_log_ulonglong(int line, int scope, int type_var, unsigned long long *value, const char *function_name);
+non_det_log_t *map2check_save_nondet_log_u8(int line, int scope, int type_var, unsigned char *value, const char *function_name);
+non_det_log_t *map2check_save_nondet_log_u16(int line, int scope, int type_var, unsigned short *value, const char *function_name);
+non_det_log_t *map2check_save_nondet_log_u32(int line, int scope, int type_var, unsigned int *value, const char *function_name);
 
 void map2check_binop_add_int(int32_t param1, int32_t param2, uint32_t line, uint32_t scope, const char *function_name);
 void map2check_binop_sub_int(int32_t param1, int32_t param2, uint32_t line, uint32_t scope, const char *function_name);

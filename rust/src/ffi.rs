@@ -592,6 +592,44 @@ nondet_ffi!(
     0.0,
     NonDetValue::Float
 );
+// Map2Check 9.0's loggers (issue #74), one per new `NONDET_TYPE`.
+nondet_ffi!(
+    map2check_save_nondet_log_longlong,
+    std::os::raw::c_longlong,
+    p,
+    0,
+    |v| NonDetValue::LongLong(i64::from(v))
+);
+nondet_ffi!(
+    map2check_save_nondet_log_ulonglong,
+    std::os::raw::c_ulonglong,
+    p,
+    0,
+    |v| NonDetValue::ULongLong(u64::from(v))
+);
+nondet_ffi!(map2check_save_nondet_log_u8, u8, p, 0, NonDetValue::U8);
+nondet_ffi!(map2check_save_nondet_log_u16, u16, p, 0, NonDetValue::U16);
+nondet_ffi!(map2check_save_nondet_log_u32, u32, p, 0, NonDetValue::U32);
+
+/// Logs one byte of a `__VERIFIER_nondet_memory` (`MEMORY_BYTE` row, line 0,
+/// scope 0), as Map2Check 9.0's `map2check_nondet_memory_byte`. The
+/// generators call it; no pass emits it.
+pub(crate) fn log_memory_byte(byte: u8) {
+    if let Err(e) = state::with_state(|s| {
+        let step = s.next_step();
+        s.nondets.push(NonDetEntry::new(
+            step,
+            0,
+            0,
+            "__VERIFIER_nondet_memory",
+            NonDetValue::MemoryByte(byte),
+        ));
+        Ok(())
+    }) {
+        log_error(&e);
+    }
+}
+
 nondet_ffi!(
     map2check_save_nondet_log_double,
     f64,
