@@ -298,6 +298,14 @@ pub fn nondet_value_and_type(value: &NonDetValue) -> (String, i32) {
         // %.9g (`NonDetLog.c`, issue #74).
         NonDetValue::Float(v) => (c_float(v), 16),
         NonDetValue::Double(v) => (c_double(v), 15),
+        // Map2Check 9.0 (`NonDetLog.c`, issue #74): the 64-bit types keep
+        // all their bits, U32 prints as `%u`, the narrow ones as their value.
+        NonDetValue::LongLong(v) => (v.to_string(), 17),
+        NonDetValue::ULongLong(v) => (v.to_string(), 18),
+        NonDetValue::U8(v) => (v.to_string(), 19),
+        NonDetValue::U16(v) => (v.to_string(), 20),
+        NonDetValue::U32(v) => (v.to_string(), 21),
+        NonDetValue::MemoryByte(v) => (v.to_string(), 22),
     }
 }
 
@@ -1006,13 +1014,26 @@ mod tests {
             nondet_value_and_type(&V::Pointer(0x1_2345_6789)),
             ("591751049".into(), 2)
         );
-        assert_eq!(
-            nondet_value_and_type(&V::Float(0.5)),
-            ("0.5".into(), 16)
-        );
+        assert_eq!(nondet_value_and_type(&V::Float(0.5)), ("0.5".into(), 16));
         assert_eq!(
             nondet_value_and_type(&V::Double(2.5)),
             ("2.500000".into(), 15)
         );
+        // Map2Check 9.0's types (issue #74): no truncation to 32 bits.
+        assert_eq!(
+            nondet_value_and_type(&V::LongLong(i64::MIN)),
+            ("-9223372036854775808".into(), 17)
+        );
+        assert_eq!(
+            nondet_value_and_type(&V::ULongLong(u64::MAX)),
+            ("18446744073709551615".into(), 18)
+        );
+        assert_eq!(nondet_value_and_type(&V::U8(255)), ("255".into(), 19));
+        assert_eq!(nondet_value_and_type(&V::U16(65535)), ("65535".into(), 20));
+        assert_eq!(
+            nondet_value_and_type(&V::U32(u32::MAX)),
+            ("4294967295".into(), 21)
+        );
+        assert_eq!(nondet_value_and_type(&V::MemoryByte(7)), ("7".into(), 22));
     }
 }

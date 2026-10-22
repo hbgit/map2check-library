@@ -10,7 +10,8 @@ use serde::Serialize;
 /// (`Map2CheckTypes.h:41-58`), with the C type `NonDetGenerator.h` gives it
 /// (`bool` is `typedef int bool`, `sector_t` is `unsigned long`, `loff_t` is
 /// glibc's `long long`, `pointer` and `pchar` are addresses), plus `Float`,
-/// which develop does not instrument.
+/// which develop does not instrument, and the types Map2Check 9.0 added
+/// (`LongLong` .. `MemoryByte`, `enum NONDET_TYPE` 17-22).
 #[derive(Debug, Clone, Serialize, PartialEq)]
 #[serde(tag = "type", content = "value")]
 pub enum NonDetValue {
@@ -48,6 +49,23 @@ pub enum NonDetValue {
     LoffT(i64),
     #[serde(rename = "SECTOR_T")]
     SectorT(u64),
+    // Map2Check 9.0's types for the SV-COMP names develop did not model
+    // (issue #74 of Map2Check): FLOAT 16 is `Float` above; these are 17-22.
+    #[serde(rename = "LONGLONG")]
+    LongLong(i64),
+    #[serde(rename = "ULONGLONG")]
+    ULongLong(u64),
+    #[serde(rename = "U8")]
+    U8(u8),
+    #[serde(rename = "U16")]
+    U16(u16),
+    #[serde(rename = "U32")]
+    U32(u32),
+    /// One byte of a `__VERIFIER_nondet_memory(p, n)`, which the validators'
+    /// harness reads as `n` uchar inputs. Its own type, not `UChar`, so the
+    /// frontend's seed converter can tell that `n` rows are one KLEE object.
+    #[serde(rename = "MEMORY_BYTE")]
+    MemoryByte(u8),
 }
 
 impl NonDetValue {
@@ -70,6 +88,12 @@ impl NonDetValue {
             Self::SizeT(_) => "SIZE_T",
             Self::LoffT(_) => "LOFF_T",
             Self::SectorT(_) => "SECTOR_T",
+            Self::LongLong(_) => "LONGLONG",
+            Self::ULongLong(_) => "ULONGLONG",
+            Self::U8(_) => "U8",
+            Self::U16(_) => "U16",
+            Self::U32(_) => "U32",
+            Self::MemoryByte(_) => "MEMORY_BYTE",
         }
     }
 }

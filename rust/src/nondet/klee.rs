@@ -108,6 +108,58 @@ klee_nondet!(
     "non_det_sector_t"
 );
 
+// Map2Check 9.0's generators (issue #74). Each object is named after the
+// type, the only place a `.ktest` keeps it; the 9.0 frontend decodes these
+// names (`ktest_reader.cpp`).
+klee_nondet!(__VERIFIER_nondet_longlong, i64, "non_det_longlong");
+klee_nondet!(__VERIFIER_nondet_ulonglong, u64, "non_det_ulonglong");
+klee_nondet!(__VERIFIER_nondet_u8, u8, "non_det_u8");
+klee_nondet!(__VERIFIER_nondet_u16, u16, "non_det_u16");
+klee_nondet!(__VERIFIER_nondet_u32, u32, "non_det_u32");
+
+/// `size` symbolic bytes at `destination`, as Map2Check 9.0's
+/// `map2check_non_det_memory`: a fresh object copied in, rather than
+/// `klee_make_symbolic(destination)`, because KLEE accepts only the exact
+/// start and size of an allocation and the benchmarks pass a field or a
+/// struct inside a larger one. One object of `size` bytes (`non_det_memory`),
+/// which the frontend expands into one uchar input per byte; logged a byte at
+/// a time, as the validators' harness reads it.
+#[no_mangle]
+pub extern "C" fn __VERIFIER_nondet_memory(destination: *mut c_void, size: usize) {
+    extern "C" {
+        fn malloc(size: usize) -> *mut c_void;
+        fn free(pointer: *mut c_void);
+    }
+    crate::ffi::ffi_guard(
+        || {
+            if size == 0 || destination.is_null() {
+                return;
+            }
+            // SAFETY: plain C allocation; the result is checked for NULL.
+            let bytes = unsafe { malloc(size) }.cast::<u8>();
+            if bytes.is_null() {
+                return;
+            }
+            // SAFETY: `bytes` is a live block of `size` bytes, the name is a
+            // NUL-terminated static string, and `destination` holds `size`
+            // bytes by the caller's contract.
+            unsafe {
+                klee_make_symbolic(
+                    bytes.cast::<c_void>(),
+                    size,
+                    b"non_det_memory\0".as_ptr().cast::<c_char>(),
+                );
+                std::ptr::copy_nonoverlapping(bytes, destination.cast::<u8>(), size);
+                for i in 0..size {
+                    crate::ffi::log_memory_byte(*bytes.add(i));
+                }
+                free(bytes.cast::<c_void>());
+            }
+        },
+        (),
+    );
+}
+
 /// develop's `bool` is `typedef int bool` (`NonDetGenerator.h:74`): a 4-byte
 /// object, returned as that `int` converted to `_Bool`, as `libfuzzer.rs`
 /// reads it.
@@ -300,6 +352,12 @@ fn concrete_value(value: &NonDetValue) -> NonDetValue {
         V::SizeT(v) => V::SizeT(concrete_usize(v)),
         V::LoffT(v) => V::LoffT(concrete_i64(v)),
         V::SectorT(v) => V::SectorT(concrete_i64(v as i64) as u64),
+        V::LongLong(v) => V::LongLong(concrete_i64(v)),
+        V::ULongLong(v) => V::ULongLong(concrete_i64(v as i64) as u64),
+        V::U8(v) => V::U8(concrete_i32(i32::from(v)) as u8),
+        V::U16(v) => V::U16(concrete_i32(i32::from(v)) as u16),
+        V::U32(v) => V::U32(concrete_i32(v as i32) as u32),
+        V::MemoryByte(v) => V::MemoryByte(concrete_i32(i32::from(v)) as u8),
     }
 }
 
