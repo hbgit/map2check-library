@@ -92,13 +92,15 @@ At analysis end, `print_all_containers_as_json()` serializes the state to RFC 82
    Map2Check, nem em qualquer outro repositório.
 
 3. **Map2Check para testes de integração: cópia local e sem versionamento.**
-   - Baixe o Map2Check para o diretório `vendor/map2check/` (ou outro que o usuário indicar),
-     por meio de `git clone --depth 1 <url> vendor/map2check` ou do tarball de uma release.
+   - Baixe o Map2Check sempre do branch `develop`, para o diretório `vendor/map2check/` (ou
+     outro que o usuário indicar), por meio de
+     `git clone --depth 1 --branch develop <url> vendor/map2check`. Não use tags nem tarballs
+     de release.
    - Logo após o download, remova o versionamento com `rm -rf vendor/map2check/.git`, para
      que nenhum comando git atue sobre o repositório original.
    - Garanta que `vendor/map2check/` esteja no `.gitignore` deste repositório, para que a
      cópia não seja commitada aqui.
-   - Registre a versão ou o commit baixado (por exemplo, em `vendor/MAP2CHECK_VERSION`) para
+   - Registre o commit do `develop` baixado (por exemplo, em `vendor/MAP2CHECK_VERSION`) para
      tornar os testes reproduzíveis.
    - Não edite os fontes baixados. Se um teste exigir mudanças no Map2Check, pare e informe
      o usuário.

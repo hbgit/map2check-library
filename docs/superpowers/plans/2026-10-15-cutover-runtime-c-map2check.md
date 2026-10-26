@@ -10,7 +10,12 @@
 
 **Spec:** a mensagem do usuário que pediu este plano (cutover para Rust apenas), mais as respostas da sessão de 2026-10-15: **escopo = runtime C do Map2Check**; **programas C de teste da ABI deste repositório ficam como testes**; **D5: sem camada de compatibilidade** e **migração direta dos passes, sem tabela de ABI dupla** (decisões do usuário). Requisitos de paridade de referência: [TODO.md](../../../TODO.md), issues #6–#24 e #36–#38, [docs/api-deltas.md](../../api-deltas.md) e [docs/semantic-deltas.md](../../semantic-deltas.md).
 
+> **Revisão de escopo (2026-10-26):** a partir desta data, o agente que executa este plano só modifica **este repositório** (`map2check-library`), conforme a seção "Regras obrigatórias" do [CLAUDE.md](../../../CLAUDE.md). Tudo o que altera o repositório do Map2Check (commits, branches, tags, PRs, issues e releases) passa a ser **responsabilidade do mantenedor** e aparece neste plano marcado como **[Mantenedor]**, apenas como referência e pré-condição. O agente usa o Map2Check só como cópia local, sem versionamento e somente leitura, em `vendor/map2check/` (Task 5.3). As Fases 0–4 e a Task 5.2 foram concluídas antes desta revisão, e o seu texto fica como registro histórico.
+
 ## Global Constraints
+
+- **Escopo do agente (desde 2026-10-26):** código, testes, configuração e documentação são alterados somente neste repositório. O agente não altera, não faz commit e não abre PR/issue no Map2Check nem em outro repositório. `gh` com efeito remoto e `git push` só com pedido explícito do usuário na mensagem atual.
+- **Map2Check nos testes de integração:** cópia do branch **`develop`** do Map2Check em `vendor/map2check/` (via `git clone --depth 1 --branch develop`; tags e tarballs de release não são usados), com `vendor/map2check/.git` removido logo após o download, o diretório no `.gitignore`, a versão ou o commit registrado em `vendor/MAP2CHECK_VERSION` e os fontes nunca editados. Builds e saídas do corpus vão para fora de `vendor/map2check/` (por exemplo, `target/map2check-it/`). Se um teste exigir mudança no Map2Check, o agente para e informa o usuário.
 
 - Nada em C é removido sem equivalente Rust validado pelo gate diferencial (Task 4.2) no fluxo correspondente.
 - Nenhuma funcionalidade é declarada obsoleta sem uma justificativa registrada em `docs/cutover/decisoes.md`, com evidência e aprovação explícita do mantenedor.
@@ -1360,10 +1365,11 @@ if __name__ == "__main__":
 - [ ] **Step 2:** Ensaiar o rollback antes do merge. Em um clone descartável, fazer o merge local, depois `git revert -m 1 HEAD`, build e `ctest`. Registrar no PR que o revert restaura o runtime C e passa.
 - [ ] **Step 3:** README do Map2Check: na seção de build, documentar `MAP2CHECK_RUST_LIB_DIR`/`MAP2CHECK_RUST_SRC` e a versão mínima da biblioteca. CHANGELOG: entrada "Runtime replaced by map2check-library (Rust)".
 - [ ] **Step 4:** Tirar o PR de draft e mergear com **merge commit** (não squash, não rebase), para que um único `git revert -m 1` desfaça tudo. Anotar o hash do merge no PR e em `docs/cutover/decisoes.md`.
-- [ ] **Step 5:** Publicar uma release do Map2Check.
-- [ ] **Step 6:** Período de observação de **um ciclo de release**. Toda regressão reportada é triada; se for de runtime e não tiver correção rápida, o rollback é `git revert -m 1 <merge>` em `develop` + issue + nova release.
+- [ ] **Step 5 [Mantenedor]:** Publicar uma release do Map2Check.
+- [ ] **Step 6 [Mantenedor]:** Período de observação de **um ciclo de release**. Toda regressão reportada é triada; se for de runtime e não tiver correção rápida, o rollback é `git revert -m 1 <merge>` em `develop` + issue + nova release.
+- [ ] **Step 7 (agente, neste repositório):** Quando o mantenedor informar a release do Step 5, registrar a versão, a data e o merge `a0f8b9cd` em `docs/cutover/decisoes.md`. Durante a observação, toda regressão de runtime atribuída à biblioteca é reproduzida pela Task 5.3, sobre o `develop` atual do Map2Check, corrigida aqui com teste RED/GREEN e entregue numa release da biblioteca; o que exigir mudança no Map2Check é reportado ao usuário, sem ação do agente lá.
 
-**Critério de conclusão:** uma release publicada com o runtime Rust, nenhum revert acionado e o gate 4.2 verde de novo ao fim do ciclo.
+**Critério de conclusão:** uma release publicada com o runtime Rust, nenhum revert acionado e o gate 4.2 verde de novo ao fim do ciclo (reexecutado pela Task 5.3 sobre uma cópia nova do `develop` do Map2Check, que já contém a release).
 
 ### Task 5.2: Portar as asserções dos testes unitários C
 
@@ -1375,11 +1381,25 @@ if __name__ == "__main__":
 
 **Critério de conclusão:** a tabela de correspondência `TEST C → #[test] Rust` está em `docs/cutover/decisoes.md` e todos passam.
 
+### Task 5.3: Ambiente local de integração com o Map2Check (somente leitura)
+
+**Files:** `.gitignore` (já contém `vendor/map2check/`), criar `vendor/MAP2CHECK_VERSION` e, se útil, `scripts/fetch-map2check.sh` com o seu teste `scripts/test-fetch-map2check.sh`.
+
+- [ ] **Step 1:** Baixar o Map2Check sempre do branch `develop`: `git clone --depth 1 --branch develop https://github.com/hbgit/Map2Check vendor/map2check` e, em seguida, `rm -rf vendor/map2check/.git`.
+- [ ] **Step 2:** Gravar em `vendor/MAP2CHECK_VERSION` a URL, o branch (`develop`), o commit resolvido (obtido antes de remover o `.git`, por exemplo com `git -C vendor/map2check rev-parse HEAD`) e a data. Conferir com `git status --short` que nada de `vendor/map2check/` aparece.
+- [ ] **Step 3:** Construir o Map2Check da cópia com a biblioteca deste checkout (`MAP2CHECK_RUST_LIB_DIR` apontando para `target/release`), com o diretório de build e as saídas do corpus fora de `vendor/map2check/` (`target/map2check-it/`).
+- [ ] **Step 4:** Rodar o corpus e o comparador do gate 4.2 a partir da cópia, sem editar os scripts dela. Se algum passo só funcionar com mudança nos fontes baixados, parar e informar o usuário.
+- [ ] **Step 5:** Registrar o resultado (commit da cópia, `gate: PASS/FAIL`, razões de tempo e RSS) em `docs/cutover/decisoes.md`.
+
+**Critério de conclusão:** `vendor/MAP2CHECK_VERSION` identifica a cópia, `git status` não mostra arquivos de `vendor/map2check/`, e o gate roda contra a cópia sem nenhuma alteração nos fontes do Map2Check.
+
 ---
 
 ## Fase 6 — Remoção do C (contém o PONTO DE NÃO-RETORNO)
 
 **Ponto de não-retorno:** o merge, em `develop` do Map2Check, do PR da Task 6.2. Antes dele, o runtime C ainda está no repositório (fora do build) e o merge da Task 5.1 pode ser revertido com `git revert -m 1`. Depois dele, voltar ao C exige reverter também a remoção ou partir de `legacy/c-runtime-final`; o plano trata isso como fora do caminho normal.
+
+**Divisão de responsabilidade (revisão de 2026-10-26):** as Tasks 6.1, 6.2 e 6.3 e os itens da 6.4 que alteram o Map2Check são **[Mantenedor]**. O agente não os executa. O texto delas fica como roteiro para o mantenedor e como referência das pré-condições. Cabem ao agente a Task 6.0 (verificação local) e a Task 6.4a (documentação deste repositório).
 
 **Pré-condições (todas obrigatórias, conferidas no PR):**
 - [ ] Task 5.1 concluída (um ciclo de release sem revert).
@@ -1387,14 +1407,23 @@ if __name__ == "__main__":
 - [ ] D1–D4 registradas e aprovadas.
 - [ ] Nenhuma issue aberta com o label `area:memtrack`/`kind:bug` sem triagem.
 
-### Task 6.1: Atualizar a tag de preservação
+### Task 6.0: Verificação local das pré-condições (agente, neste repositório)
+
+- [ ] **Step 1:** Atualizar a cópia de `vendor/map2check/` para o `develop` atual do Map2Check (Task 5.3, Steps 1–2) e rodar o gate 4.2 contra ela (Task 5.3, Steps 3–5). Esta é a segunda execução consecutiva exigida pelo critério de prontidão antes da Fase 6.
+- [ ] **Step 2:** Na cópia, sem editá-la, confirmar que o runtime C está fora do build: `grep -rn 'backend/library' vendor/map2check/CMakeLists.txt vendor/map2check/modules/frontend` só deve citar código morto ou notas.
+- [ ] **Step 3:** Conferir em `docs/cutover/decisoes.md` que D1–D4 estão registradas e aprovadas. Para as issues, usar só leitura (`gh issue list --repo hbgit/Map2Check --label area:memtrack --label kind:bug --state open`).
+- [ ] **Step 4:** Registrar o resultado em `docs/cutover/decisoes.md` e informar ao usuário se as pré-condições da Fase 6 estão satisfeitas, para que o mantenedor decida sobre as Tasks 6.1–6.3.
+
+**Critério de conclusão:** o relatório de pré-condições está em `docs/cutover/decisoes.md`, com o commit da cópia usada.
+
+### Task 6.1 [Mantenedor]: Atualizar a tag de preservação
 
 - [ ] **Step 1:** `git tag -s -f legacy/c-runtime-final origin/develop -m "Último commit com o runtime C (antes da remoção)" && git push -f origin legacy/c-runtime-final`, e anotar o hash no PR da Task 6.2.
 - [ ] **Step 2:** Ensaiar a recuperação: em um clone descartável, `git checkout legacy/c-runtime-final`, build e `ctest`. Como a tag aponta para o commit antes da remoção (e depois do merge da 5.1), o ensaio também roda `git revert -m 1 <merge da 5.1>` e confirma que o runtime C volta a compilar e passar no `ctest`.
 
 **Critério de conclusão:** o rollback foi ensaiado com sucesso e registrado no PR.
 
-### Task 6.2: Remover o runtime C, do menos ao mais acoplado
+### Task 6.2 [Mantenedor]: Remover o runtime C, do menos ao mais acoplado
 
 Um PR, um commit por grupo, e **cada commit** mantém o build + `ctest` + `run-corpus.sh` (com `REPS=1`, como verificação rápida) verdes. Desde a Task 3.1 o runtime C está fora do build, então os commits só apagam código morto; a ordem, das folhas que nenhum outro `.c` usa até o núcleo, mantém cada commit revisável e revertível isoladamente.
 
@@ -1414,23 +1443,32 @@ Um PR, um commit por grupo, e **cada commit** mantém o build + `ctest` + `run-c
 
 **Critério de conclusão:** o PR foi mergeado; o CI do Map2Check passa sem a coluna `c`; a busca acima retorna vazio.
 
-### Task 6.3: CI e ferramentas de análise
+### Task 6.3 [Mantenedor]: CI e ferramentas de análise
 
 - [ ] **Step 1:** Conferir que o `ci.yml` já não tem passos do runtime C (removidos na Task 3.4) e atualizar `.cppcheck-suppressions.txt` e `.clang-tidy` se ainda citarem `modules/backend/library`.
 - [ ] **Step 2:** Adicionar ao Map2Check uma versão de `scripts/check-no-c-era-artifacts.sh` (copiada deste repo) com o padrão `^modules/backend/library/` e o seu teste.
 
 **Critério de conclusão:** a guarda falha se alguém reintroduzir o diretório; o CI passa.
 
-### Task 6.4: Documentação
+### Task 6.4 [Mantenedor]: Documentação no Map2Check
 
 - [ ] **Map2Check `README.md`:** a seção de arquitetura passa a dizer que o runtime é `map2check-library` (Rust), com a versão mínima, o link e como fixar uma versão.
-- [ ] **Map2Check `CLAUDE.md`, `docs/`, `modules/backend/pass/NOTES.txt`:** trocar referências a `modules/backend/library` pelos fontes Rust. As instruções de "como adicionar um tipo nondet" (`modules/backend/library/NOTES.txt`) migram para `map2check-library/docs/integration-guide.md`.
-- [ ] **Este repo `README.md` e `CLAUDE.md`:** declarar que esta biblioteca é **o** runtime do Map2Check e citar `legacy/c-library-final` e `legacy/c-runtime-final` como referências históricas.
-- [ ] **Este repo `TODO.md`:** marcar os itens concluídos e mover a seção "Dependente do repositório externo" para "Concluído", com os links dos PRs.
-- [ ] **Este repo `docs/plano_map2check_library_rust.md` e `audit/`:** acrescentar uma nota no topo dizendo que o documento é histórico e apontando para este plano. Não reescrever evidência.
-- [ ] **CHANGELOGs dos dois repositórios:** uma entrada de remoção, com o hash da tag de preservação.
+- [ ] **Map2Check `CLAUDE.md`, `docs/`, `modules/backend/pass/NOTES.txt`:** trocar referências a `modules/backend/library` pelos fontes Rust e apontar para `map2check-library/docs/integration-guide.md` (Task 6.4a).
+- [ ] **CHANGELOG do Map2Check:** uma entrada de remoção, com o hash da tag de preservação.
 
 **Critério de conclusão:** `grep -rn 'backend/library' README.md CLAUDE.md docs/` no Map2Check só aponta para notas históricas.
+
+### Task 6.4a: Documentação deste repositório (agente)
+
+Os itens que dependem de um fato do Map2Check (hash da tag `legacy/c-runtime-final`, merge da Task 6.2) esperam o mantenedor informá-lo; os demais podem ser feitos já.
+
+- [ ] **`docs/integration-guide.md`:** incorporar as instruções de "como adicionar um tipo nondet", lidas de `vendor/map2check/modules/backend/library/NOTES.txt` (Task 5.3) e reescritas para a API núcleo Rust.
+- [ ] **`README.md` e `CLAUDE.md`:** declarar que esta biblioteca é **o** runtime do Map2Check e citar `legacy/c-library-final` e `legacy/c-runtime-final` como referências históricas.
+- [ ] **`TODO.md`:** marcar os itens concluídos e mover a seção "Dependente do repositório externo" para "Concluído", com os links dos PRs.
+- [ ] **`docs/plano_map2check_library_rust.md` e `audit/`:** acrescentar uma nota no topo dizendo que o documento é histórico e apontando para este plano. Não reescrever evidência.
+- [ ] **`CHANGELOG.md`:** uma entrada registrando a remoção do runtime C no Map2Check, com o hash da tag de preservação informado pelo mantenedor.
+
+**Critério de conclusão:** `cargo test --all-features` e `scripts/test-check-no-c-era-artifacts.sh` passam; os documentos deste repositório não descrevem mais o runtime C como ativo.
 
 ---
 
@@ -1443,3 +1481,5 @@ A migração dos passes para a API núcleo, antes prevista aqui, virou a Task 3.
 ## Execution order (resumo)
 
 0.1 → 0.2 → 0.3 → **1.1 (D1, aprovação)** → 1.2 → 2.1 → 2.2 → 2.3 → 2.4 → 2.5 → (2.6 depois de 4.3) → 2.7 → 2.8 → 2.9 → 3.1 → 3.2 → 3.3 → 3.4 → 4.1 → 4.3 → 4.2 → 5.1 → 5.2 → 6.1 → **6.2 (não-retorno)** → 6.3 → 6.4.
+
+**Ordem a partir da revisão de escopo (2026-10-26):** 5.3 → 5.1 Step 7 (acompanha 5.1 Steps 5–6 [Mantenedor]) → 6.4a (itens independentes do Map2Check) → 6.0 → [Mantenedor: 6.1 → **6.2 (não-retorno)** → 6.3 → 6.4] → 6.4a (itens restantes, com o hash da tag).
