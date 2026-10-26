@@ -91,4 +91,12 @@ grep -q 'remova o marcador' "$T/out"
 : > "$T/pe.txt"
 ce > "$T/out" || { cat "$T/out" >&2; echo "FALHA: enum igual sem marcador deveria passar" >&2; exit 1; }
 grep -q '^PASS  A.h (n=0' "$T/out"
+# o check de enum não falha aberto
+printf 'enum E { A = 0, B = 1 };\n' > "$T/h/A.h"; : > "$T/pe.txt"
+printf 'tag\tc_enumerator\trust_enumerator\nE\tA\tX\nE\tB\tNOPE\n' > "$T/em.tsv"
+if ce >"$T/out"; then echo "FALHA: erro de compilação virou 0 divergências" >&2; exit 1; fi
+grep -q 'NOPE' "$T/out"
+printf 'tag\tc_enumerator\trust_enumerator\nE\tA\tX\n' > "$T/em.tsv"
+if ce >"$T/out"; then echo "FALHA: enumerador C sem linha no mapa passou" >&2; exit 1; fi
+grep -q 'sem linha.*B' "$T/out"
 echo "test-runtime-abi-coverage: OK"

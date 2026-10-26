@@ -80,7 +80,18 @@ for h in "$DIR"/*.h; do
     grep -qE "enum[[:space:]]+$t[[:space:]]*\\{" "$h" || continue
     { echo "#define $t C_$t"; echo "#include \"$h\""; echo "#undef $t"; echo "#include \"$RH\"";
       awk -F'\t' -v t="$t" 'NR>1 && $1==t {printf "_Static_assert((int)%s == (int)%s, \"enum %s: %s != %s\");\n", $2, $3, t, $2, $3}' "$EMAP"; } > "$T/e.c"
-    nbad="$(clang -fsyntax-only -Werror -I"$DIR" "$T/e.c" 2>&1 | grep -c 'static assertion failed\|static_assert failed' || true)"
+    clang -fsyntax-only -Werror -I"$DIR" "$T/e.c" > "$T/ediag" 2>&1 || true
+    nbad="$(grep -c 'static assertion failed\|static_assert failed' "$T/ediag" || true)"
+    if grep 'error:' "$T/ediag" | grep -qv 'static assertion failed\|static_assert failed'; then
+      bad="$bad enum $t: erro de compilação na unidade de valores: $(grep 'error:' "$T/ediag" | grep -v 'static assertion failed\|static_assert failed' | head -3 | tr '\n' '|');"
+    fi
+    # todo enumerador do C precisa de linha em enum-map.tsv
+    clang -E -P -I"$DIR" "$h" 2>/dev/null | tr '\n' ' ' \
+      | sed -nE "s/.*enum[[:space:]]+$t[[:space:]]*\\{([^}]*)\\}.*/\\1/p" | tr ',' '\n' \
+      | sed -E 's/=.*//; s/[[:space:]]//g' | grep . | sort -u > "$T/cenums" || true
+    awk -F'\t' -v t="$t" 'NR>1 && $1==t {print $2}' "$EMAP" | sort -u > "$T/mapped"
+    unmapped="$(comm -23 "$T/cenums" "$T/mapped" | tr '\n' ' ')"
+    [ -n "$unmapped" ] && bad="$bad enum $t: enumerador C sem linha em enum-map.tsv: $unmapped;"
     if grep -qx "enum:$t" "$PENUM"; then
       if [ "$nbad" -gt 0 ]; then enote="$enote [enum $t: $nbad valores diferem, pendente]"; exfail=1
       else bad="$bad marcador enum:$t em pending-enums.txt mas os valores já batem (remova o marcador);"; fi
