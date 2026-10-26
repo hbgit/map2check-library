@@ -4,19 +4,29 @@
 
 Writes two tab-separated files to --out-dir, sorted by symbol:
 
-  inventory.tsv  symbol kind signature module referenced_by
-  rust-gap.tsv   symbol status rust_signature
+  inventory.tsv  symbol kind signature canonical_signature module referenced_by
+  rust-gap.tsv   symbol status rust_signature rust_canonical_signature
 
 A row exists for every external symbol defined (nm types T/D/B/R/C/V/W) by an
 object compiled from modules/backend/library/lib/*.c. `signature` is the
-`type.qualType` clang prints in its JSON AST for the definition; `module` lists
-the .bc files that define it (joined by '+'); `referenced_by` is a subset of
-pass+frontend+runtime ('-' when empty):
+`type.qualType` clang prints in its JSON AST for the definition, typedef names
+kept as written. `canonical_signature` is the same type with every typedef
+resolved to its underlying type (recursively, from the TypedefDecls of the same
+translation unit), a bare `bool` that is not a typedef written `_Bool`, and an
+empty parameter list `T ()` written `T (void)`. Struct, union and enum types
+stay `struct <tag>`; clang already names an anonymous typedef'd struct by its
+typedef name, so `typedef struct {...} X` reads `struct X`. When files define
+a symbol with different types, the variants are joined with ' | ' (only
+`main`). `module` lists the .bc files that define it (joined by '+');
+`referenced_by` is a subset of pass+frontend+runtime+external ('-' when
+empty):
 
   pass      the name is a string literal (or the expansion of a `"prefix" #arg`
             macro body for every invocation) in modules/backend/pass/*.{cpp,hpp}
   frontend  the name is a string literal in modules/frontend/*.{cpp,hpp}
   runtime   the symbol is undefined in one runtime object and defined in another
+  external  the symbol is consumed by code neither the passes nor the frontend
+            emit; decided only by the EXTERNAL_PREFIXES/EXTERNAL_NAMES rules
 
 WasmRuntimeStubs.c includes wasm-rt.h from WABT. When the host has no WABT the
 script falls back (-idirafter, so a real wasm-rt.h always wins) to a minimal
@@ -24,9 +34,14 @@ shim written to a temporary directory; it declares the WABT typedef names the
 file uses, so the qualType spelling is the same as with WABT.
 
 rust-gap.tsv compares each inventory symbol with the external symbols defined
-in --rust-lib (nm) and the declarations of --rust-header (clang JSON AST):
-`same` needs an equal qualType, `different` otherwise, `missing` when the
-archive does not define the symbol.
+in --rust-lib (nm) and the declarations of --rust-header (clang JSON AST),
+canonicalized the same way: `same` when the canonical signatures are equal
+(one of them, for a symbol with several variants), `different` otherwise,
+`missing` when the archive does not define the symbol and `undeclared` when the
+archive defines it but the header does not declare it.
+
+A symbol defined by a runtime object with no top-level declaration in the
+clang AST (e.g. one defined in top-level asm) is an error.
 
 Regenerate the committed files from the repository root with:
 
@@ -48,6 +63,28 @@ import sys
 import tempfile
 
 DEFINED_TYPES = set("TDBRCVW")
+
+# `external` consumers: code that is neither emitted by a pass nor named by the
+# frontend, yet links against a runtime definition by name.
+EXTERNAL_PREFIXES = (
+    # wasm2c-lifted programs call the wasm-rt API (WasmRuntimeStubs.c replaces
+    # WABT's wasm-rt-impl) and the WASI imports, which are named w2c_<module>_*.
+    "wasm_rt_",
+    "w2c_",
+    # AFL++: __AFL_FUZZ_INIT() (NonDetGeneratorAFL.c) defines __afl_* objects
+    # that afl-compiler-rt and the __AFL_FUZZ_TESTCASE_* macros read.
+    "__afl_",
+)
+EXTERNAL_NAMES = (
+    # Process entry point: called by the C startup files (native/AFL builds)
+    # and by KLEE, which starts every run at main.
+    "main",
+)
+C_KEYWORDS = {
+    "void", "char", "short", "int", "long", "float", "double", "signed",
+    "unsigned", "_Bool", "const", "volatile", "restrict", "struct", "union",
+    "enum", "__int128", "_Complex",
+}
 WASM_SHIM = """\
 /* Minimal stand-in for WABT's wasm-rt.h (runtime-abi-inventory.py). */
 #ifndef WASM_RT_SHIM_H
@@ -149,11 +186,83 @@ def nm_symbols(path):
     return defined, undefined
 
 
-def ast_declarations(source, flags):
-    """Map name -> (kind, qualType) of top-level declarations; definitions win."""
+class Canonicalizer:
+    """Resolve typedef names in clang type strings, using one TU's TypedefDecls."""
+
+    TOKEN_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_]*|[0-9]+|\S")
+
+    def __init__(self, typedefs):
+        self.typedefs = typedefs
+        self.cache = {}
+
+    def resolve(self, name, seen=()):
+        if name not in self.cache:
+            if name in seen:
+                raise ValueError("typedef cycle at %s" % name)
+            self.cache[name] = self.canonical(self.typedefs[name], seen + (name,))
+        return self.cache[name]
+
+    def canonical(self, type_str, seen=()):
+        tokens = self.TOKEN_RE.findall(type_str)
+        out, i = [], 0
+        while i < len(tokens):
+            tok = tokens[i]
+            if tok in ("struct", "union", "enum") and i + 1 < len(tokens):
+                out += [tok, tokens[i + 1]]
+                i += 2
+                continue
+            if tok in self.typedefs and tok not in C_KEYWORDS:
+                under = self.resolve(tok, seen)
+                quals = []
+                while out and out[-1] in ("const", "volatile"):
+                    quals.insert(0, out.pop())
+                if any(c in under for c in "[("):
+                    raise ValueError("cannot inline typedef %s = %s in %r" % (tok, under, type_str))
+                if quals and under.endswith("*"):
+                    out += self.TOKEN_RE.findall(under) + quals  # const pointer -> void *const
+                else:
+                    out += quals + self.TOKEN_RE.findall(under)
+                i += 1
+                continue
+            out.append("_Bool" if tok == "bool" else tok)
+            i += 1
+        return self.join(out)
+
+    @staticmethod
+    def join(tokens):
+        text = ""
+        for tok in tokens:
+            if not text:
+                text = tok
+            elif tok in (",", ")", "]", "["):
+                text += tok
+            elif tok == "(":
+                text += tok if text.endswith(("*", "(", ")")) else " " + tok
+            elif tok == "*":
+                text += tok if text.endswith(("*", "(")) else " " + tok
+            elif text.endswith(("(", "[", "*")):
+                text += tok
+            else:
+                text += " " + tok
+        return text
+
+
+def canonical_signature(canon, kind, qual_type):
+    sig = canon.canonical(qual_type)
+    if kind == "func" and sig.endswith("()"):
+        sig = sig[:-2] + "(void)"
+    return sig
+
+
+def ast_declarations(source, flags, wanted):
+    """Map name -> (kind, qualType, canonical) of the top-level declarations of the
+    names in `wanted`; definitions win over plain declarations."""
     dump = run(["clang", "-w", "-fsyntax-only", "-Xclang", "-ast-dump=json"] + flags + [source])
+    nodes = json.loads(dump).get("inner", [])
+    canon = Canonicalizer({n["name"]: n["type"]["qualType"] for n in nodes
+                           if n.get("kind") == "TypedefDecl" and "name" in n})
     decls = {}
-    for node in json.loads(dump).get("inner", []):
+    for node in nodes:
         if node.get("kind") not in ("FunctionDecl", "VarDecl") or "name" not in node:
             continue
         kind = "func" if node["kind"] == "FunctionDecl" else "data"
@@ -164,7 +273,8 @@ def ast_declarations(source, flags):
         name = node["name"]
         if is_def or name not in decls or not decls[name][2]:
             decls[name] = (kind, node["type"]["qualType"], is_def)
-    return {name: (kind, sig) for name, (kind, sig, _) in decls.items()}
+    return {name: (kind, sig, canonical_signature(canon, kind, sig))
+            for name, (kind, sig, _) in decls.items() if name in wanted}
 
 
 def compile_runtime(lib_dir, header_dir, work):
@@ -180,7 +290,12 @@ def compile_runtime(lib_dir, header_dir, work):
         obj = os.path.join(work, base + ".o")
         run(["clang", "-w", "-c", "-O0"] + flags + ["-o", obj, source])
         defined, undefined = nm_symbols(obj)
-        modules[base + ".bc"] = (defined, undefined, ast_declarations(source, flags))
+        decls = ast_declarations(source, flags, defined)
+        orphans = sorted(set(defined) - set(decls))
+        if orphans:
+            raise SystemExit("error: %s defines %s with no top-level declaration in the clang AST"
+                             % (source, ", ".join(orphans)))
+        modules[base + ".bc"] = (defined, undefined, decls)
     return modules
 
 
@@ -198,12 +313,14 @@ def build_inventory(m2c, work):
     rows = {}
     for module, (defined, _, decls) in modules.items():
         for name, nm_type in defined.items():
-            row = rows.setdefault(name, {"modules": [], "sigs": [], "kind": None})
+            row = rows.setdefault(name, {"modules": [], "sigs": [], "canons": [], "kind": None})
             row["modules"].append(module)
-            kind, sig = decls.get(name, ("func" if nm_type == "T" else "data", "?"))
+            kind, sig, canon = decls[name]
             row["kind"] = row["kind"] or kind
             if sig not in row["sigs"]:
                 row["sigs"].append(sig)
+            if canon not in row["canons"]:
+                row["canons"].append(canon)
 
     for name, row in rows.items():
         refs = []
@@ -214,24 +331,27 @@ def build_inventory(m2c, work):
         if any(name in undefined and module not in row["modules"]
                for module, (_, undefined, _) in modules.items()):
             refs.append("runtime")
+        if name.startswith(EXTERNAL_PREFIXES) or name in EXTERNAL_NAMES:
+            refs.append("external")
         row["refs"] = "+".join(refs) or "-"
         row["signature"] = " | ".join(row["sigs"])
+        row["canonical"] = " | ".join(row["canons"])
     unresolved = sorted(pass_names - set(rows))
     return rows, unresolved
 
 
 def rust_gap(rows, rust_lib, rust_header):
     defined, _ = nm_symbols(rust_lib)
-    decls = ast_declarations(rust_header, ["-x", "c"])
+    decls = ast_declarations(rust_header, ["-x", "c"], rows)
     gap = {}
     for name, row in rows.items():
         if name not in defined:
-            gap[name] = ("missing", "-")
+            gap[name] = ("missing", "-", "-")
         elif name not in decls:
-            gap[name] = ("different", "(not declared in header)")
+            gap[name] = ("undeclared", "-", "-")
         else:
-            sig = decls[name][1]
-            gap[name] = ("same" if sig == row["signature"] else "different", sig)
+            _, sig, canon = decls[name]
+            gap[name] = ("same" if canon in row["canons"] else "different", sig, canon)
     return gap
 
 
@@ -258,15 +378,16 @@ def main(argv=None):
     os.makedirs(args.out_dir, exist_ok=True)
     names = sorted(rows)
     write_tsv(os.path.join(args.out_dir, "inventory.tsv"),
-              ["symbol", "kind", "signature", "module", "referenced_by"],
-              ([n, rows[n]["kind"], rows[n]["signature"], "+".join(sorted(rows[n]["modules"])), rows[n]["refs"]]
+              ["symbol", "kind", "signature", "canonical_signature", "module", "referenced_by"],
+              ([n, rows[n]["kind"], rows[n]["signature"], rows[n]["canonical"], "+".join(sorted(rows[n]["modules"])), rows[n]["refs"]]
                for n in names))
-    write_tsv(os.path.join(args.out_dir, "rust-gap.tsv"), ["symbol", "status", "rust_signature"],
-              ([n, gap[n][0], gap[n][1]] for n in names))
+    write_tsv(os.path.join(args.out_dir, "rust-gap.tsv"), ["symbol", "status", "rust_signature", "rust_canonical_signature"],
+              ([n] + list(gap[n]) for n in names))
 
-    counts = {s: sum(1 for g in gap.values() if g[0] == s) for s in ("same", "different", "missing")}
+    counts = {s: sum(1 for g in gap.values() if g[0] == s)
+              for s in ("same", "different", "missing", "undeclared")}
     print("defined: %d" % len(rows))
-    print("rust: same %(same)d, different %(different)d, missing %(missing)d" % counts)
+    print("rust: same %(same)d, different %(different)d, missing %(missing)d, undeclared %(undeclared)d" % counts)
     print("pass-referenced names not defined by the runtime (%d):" % len(unresolved))
     for name in unresolved:
         print("  " + name)

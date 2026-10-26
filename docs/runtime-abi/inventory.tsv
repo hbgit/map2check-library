@@ -1,193 +1,193 @@
-symbol	kind	signature	module	referenced_by
-B_TREE_CREATE	func	B_TREE (const char *)	BTree.bc	runtime
-B_TREE_FREE	func	void (B_TREE *)	BTree.bc	runtime
-B_TREE_INSERT	func	char (B_TREE *, B_TREE_ROW *)	BTree.bc	runtime
-B_TREE_INSERT_NONFULL	func	char (B_TREE *, B_TREE_ROW *, B_TREE_PAGE *)	BTree.bc	-
-B_TREE_PAGE_CREATE	func	B_TREE_PAGE *(B_TREE *)	BTree.bc	-
-B_TREE_SEARCH	func	B_TREE_ROW *(B_TREE *, unsigned int)	BTree.bc	runtime
-B_TREE_SPLIT_CHILD	func	char (B_TREE *, B_TREE_PAGE *, int, B_TREE_PAGE *)	BTree.bc	-
-CHECK_AND_RELEASE_PAGES	func	void (B_TREE *)	BTree.bc	-
-DISK_READ	func	char (B_TREE *, fpos_t *, B_TREE_PAGE *)	BTree.bc	-
-DISK_WRITE	func	char (B_TREE *, B_TREE_PAGE *)	BTree.bc	-
-DumpTree	func	void (B_TREE *)	BTree.bc	-
-DumpTreeHelper	func	void (B_TREE *, unsigned int, B_TREE_PAGE *)	BTree.bc	-
-DumpTreePage	func	void (B_TREE_PAGE *)	BTree.bc	-
-DumpTreePageChildren	func	void (B_TREE_PAGE *)	BTree.bc	-
-ERROR_DEREF	data	char	AnalysisModeMemcleanup.bc+AnalysisModeMemtrack.bc	-
-Map2CheckCurrentStep	data	unsigned int	Map2CheckFunctions.bc	-
-__VERIFIER_assert	func	void (int)	AnalysisModeAssert.bc	pass+frontend
-__VERIFIER_error	func	void ()	Map2CheckFunctions.bc	pass+frontend
-__afl_fuzz_alt	data	unsigned char[1048576]	NonDetGeneratorAFL.bc	-
-__afl_fuzz_alt_ptr	data	unsigned char *	NonDetGeneratorAFL.bc	-
-__afl_sharedmem_fuzzing	data	int	NonDetGeneratorAFL.bc	-
-allocation_log	data	MAP2CHECK_CONTAINER	AnalysisModeMemcleanup.bc+AnalysisModeMemtrack.bc	-
-allocation_log_to_file	func	void (MAP2CHECK_CONTAINER *)	AllocationLog.bc	runtime
-analysis_destroy	func	void ()	AnalysisModeAssert.bc+AnalysisModeMemcleanup.bc+AnalysisModeMemtrack.bc+AnalysisModeNone.bc+AnalysisModeOverflow.bc	runtime
-analysis_generate_aux_witness_files	func	void ()	AnalysisModeAssert.bc+AnalysisModeMemcleanup.bc+AnalysisModeMemtrack.bc+AnalysisModeNone.bc+AnalysisModeOverflow.bc	runtime
-analysis_init	func	void ()	AnalysisModeAssert.bc+AnalysisModeMemcleanup.bc+AnalysisModeMemtrack.bc+AnalysisModeNone.bc+AnalysisModeOverflow.bc	runtime
-analysis_is_program_correct	func	char ()	AnalysisModeAssert.bc+AnalysisModeMemcleanup.bc+AnalysisModeMemtrack.bc+AnalysisModeNone.bc+AnalysisModeOverflow.bc	runtime
-append_element	func	char (MAP2CHECK_CONTAINER *, void *)	ContainerBTree.bc+ContainerRealloc.bc	runtime
-check_address_allocation_log	func	enum MemoryAddressStatus (MAP2CHECK_CONTAINER *, long)	AllocationLog.bc	runtime
-divisionByZeroError	func	void (unsigned int, const char *)	AnalysisModeOverflow.bc	-
-find_row_with_address	func	MEMORY_ALLOCATIONS_ROW *(MAP2CHECK_CONTAINER *, void *)	AllocationLog.bc	runtime
-free_container	func	char (MAP2CHECK_CONTAINER *)	ContainerBTree.bc+ContainerRealloc.bc	runtime
-generate_aux_files	func	void (MAP2CHECK_CONTAINER *, char)	WitnessGeneration.bc+WitnessGenerationNone.bc	runtime
-generate_confirmation_file	func	void ()	WitnessGeneration.bc+WitnessGenerationNone.bc	runtime
-get_element_at	func	void *(unsigned int, MAP2CHECK_CONTAINER)	ContainerBTree.bc+ContainerRealloc.bc	runtime
-get_next_input_from_afl	func	uint8_t ()	NonDetGeneratorAFL.bc	-
-get_old_reference	func	long (long, MAP2CHECK_CONTAINER *)	ListLog.bc	-
-get_type_from_list_log_row	func	enum MemoryAddressStatus (LIST_LOG_ROW *)	ListLog.bc	runtime
-gotError	data	char	Map2CheckFunctions.bc	-
-heap_log	data	MAP2CHECK_CONTAINER	AnalysisModeMemcleanup.bc+AnalysisModeMemtrack.bc	-
-heap_log_file	data	const char *	HeapLog.bc	-
-heap_log_to_file	func	void (MAP2CHECK_CONTAINER *)	HeapLog.bc	runtime
-helper_map2check_nondet_append_element	func	void (NONDET_CALL)	NonDetLog.bc	-
-is_deref_error	func	char (long, MAP2CHECK_CONTAINER *)	ListLog.bc	-
-is_in_tracked	func	char (unsigned int, MAP2CHECK_CONTAINER *)	TrackBBLog.bc	runtime
-is_invalid_free	func	char (long, MAP2CHECK_CONTAINER *)	ListLog.bc	runtime
-is_memcleanup_error	func	char (long, MAP2CHECK_CONTAINER *)	ListLog.bc	runtime
-is_valid_allocation_address	func	char (MAP2CHECK_CONTAINER *, void *, int)	AllocationLog.bc	runtime
-is_valid_heap_address	func	char (MAP2CHECK_CONTAINER *, void *, int)	HeapLog.bc	runtime
-klee_log_file	data	const char *	NonDetLog.bc	-
-list_log	data	MAP2CHECK_CONTAINER	AnalysisModeMemcleanup.bc+AnalysisModeMemtrack.bc	-
-list_log_file	data	const char *	ListLog.bc	-
-list_log_to_file	func	void (MAP2CHECK_CONTAINER *)	ListLog.bc	runtime
-main	func	int (int, char **) | int ()	NonDetGeneratorAFL.bc+NonDetGeneratorKlee.bc+NonDetGeneratorNone.bc	pass+frontend
-map2check_add_store_pointer	func	void (void *, void *, unsigned int, const char *, int, const char *)	AnalysisModeMemcleanup.bc+AnalysisModeMemtrack.bc	pass
-map2check_afl_data	data	const uint8_t *	NonDetGeneratorAFL.bc	-
-map2check_afl_size	data	size_t	NonDetGeneratorAFL.bc	-
-map2check_alloca	func	void (const char *, void *, int, int, int, int)	AnalysisModeMemcleanup.bc+AnalysisModeMemtrack.bc	pass
-map2check_assert	func	void (int, int, const char *)	AnalysisModeAssert.bc	pass
-map2check_assume	func	void (int)	Map2CheckFunctions.bc	pass
-map2check_assume_loop	func	void (char)	Map2CheckFunctions.bc	pass
-map2check_binop_add	func	void (long long, long long, unsigned int, unsigned int, unsigned int, char *)	AnalysisModeOverflow.bc	pass
-map2check_binop_add_uint	func	void (unsigned long long, unsigned long long, unsigned int, unsigned int, unsigned int, char *)	AnalysisModeOverflow.bc	pass
-map2check_binop_mul	func	void (long long, long long, unsigned int, unsigned int, unsigned int, char *)	AnalysisModeOverflow.bc	pass
-map2check_binop_mul_uint	func	void (unsigned long long, unsigned long long, unsigned int, unsigned int, unsigned int, char *)	AnalysisModeOverflow.bc	pass
-map2check_binop_sdiv	func	void (long long, long long, unsigned int, unsigned int, unsigned int, char *)	AnalysisModeOverflow.bc	pass
-map2check_binop_srem	func	void (long long, long long, unsigned int, unsigned int, unsigned int, char *)	AnalysisModeOverflow.bc	pass
-map2check_binop_sub	func	void (long long, long long, unsigned int, unsigned int, unsigned int, char *)	AnalysisModeOverflow.bc	pass
-map2check_binop_sub_uint	func	void (unsigned long long, unsigned long long, unsigned int, unsigned int, unsigned int, char *)	AnalysisModeOverflow.bc	pass
-map2check_calloc	func	void (void *, int, int)	AnalysisModeMemcleanup.bc+AnalysisModeMemtrack.bc	pass
-map2check_check_cstring	func	void (const char *)	AnalysisModeMemcleanup.bc+AnalysisModeMemtrack.bc	pass
-map2check_check_deref	func	void (int, const char *)	AnalysisModeMemcleanup.bc+AnalysisModeMemtrack.bc	pass
-map2check_crab_assume	func	void (char)	Map2CheckFunctions.bc	pass
-map2check_destroy	func	void ()	Map2CheckFunctions.bc	-
-map2check_error	func	void ()	Map2CheckFunctions.bc	runtime
-map2check_exit	func	void ()	Map2CheckFunctions.bc	-
-map2check_free	func	void (const char *, void *, unsigned int, unsigned int, const char *)	AnalysisModeMemcleanup.bc+AnalysisModeMemtrack.bc	pass
-map2check_free_resolved_address	func	void (void *, unsigned int, const char *, short)	AnalysisModeMemcleanup.bc+AnalysisModeMemtrack.bc	pass
-map2check_function	func	void (const char *, void *)	AnalysisModeMemcleanup.bc+AnalysisModeMemtrack.bc	pass
-map2check_get_current_step	func	unsigned int ()	Map2CheckFunctions.bc	runtime
-map2check_init	func	void (int)	Map2CheckFunctions.bc	pass
-map2check_load	func	void (void *, int)	AnalysisModeMemcleanup.bc+AnalysisModeMemtrack.bc	pass
-map2check_malloc	func	void (void *, int)	AnalysisModeMemcleanup.bc+AnalysisModeMemtrack.bc	pass
-map2check_next_current_step	func	void ()	Map2CheckFunctions.bc	runtime
-map2check_non_det_bool	func	bool ()	NonDetGeneratorAFL.bc+NonDetGeneratorKlee.bc	pass
-map2check_non_det_char	func	char ()	NonDetGeneratorAFL.bc+NonDetGeneratorKlee.bc+NonDetGeneratorNone.bc	pass
-map2check_non_det_double	func	double ()	NonDetGeneratorAFL.bc+NonDetGeneratorKlee.bc+NonDetGeneratorNone.bc	pass
-map2check_non_det_float	func	float ()	NonDetGeneratorAFL.bc+NonDetGeneratorKlee.bc+NonDetGeneratorNone.bc	pass
-map2check_non_det_int	func	int ()	NonDetGeneratorAFL.bc+NonDetGeneratorKlee.bc+NonDetGeneratorNone.bc	pass
-map2check_non_det_loff_t	func	loff_t ()	NonDetGeneratorAFL.bc+NonDetGeneratorKlee.bc	pass
-map2check_non_det_long	func	long ()	NonDetGeneratorAFL.bc+NonDetGeneratorKlee.bc+NonDetGeneratorNone.bc	pass
-map2check_non_det_longlong	func	longlong ()	NonDetGeneratorAFL.bc+NonDetGeneratorKlee.bc+NonDetGeneratorNone.bc	pass
-map2check_non_det_memory	func	void (void *, size_t)	NonDetGeneratorAFL.bc+NonDetGeneratorKlee.bc+NonDetGeneratorNone.bc	pass
-map2check_non_det_pchar	func	char *()	NonDetGeneratorAFL.bc+NonDetGeneratorKlee.bc	pass
-map2check_non_det_pointer	func	pointer ()	NonDetGeneratorAFL.bc+NonDetGeneratorKlee.bc+NonDetGeneratorNone.bc	pass
-map2check_non_det_sector_t	func	unsigned long ()	NonDetGeneratorAFL.bc+NonDetGeneratorKlee.bc	pass
-map2check_non_det_short	func	short ()	NonDetGeneratorAFL.bc+NonDetGeneratorKlee.bc+NonDetGeneratorNone.bc	pass
-map2check_non_det_size_t	func	size_t ()	NonDetGeneratorAFL.bc+NonDetGeneratorKlee.bc	pass
-map2check_non_det_u16	func	u16 ()	NonDetGeneratorAFL.bc+NonDetGeneratorKlee.bc+NonDetGeneratorNone.bc	pass
-map2check_non_det_u32	func	u32 ()	NonDetGeneratorAFL.bc+NonDetGeneratorKlee.bc+NonDetGeneratorNone.bc	pass
-map2check_non_det_u8	func	u8 ()	NonDetGeneratorAFL.bc+NonDetGeneratorKlee.bc+NonDetGeneratorNone.bc	pass
-map2check_non_det_uchar	func	unsigned char ()	NonDetGeneratorAFL.bc+NonDetGeneratorKlee.bc	pass
-map2check_non_det_uint	func	unsigned int ()	NonDetGeneratorAFL.bc+NonDetGeneratorKlee.bc+NonDetGeneratorNone.bc	pass
-map2check_non_det_ulong	func	unsigned long ()	NonDetGeneratorAFL.bc+NonDetGeneratorKlee.bc	pass
-map2check_non_det_ulonglong	func	ulonglong ()	NonDetGeneratorAFL.bc+NonDetGeneratorKlee.bc+NonDetGeneratorNone.bc	pass
-map2check_non_det_unsigned	func	unsigned int ()	NonDetGeneratorAFL.bc+NonDetGeneratorKlee.bc	pass
-map2check_non_det_ushort	func	ushort ()	NonDetGeneratorAFL.bc+NonDetGeneratorKlee.bc+NonDetGeneratorNone.bc	pass
-map2check_non_static_alloca	func	void (const char *, void *, int, int, int, int)	AnalysisModeMemcleanup.bc+AnalysisModeMemtrack.bc	pass
-map2check_nondet_bool	func	void (unsigned int, unsigned int, int, const char *)	NonDetLog.bc	pass
-map2check_nondet_char	func	void (unsigned int, unsigned int, int, const char *)	NonDetLog.bc	pass
-map2check_nondet_double	func	void (unsigned int, unsigned int, double, const char *)	NonDetLog.bc	pass
-map2check_nondet_float	func	void (unsigned int, unsigned int, double, const char *)	NonDetLog.bc	pass
-map2check_nondet_get_log	func	MAP2CHECK_CONTAINER ()	NonDetLog.bc	runtime
-map2check_nondet_int	func	void (unsigned int, unsigned int, int, const char *)	NonDetLog.bc	pass
-map2check_nondet_loff_t	func	void (unsigned int, unsigned int, int, const char *)	NonDetLog.bc	pass
-map2check_nondet_long	func	void (unsigned int, unsigned int, int, const char *)	NonDetLog.bc	pass
-map2check_nondet_longlong	func	void (unsigned int, unsigned int, long long, const char *)	NonDetLog.bc	pass
-map2check_nondet_memory_byte	func	void (unsigned int, unsigned int, int, const char *)	NonDetLog.bc	runtime
-map2check_nondet_pchar	func	void (unsigned int, unsigned int, int, const char *)	NonDetLog.bc	pass
-map2check_nondet_pointer	func	void (unsigned int, unsigned int, int, const char *)	NonDetLog.bc	pass
-map2check_nondet_sector_t	func	void (unsigned int, unsigned int, int, const char *)	NonDetLog.bc	pass
-map2check_nondet_short	func	void (unsigned int, unsigned int, int, const char *)	NonDetLog.bc	pass
-map2check_nondet_size_t	func	void (unsigned int, unsigned int, int, const char *)	NonDetLog.bc	pass
-map2check_nondet_u16	func	void (unsigned int, unsigned int, int, const char *)	NonDetLog.bc	pass
-map2check_nondet_u32	func	void (unsigned int, unsigned int, int, const char *)	NonDetLog.bc	pass
-map2check_nondet_u8	func	void (unsigned int, unsigned int, int, const char *)	NonDetLog.bc	pass
-map2check_nondet_uchar	func	void (unsigned int, unsigned int, int, const char *)	NonDetLog.bc	pass
-map2check_nondet_uint	func	void (unsigned int, unsigned int, int, const char *)	NonDetLog.bc	pass
-map2check_nondet_ulong	func	void (unsigned int, unsigned int, int, const char *)	NonDetLog.bc	pass
-map2check_nondet_ulonglong	func	void (unsigned int, unsigned int, unsigned long long, const char *)	NonDetLog.bc	pass
-map2check_nondet_unsigned	func	void (unsigned int, unsigned int, unsigned int, const char *)	NonDetLog.bc	pass
-map2check_nondet_ushort	func	void (unsigned int, unsigned int, int, const char *)	NonDetLog.bc	pass
-map2check_posix	func	void (void *, int)	AnalysisModeMemcleanup.bc+AnalysisModeMemtrack.bc	pass
-map2check_success	func	void ()	Map2CheckFunctions.bc	pass
-map2check_target_function	func	void (const char *, int, int)	Map2CheckFunctions.bc	pass
-map2check_track_bb	func	void (unsigned int, const char *)	Map2CheckFunctions.bc	pass
-map2check_wasm_check_access	func	void (uint64_t, uint64_t)	AnalysisModeMemtrack.bc	pass
-map2check_wasm_free	func	void (uint64_t, int)	AnalysisModeMemtrack.bc	pass
-map2check_wasm_malloc	func	void (uint64_t, uint64_t)	AnalysisModeMemtrack.bc	pass
-mark_allocation_log	func	char (MAP2CHECK_CONTAINER *, long)	AllocationLog.bc	-
-mark_deallocation_log	func	char (MAP2CHECK_CONTAINER *, long)	AllocationLog.bc	-
-mark_heap_log	func	char (MAP2CHECK_CONTAINER *, MEMORY_HEAP_ROW)	HeapLog.bc	-
-new_container	func	MAP2CHECK_CONTAINER (enum Container_Type)	ContainerBTree.bc+ContainerRealloc.bc	runtime
-new_heap_row	func	MEMORY_HEAP_ROW (int, int, void *, int, int, const char *)	HeapLog.bc	runtime
-new_list_row	func	LIST_LOG_ROW (long, long, unsigned int, char, char, unsigned int, const char *, const char *, unsigned int)	ListLog.bc	runtime
-new_memory_row	func	MEMORY_ALLOCATIONS_ROW (long, char)	AllocationLog.bc	runtime
-new_nondet_call	func	NONDET_CALL (enum NONDET_TYPE, unsigned int, unsigned int, void *, const char *, unsigned int)	NonDetLog.bc	-
-nondet_assume	func	void (int)	NonDetGeneratorAFL.bc+NonDetGeneratorKlee.bc+NonDetGeneratorNone.bc	runtime
-nondet_cancel	func	void ()	NonDetGeneratorAFL.bc	-
-nondet_destroy	func	void ()	NonDetGeneratorAFL.bc+NonDetGeneratorKlee.bc+NonDetGeneratorNone.bc	runtime
-nondet_generate_aux_witness_files	func	void ()	NonDetGeneratorAFL.bc+NonDetGeneratorKlee.bc+NonDetGeneratorNone.bc	runtime
-nondet_init	func	void ()	NonDetGeneratorAFL.bc+NonDetGeneratorKlee.bc+NonDetGeneratorNone.bc	runtime
-nondet_log	data	MAP2CHECK_CONTAINER	NonDetLog.bc	-
-nondet_log_destroy	func	void ()	NonDetLog.bc	runtime
-nondet_log_init	func	void ()	NonDetLog.bc	runtime
-nondet_log_to_file	func	char (MAP2CHECK_CONTAINER)	NonDetLog.bc	runtime
-overflowError	func	void (unsigned int, const char *)	AnalysisModeOverflow.bc	pass
-release_unreleased_addresses	func	void (MAP2CHECK_CONTAINER *)	AllocationLog.bc	-
-sv_comp	data	char	Map2CheckFunctions.bc	-
-trackbb_log	data	MAP2CHECK_CONTAINER	Map2CheckFunctions.bc	-
-trackbb_log_file	data	const char *	TrackBBLog.bc	-
-trackbb_log_to_file	func	void (MAP2CHECK_CONTAINER *)	TrackBBLog.bc	runtime
-trackbb_new_row	func	TRACK_BB_ROW (unsigned int, const char *)	TrackBBLog.bc	runtime
-unknown_not_supported	func	void ()	AnalysisModeOverflow.bc	-
-update_reference_list_log	func	void (long, enum MemoryAddressStatus, unsigned int)	AnalysisModeMemcleanup.bc+AnalysisModeMemtrack.bc	-
-valid_allocation_log	func	long (MAP2CHECK_CONTAINER *)	AllocationLog.bc	runtime
-violated_property_file	data	const char *	PropertyGenerator.bc	-
-violated_property_file_assert	data	const char *	PropertyGenerator.bc	-
-violated_property_file_deref	data	const char *	PropertyGenerator.bc	-
-violated_property_file_free	data	const char *	PropertyGenerator.bc	-
-violated_property_file_memcleanup	data	const char *	PropertyGenerator.bc	-
-violated_property_file_memtrack	data	const char *	PropertyGenerator.bc	-
-violated_property_file_overflow	data	const char *	PropertyGenerator.bc	-
-violated_property_file_unknown	data	const char *	PropertyGenerator.bc	-
-w2c_wasi__snapshot__preview1_proc_exit	func	void (struct w2c_wasi__snapshot__preview1 *, uint32_t)	WasmRuntimeStubs.bc	-
-wasm_rt_allocate_funcref_table	func	void (wasm_rt_funcref_table_t *, uint32_t, uint32_t)	WasmRuntimeStubs.bc	-
-wasm_rt_allocate_memory	func	void (wasm_rt_memory_t *, uint64_t, uint64_t, bool, uint32_t)	WasmRuntimeStubs.bc	-
-wasm_rt_free	func	void (void)	WasmRuntimeStubs.bc	-
-wasm_rt_free_funcref_table	func	void (wasm_rt_funcref_table_t *)	WasmRuntimeStubs.bc	-
-wasm_rt_free_memory	func	void (wasm_rt_memory_t *)	WasmRuntimeStubs.bc	-
-wasm_rt_grow_memory	func	uint64_t (wasm_rt_memory_t *, uint64_t)	WasmRuntimeStubs.bc	-
-wasm_rt_init	func	void (void)	WasmRuntimeStubs.bc	-
-wasm_rt_is_initialized	func	bool (void)	WasmRuntimeStubs.bc	-
-wasm_rt_trap	func	void (wasm_rt_trap_t)	WasmRuntimeStubs.bc	-
-write_property	func	void (enum ViolatedProperty, int, const char *)	PropertyGenerator.bc	runtime
-write_property_assert	func	void (int, const char *)	PropertyGenerator.bc	-
-write_property_deref	func	void (int, const char *)	PropertyGenerator.bc	runtime
-write_property_free	func	void (int, const char *)	PropertyGenerator.bc	runtime
-write_property_memcleanup	func	void ()	PropertyGenerator.bc	runtime
-write_property_memtrack	func	void ()	PropertyGenerator.bc	runtime
-write_property_overflow	func	void (int, const char *)	PropertyGenerator.bc	-
-write_property_unknown	func	void ()	PropertyGenerator.bc	runtime
+symbol	kind	signature	canonical_signature	module	referenced_by
+B_TREE_CREATE	func	B_TREE (const char *)	struct B_TREE (const char *)	BTree.bc	runtime
+B_TREE_FREE	func	void (B_TREE *)	void (struct B_TREE *)	BTree.bc	runtime
+B_TREE_INSERT	func	char (B_TREE *, B_TREE_ROW *)	char (struct B_TREE *, struct B_TREE_ROW *)	BTree.bc	runtime
+B_TREE_INSERT_NONFULL	func	char (B_TREE *, B_TREE_ROW *, B_TREE_PAGE *)	char (struct B_TREE *, struct B_TREE_ROW *, struct B_TREE_PAGE *)	BTree.bc	-
+B_TREE_PAGE_CREATE	func	B_TREE_PAGE *(B_TREE *)	struct B_TREE_PAGE *(struct B_TREE *)	BTree.bc	-
+B_TREE_SEARCH	func	B_TREE_ROW *(B_TREE *, unsigned int)	struct B_TREE_ROW *(struct B_TREE *, unsigned int)	BTree.bc	runtime
+B_TREE_SPLIT_CHILD	func	char (B_TREE *, B_TREE_PAGE *, int, B_TREE_PAGE *)	char (struct B_TREE *, struct B_TREE_PAGE *, int, struct B_TREE_PAGE *)	BTree.bc	-
+CHECK_AND_RELEASE_PAGES	func	void (B_TREE *)	void (struct B_TREE *)	BTree.bc	-
+DISK_READ	func	char (B_TREE *, fpos_t *, B_TREE_PAGE *)	char (struct B_TREE *, struct _G_fpos_t *, struct B_TREE_PAGE *)	BTree.bc	-
+DISK_WRITE	func	char (B_TREE *, B_TREE_PAGE *)	char (struct B_TREE *, struct B_TREE_PAGE *)	BTree.bc	-
+DumpTree	func	void (B_TREE *)	void (struct B_TREE *)	BTree.bc	-
+DumpTreeHelper	func	void (B_TREE *, unsigned int, B_TREE_PAGE *)	void (struct B_TREE *, unsigned int, struct B_TREE_PAGE *)	BTree.bc	-
+DumpTreePage	func	void (B_TREE_PAGE *)	void (struct B_TREE_PAGE *)	BTree.bc	-
+DumpTreePageChildren	func	void (B_TREE_PAGE *)	void (struct B_TREE_PAGE *)	BTree.bc	-
+ERROR_DEREF	data	char	char	AnalysisModeMemcleanup.bc+AnalysisModeMemtrack.bc	-
+Map2CheckCurrentStep	data	unsigned int	unsigned int	Map2CheckFunctions.bc	-
+__VERIFIER_assert	func	void (int)	void (int)	AnalysisModeAssert.bc	pass+frontend
+__VERIFIER_error	func	void ()	void (void)	Map2CheckFunctions.bc	pass+frontend
+__afl_fuzz_alt	data	unsigned char[1048576]	unsigned char[1048576]	NonDetGeneratorAFL.bc	external
+__afl_fuzz_alt_ptr	data	unsigned char *	unsigned char *	NonDetGeneratorAFL.bc	external
+__afl_sharedmem_fuzzing	data	int	int	NonDetGeneratorAFL.bc	external
+allocation_log	data	MAP2CHECK_CONTAINER	struct obj4	AnalysisModeMemcleanup.bc+AnalysisModeMemtrack.bc	-
+allocation_log_to_file	func	void (MAP2CHECK_CONTAINER *)	void (struct obj4 *)	AllocationLog.bc	runtime
+analysis_destroy	func	void ()	void (void)	AnalysisModeAssert.bc+AnalysisModeMemcleanup.bc+AnalysisModeMemtrack.bc+AnalysisModeNone.bc+AnalysisModeOverflow.bc	runtime
+analysis_generate_aux_witness_files	func	void ()	void (void)	AnalysisModeAssert.bc+AnalysisModeMemcleanup.bc+AnalysisModeMemtrack.bc+AnalysisModeNone.bc+AnalysisModeOverflow.bc	runtime
+analysis_init	func	void ()	void (void)	AnalysisModeAssert.bc+AnalysisModeMemcleanup.bc+AnalysisModeMemtrack.bc+AnalysisModeNone.bc+AnalysisModeOverflow.bc	runtime
+analysis_is_program_correct	func	char ()	char (void)	AnalysisModeAssert.bc+AnalysisModeMemcleanup.bc+AnalysisModeMemtrack.bc+AnalysisModeNone.bc+AnalysisModeOverflow.bc	runtime
+append_element	func	char (MAP2CHECK_CONTAINER *, void *)	char (struct obj4 *, void *)	ContainerBTree.bc+ContainerRealloc.bc	runtime
+check_address_allocation_log	func	enum MemoryAddressStatus (MAP2CHECK_CONTAINER *, long)	enum MemoryAddressStatus (struct obj4 *, long)	AllocationLog.bc	runtime
+divisionByZeroError	func	void (unsigned int, const char *)	void (unsigned int, const char *)	AnalysisModeOverflow.bc	-
+find_row_with_address	func	MEMORY_ALLOCATIONS_ROW *(MAP2CHECK_CONTAINER *, void *)	struct obj2 *(struct obj4 *, void *)	AllocationLog.bc	runtime
+free_container	func	char (MAP2CHECK_CONTAINER *)	char (struct obj4 *)	ContainerBTree.bc+ContainerRealloc.bc	runtime
+generate_aux_files	func	void (MAP2CHECK_CONTAINER *, char)	void (struct obj4 *, char)	WitnessGeneration.bc+WitnessGenerationNone.bc	runtime
+generate_confirmation_file	func	void ()	void (void)	WitnessGeneration.bc+WitnessGenerationNone.bc	runtime
+get_element_at	func	void *(unsigned int, MAP2CHECK_CONTAINER)	void *(unsigned int, struct obj4)	ContainerBTree.bc+ContainerRealloc.bc	runtime
+get_next_input_from_afl	func	uint8_t ()	unsigned char (void)	NonDetGeneratorAFL.bc	-
+get_old_reference	func	long (long, MAP2CHECK_CONTAINER *)	long (long, struct obj4 *)	ListLog.bc	-
+get_type_from_list_log_row	func	enum MemoryAddressStatus (LIST_LOG_ROW *)	enum MemoryAddressStatus (struct obj *)	ListLog.bc	runtime
+gotError	data	char	char	Map2CheckFunctions.bc	-
+heap_log	data	MAP2CHECK_CONTAINER	struct obj4	AnalysisModeMemcleanup.bc+AnalysisModeMemtrack.bc	-
+heap_log_file	data	const char *	const char *	HeapLog.bc	-
+heap_log_to_file	func	void (MAP2CHECK_CONTAINER *)	void (struct obj4 *)	HeapLog.bc	runtime
+helper_map2check_nondet_append_element	func	void (NONDET_CALL)	void (struct obj3)	NonDetLog.bc	-
+is_deref_error	func	char (long, MAP2CHECK_CONTAINER *)	char (long, struct obj4 *)	ListLog.bc	-
+is_in_tracked	func	char (unsigned int, MAP2CHECK_CONTAINER *)	char (unsigned int, struct obj4 *)	TrackBBLog.bc	runtime
+is_invalid_free	func	char (long, MAP2CHECK_CONTAINER *)	char (long, struct obj4 *)	ListLog.bc	runtime
+is_memcleanup_error	func	char (long, MAP2CHECK_CONTAINER *)	char (long, struct obj4 *)	ListLog.bc	runtime
+is_valid_allocation_address	func	char (MAP2CHECK_CONTAINER *, void *, int)	char (struct obj4 *, void *, int)	AllocationLog.bc	runtime
+is_valid_heap_address	func	char (MAP2CHECK_CONTAINER *, void *, int)	char (struct obj4 *, void *, int)	HeapLog.bc	runtime
+klee_log_file	data	const char *	const char *	NonDetLog.bc	-
+list_log	data	MAP2CHECK_CONTAINER	struct obj4	AnalysisModeMemcleanup.bc+AnalysisModeMemtrack.bc	-
+list_log_file	data	const char *	const char *	ListLog.bc	-
+list_log_to_file	func	void (MAP2CHECK_CONTAINER *)	void (struct obj4 *)	ListLog.bc	runtime
+main	func	int (int, char **) | int ()	int (int, char **) | int (void)	NonDetGeneratorAFL.bc+NonDetGeneratorKlee.bc+NonDetGeneratorNone.bc	pass+frontend+external
+map2check_add_store_pointer	func	void (void *, void *, unsigned int, const char *, int, const char *)	void (void *, void *, unsigned int, const char *, int, const char *)	AnalysisModeMemcleanup.bc+AnalysisModeMemtrack.bc	pass
+map2check_afl_data	data	const uint8_t *	const unsigned char *	NonDetGeneratorAFL.bc	-
+map2check_afl_size	data	size_t	unsigned long	NonDetGeneratorAFL.bc	-
+map2check_alloca	func	void (const char *, void *, int, int, int, int)	void (const char *, void *, int, int, int, int)	AnalysisModeMemcleanup.bc+AnalysisModeMemtrack.bc	pass
+map2check_assert	func	void (int, int, const char *)	void (int, int, const char *)	AnalysisModeAssert.bc	pass
+map2check_assume	func	void (int)	void (int)	Map2CheckFunctions.bc	pass
+map2check_assume_loop	func	void (char)	void (char)	Map2CheckFunctions.bc	pass
+map2check_binop_add	func	void (long long, long long, unsigned int, unsigned int, unsigned int, char *)	void (long long, long long, unsigned int, unsigned int, unsigned int, char *)	AnalysisModeOverflow.bc	pass
+map2check_binop_add_uint	func	void (unsigned long long, unsigned long long, unsigned int, unsigned int, unsigned int, char *)	void (unsigned long long, unsigned long long, unsigned int, unsigned int, unsigned int, char *)	AnalysisModeOverflow.bc	pass
+map2check_binop_mul	func	void (long long, long long, unsigned int, unsigned int, unsigned int, char *)	void (long long, long long, unsigned int, unsigned int, unsigned int, char *)	AnalysisModeOverflow.bc	pass
+map2check_binop_mul_uint	func	void (unsigned long long, unsigned long long, unsigned int, unsigned int, unsigned int, char *)	void (unsigned long long, unsigned long long, unsigned int, unsigned int, unsigned int, char *)	AnalysisModeOverflow.bc	pass
+map2check_binop_sdiv	func	void (long long, long long, unsigned int, unsigned int, unsigned int, char *)	void (long long, long long, unsigned int, unsigned int, unsigned int, char *)	AnalysisModeOverflow.bc	pass
+map2check_binop_srem	func	void (long long, long long, unsigned int, unsigned int, unsigned int, char *)	void (long long, long long, unsigned int, unsigned int, unsigned int, char *)	AnalysisModeOverflow.bc	pass
+map2check_binop_sub	func	void (long long, long long, unsigned int, unsigned int, unsigned int, char *)	void (long long, long long, unsigned int, unsigned int, unsigned int, char *)	AnalysisModeOverflow.bc	pass
+map2check_binop_sub_uint	func	void (unsigned long long, unsigned long long, unsigned int, unsigned int, unsigned int, char *)	void (unsigned long long, unsigned long long, unsigned int, unsigned int, unsigned int, char *)	AnalysisModeOverflow.bc	pass
+map2check_calloc	func	void (void *, int, int)	void (void *, int, int)	AnalysisModeMemcleanup.bc+AnalysisModeMemtrack.bc	pass
+map2check_check_cstring	func	void (const char *)	void (const char *)	AnalysisModeMemcleanup.bc+AnalysisModeMemtrack.bc	pass
+map2check_check_deref	func	void (int, const char *)	void (int, const char *)	AnalysisModeMemcleanup.bc+AnalysisModeMemtrack.bc	pass
+map2check_crab_assume	func	void (char)	void (char)	Map2CheckFunctions.bc	pass
+map2check_destroy	func	void ()	void (void)	Map2CheckFunctions.bc	-
+map2check_error	func	void ()	void (void)	Map2CheckFunctions.bc	runtime
+map2check_exit	func	void ()	void (void)	Map2CheckFunctions.bc	-
+map2check_free	func	void (const char *, void *, unsigned int, unsigned int, const char *)	void (const char *, void *, unsigned int, unsigned int, const char *)	AnalysisModeMemcleanup.bc+AnalysisModeMemtrack.bc	pass
+map2check_free_resolved_address	func	void (void *, unsigned int, const char *, short)	void (void *, unsigned int, const char *, short)	AnalysisModeMemcleanup.bc+AnalysisModeMemtrack.bc	pass
+map2check_function	func	void (const char *, void *)	void (const char *, void *)	AnalysisModeMemcleanup.bc+AnalysisModeMemtrack.bc	pass
+map2check_get_current_step	func	unsigned int ()	unsigned int (void)	Map2CheckFunctions.bc	runtime
+map2check_init	func	void (int)	void (int)	Map2CheckFunctions.bc	pass
+map2check_load	func	void (void *, int)	void (void *, int)	AnalysisModeMemcleanup.bc+AnalysisModeMemtrack.bc	pass
+map2check_malloc	func	void (void *, int)	void (void *, int)	AnalysisModeMemcleanup.bc+AnalysisModeMemtrack.bc	pass
+map2check_next_current_step	func	void ()	void (void)	Map2CheckFunctions.bc	runtime
+map2check_non_det_bool	func	bool ()	int (void)	NonDetGeneratorAFL.bc+NonDetGeneratorKlee.bc	pass
+map2check_non_det_char	func	char ()	char (void)	NonDetGeneratorAFL.bc+NonDetGeneratorKlee.bc+NonDetGeneratorNone.bc	pass
+map2check_non_det_double	func	double ()	double (void)	NonDetGeneratorAFL.bc+NonDetGeneratorKlee.bc+NonDetGeneratorNone.bc	pass
+map2check_non_det_float	func	float ()	float (void)	NonDetGeneratorAFL.bc+NonDetGeneratorKlee.bc+NonDetGeneratorNone.bc	pass
+map2check_non_det_int	func	int ()	int (void)	NonDetGeneratorAFL.bc+NonDetGeneratorKlee.bc+NonDetGeneratorNone.bc	pass
+map2check_non_det_loff_t	func	loff_t ()	long (void)	NonDetGeneratorAFL.bc+NonDetGeneratorKlee.bc	pass
+map2check_non_det_long	func	long ()	long (void)	NonDetGeneratorAFL.bc+NonDetGeneratorKlee.bc+NonDetGeneratorNone.bc	pass
+map2check_non_det_longlong	func	longlong ()	long long (void)	NonDetGeneratorAFL.bc+NonDetGeneratorKlee.bc+NonDetGeneratorNone.bc	pass
+map2check_non_det_memory	func	void (void *, size_t)	void (void *, unsigned long)	NonDetGeneratorAFL.bc+NonDetGeneratorKlee.bc+NonDetGeneratorNone.bc	pass
+map2check_non_det_pchar	func	char *()	char *(void)	NonDetGeneratorAFL.bc+NonDetGeneratorKlee.bc	pass
+map2check_non_det_pointer	func	pointer ()	void *(void)	NonDetGeneratorAFL.bc+NonDetGeneratorKlee.bc+NonDetGeneratorNone.bc	pass
+map2check_non_det_sector_t	func	unsigned long ()	unsigned long (void)	NonDetGeneratorAFL.bc+NonDetGeneratorKlee.bc	pass
+map2check_non_det_short	func	short ()	short (void)	NonDetGeneratorAFL.bc+NonDetGeneratorKlee.bc+NonDetGeneratorNone.bc	pass
+map2check_non_det_size_t	func	size_t ()	unsigned long (void)	NonDetGeneratorAFL.bc+NonDetGeneratorKlee.bc	pass
+map2check_non_det_u16	func	u16 ()	unsigned short (void)	NonDetGeneratorAFL.bc+NonDetGeneratorKlee.bc+NonDetGeneratorNone.bc	pass
+map2check_non_det_u32	func	u32 ()	unsigned int (void)	NonDetGeneratorAFL.bc+NonDetGeneratorKlee.bc+NonDetGeneratorNone.bc	pass
+map2check_non_det_u8	func	u8 ()	unsigned char (void)	NonDetGeneratorAFL.bc+NonDetGeneratorKlee.bc+NonDetGeneratorNone.bc	pass
+map2check_non_det_uchar	func	unsigned char ()	unsigned char (void)	NonDetGeneratorAFL.bc+NonDetGeneratorKlee.bc	pass
+map2check_non_det_uint	func	unsigned int ()	unsigned int (void)	NonDetGeneratorAFL.bc+NonDetGeneratorKlee.bc+NonDetGeneratorNone.bc	pass
+map2check_non_det_ulong	func	unsigned long ()	unsigned long (void)	NonDetGeneratorAFL.bc+NonDetGeneratorKlee.bc	pass
+map2check_non_det_ulonglong	func	ulonglong ()	unsigned long long (void)	NonDetGeneratorAFL.bc+NonDetGeneratorKlee.bc+NonDetGeneratorNone.bc	pass
+map2check_non_det_unsigned	func	unsigned int ()	unsigned int (void)	NonDetGeneratorAFL.bc+NonDetGeneratorKlee.bc	pass
+map2check_non_det_ushort	func	ushort ()	unsigned short (void)	NonDetGeneratorAFL.bc+NonDetGeneratorKlee.bc+NonDetGeneratorNone.bc	pass
+map2check_non_static_alloca	func	void (const char *, void *, int, int, int, int)	void (const char *, void *, int, int, int, int)	AnalysisModeMemcleanup.bc+AnalysisModeMemtrack.bc	pass
+map2check_nondet_bool	func	void (unsigned int, unsigned int, int, const char *)	void (unsigned int, unsigned int, int, const char *)	NonDetLog.bc	pass
+map2check_nondet_char	func	void (unsigned int, unsigned int, int, const char *)	void (unsigned int, unsigned int, int, const char *)	NonDetLog.bc	pass
+map2check_nondet_double	func	void (unsigned int, unsigned int, double, const char *)	void (unsigned int, unsigned int, double, const char *)	NonDetLog.bc	pass
+map2check_nondet_float	func	void (unsigned int, unsigned int, double, const char *)	void (unsigned int, unsigned int, double, const char *)	NonDetLog.bc	pass
+map2check_nondet_get_log	func	MAP2CHECK_CONTAINER ()	struct obj4 (void)	NonDetLog.bc	runtime
+map2check_nondet_int	func	void (unsigned int, unsigned int, int, const char *)	void (unsigned int, unsigned int, int, const char *)	NonDetLog.bc	pass
+map2check_nondet_loff_t	func	void (unsigned int, unsigned int, int, const char *)	void (unsigned int, unsigned int, int, const char *)	NonDetLog.bc	pass
+map2check_nondet_long	func	void (unsigned int, unsigned int, int, const char *)	void (unsigned int, unsigned int, int, const char *)	NonDetLog.bc	pass
+map2check_nondet_longlong	func	void (unsigned int, unsigned int, long long, const char *)	void (unsigned int, unsigned int, long long, const char *)	NonDetLog.bc	pass
+map2check_nondet_memory_byte	func	void (unsigned int, unsigned int, int, const char *)	void (unsigned int, unsigned int, int, const char *)	NonDetLog.bc	runtime
+map2check_nondet_pchar	func	void (unsigned int, unsigned int, int, const char *)	void (unsigned int, unsigned int, int, const char *)	NonDetLog.bc	pass
+map2check_nondet_pointer	func	void (unsigned int, unsigned int, int, const char *)	void (unsigned int, unsigned int, int, const char *)	NonDetLog.bc	pass
+map2check_nondet_sector_t	func	void (unsigned int, unsigned int, int, const char *)	void (unsigned int, unsigned int, int, const char *)	NonDetLog.bc	pass
+map2check_nondet_short	func	void (unsigned int, unsigned int, int, const char *)	void (unsigned int, unsigned int, int, const char *)	NonDetLog.bc	pass
+map2check_nondet_size_t	func	void (unsigned int, unsigned int, int, const char *)	void (unsigned int, unsigned int, int, const char *)	NonDetLog.bc	pass
+map2check_nondet_u16	func	void (unsigned int, unsigned int, int, const char *)	void (unsigned int, unsigned int, int, const char *)	NonDetLog.bc	pass
+map2check_nondet_u32	func	void (unsigned int, unsigned int, int, const char *)	void (unsigned int, unsigned int, int, const char *)	NonDetLog.bc	pass
+map2check_nondet_u8	func	void (unsigned int, unsigned int, int, const char *)	void (unsigned int, unsigned int, int, const char *)	NonDetLog.bc	pass
+map2check_nondet_uchar	func	void (unsigned int, unsigned int, int, const char *)	void (unsigned int, unsigned int, int, const char *)	NonDetLog.bc	pass
+map2check_nondet_uint	func	void (unsigned int, unsigned int, int, const char *)	void (unsigned int, unsigned int, int, const char *)	NonDetLog.bc	pass
+map2check_nondet_ulong	func	void (unsigned int, unsigned int, int, const char *)	void (unsigned int, unsigned int, int, const char *)	NonDetLog.bc	pass
+map2check_nondet_ulonglong	func	void (unsigned int, unsigned int, unsigned long long, const char *)	void (unsigned int, unsigned int, unsigned long long, const char *)	NonDetLog.bc	pass
+map2check_nondet_unsigned	func	void (unsigned int, unsigned int, unsigned int, const char *)	void (unsigned int, unsigned int, unsigned int, const char *)	NonDetLog.bc	pass
+map2check_nondet_ushort	func	void (unsigned int, unsigned int, int, const char *)	void (unsigned int, unsigned int, int, const char *)	NonDetLog.bc	pass
+map2check_posix	func	void (void *, int)	void (void *, int)	AnalysisModeMemcleanup.bc+AnalysisModeMemtrack.bc	pass
+map2check_success	func	void ()	void (void)	Map2CheckFunctions.bc	pass
+map2check_target_function	func	void (const char *, int, int)	void (const char *, int, int)	Map2CheckFunctions.bc	pass
+map2check_track_bb	func	void (unsigned int, const char *)	void (unsigned int, const char *)	Map2CheckFunctions.bc	pass
+map2check_wasm_check_access	func	void (uint64_t, uint64_t)	void (unsigned long, unsigned long)	AnalysisModeMemtrack.bc	pass
+map2check_wasm_free	func	void (uint64_t, int)	void (unsigned long, int)	AnalysisModeMemtrack.bc	pass
+map2check_wasm_malloc	func	void (uint64_t, uint64_t)	void (unsigned long, unsigned long)	AnalysisModeMemtrack.bc	pass
+mark_allocation_log	func	char (MAP2CHECK_CONTAINER *, long)	char (struct obj4 *, long)	AllocationLog.bc	-
+mark_deallocation_log	func	char (MAP2CHECK_CONTAINER *, long)	char (struct obj4 *, long)	AllocationLog.bc	-
+mark_heap_log	func	char (MAP2CHECK_CONTAINER *, MEMORY_HEAP_ROW)	char (struct obj4 *, struct obj5)	HeapLog.bc	-
+new_container	func	MAP2CHECK_CONTAINER (enum Container_Type)	struct obj4 (enum Container_Type)	ContainerBTree.bc+ContainerRealloc.bc	runtime
+new_heap_row	func	MEMORY_HEAP_ROW (int, int, void *, int, int, const char *)	struct obj5 (int, int, void *, int, int, const char *)	HeapLog.bc	runtime
+new_list_row	func	LIST_LOG_ROW (long, long, unsigned int, char, char, unsigned int, const char *, const char *, unsigned int)	struct obj (long, long, unsigned int, char, char, unsigned int, const char *, const char *, unsigned int)	ListLog.bc	runtime
+new_memory_row	func	MEMORY_ALLOCATIONS_ROW (long, char)	struct obj2 (long, char)	AllocationLog.bc	runtime
+new_nondet_call	func	NONDET_CALL (enum NONDET_TYPE, unsigned int, unsigned int, void *, const char *, unsigned int)	struct obj3 (enum NONDET_TYPE, unsigned int, unsigned int, void *, const char *, unsigned int)	NonDetLog.bc	-
+nondet_assume	func	void (int)	void (int)	NonDetGeneratorAFL.bc+NonDetGeneratorKlee.bc+NonDetGeneratorNone.bc	runtime
+nondet_cancel	func	void ()	void (void)	NonDetGeneratorAFL.bc	-
+nondet_destroy	func	void ()	void (void)	NonDetGeneratorAFL.bc+NonDetGeneratorKlee.bc+NonDetGeneratorNone.bc	runtime
+nondet_generate_aux_witness_files	func	void ()	void (void)	NonDetGeneratorAFL.bc+NonDetGeneratorKlee.bc+NonDetGeneratorNone.bc	runtime
+nondet_init	func	void ()	void (void)	NonDetGeneratorAFL.bc+NonDetGeneratorKlee.bc+NonDetGeneratorNone.bc	runtime
+nondet_log	data	MAP2CHECK_CONTAINER	struct obj4	NonDetLog.bc	-
+nondet_log_destroy	func	void ()	void (void)	NonDetLog.bc	runtime
+nondet_log_init	func	void ()	void (void)	NonDetLog.bc	runtime
+nondet_log_to_file	func	char (MAP2CHECK_CONTAINER)	char (struct obj4)	NonDetLog.bc	runtime
+overflowError	func	void (unsigned int, const char *)	void (unsigned int, const char *)	AnalysisModeOverflow.bc	pass
+release_unreleased_addresses	func	void (MAP2CHECK_CONTAINER *)	void (struct obj4 *)	AllocationLog.bc	-
+sv_comp	data	char	char	Map2CheckFunctions.bc	-
+trackbb_log	data	MAP2CHECK_CONTAINER	struct obj4	Map2CheckFunctions.bc	-
+trackbb_log_file	data	const char *	const char *	TrackBBLog.bc	-
+trackbb_log_to_file	func	void (MAP2CHECK_CONTAINER *)	void (struct obj4 *)	TrackBBLog.bc	runtime
+trackbb_new_row	func	TRACK_BB_ROW (unsigned int, const char *)	struct obj6 (unsigned int, const char *)	TrackBBLog.bc	runtime
+unknown_not_supported	func	void ()	void (void)	AnalysisModeOverflow.bc	-
+update_reference_list_log	func	void (long, enum MemoryAddressStatus, unsigned int)	void (long, enum MemoryAddressStatus, unsigned int)	AnalysisModeMemcleanup.bc+AnalysisModeMemtrack.bc	-
+valid_allocation_log	func	long (MAP2CHECK_CONTAINER *)	long (struct obj4 *)	AllocationLog.bc	runtime
+violated_property_file	data	const char *	const char *	PropertyGenerator.bc	-
+violated_property_file_assert	data	const char *	const char *	PropertyGenerator.bc	-
+violated_property_file_deref	data	const char *	const char *	PropertyGenerator.bc	-
+violated_property_file_free	data	const char *	const char *	PropertyGenerator.bc	-
+violated_property_file_memcleanup	data	const char *	const char *	PropertyGenerator.bc	-
+violated_property_file_memtrack	data	const char *	const char *	PropertyGenerator.bc	-
+violated_property_file_overflow	data	const char *	const char *	PropertyGenerator.bc	-
+violated_property_file_unknown	data	const char *	const char *	PropertyGenerator.bc	-
+w2c_wasi__snapshot__preview1_proc_exit	func	void (struct w2c_wasi__snapshot__preview1 *, uint32_t)	void (struct w2c_wasi__snapshot__preview1 *, unsigned int)	WasmRuntimeStubs.bc	external
+wasm_rt_allocate_funcref_table	func	void (wasm_rt_funcref_table_t *, uint32_t, uint32_t)	void (struct wasm_rt_funcref_table_t *, unsigned int, unsigned int)	WasmRuntimeStubs.bc	external
+wasm_rt_allocate_memory	func	void (wasm_rt_memory_t *, uint64_t, uint64_t, bool, uint32_t)	void (struct wasm_rt_memory_t *, unsigned long, unsigned long, _Bool, unsigned int)	WasmRuntimeStubs.bc	external
+wasm_rt_free	func	void (void)	void (void)	WasmRuntimeStubs.bc	external
+wasm_rt_free_funcref_table	func	void (wasm_rt_funcref_table_t *)	void (struct wasm_rt_funcref_table_t *)	WasmRuntimeStubs.bc	external
+wasm_rt_free_memory	func	void (wasm_rt_memory_t *)	void (struct wasm_rt_memory_t *)	WasmRuntimeStubs.bc	external
+wasm_rt_grow_memory	func	uint64_t (wasm_rt_memory_t *, uint64_t)	unsigned long (struct wasm_rt_memory_t *, unsigned long)	WasmRuntimeStubs.bc	external
+wasm_rt_init	func	void (void)	void (void)	WasmRuntimeStubs.bc	external
+wasm_rt_is_initialized	func	bool (void)	_Bool (void)	WasmRuntimeStubs.bc	external
+wasm_rt_trap	func	void (wasm_rt_trap_t)	void (enum wasm_rt_trap_t)	WasmRuntimeStubs.bc	external
+write_property	func	void (enum ViolatedProperty, int, const char *)	void (enum ViolatedProperty, int, const char *)	PropertyGenerator.bc	runtime
+write_property_assert	func	void (int, const char *)	void (int, const char *)	PropertyGenerator.bc	-
+write_property_deref	func	void (int, const char *)	void (int, const char *)	PropertyGenerator.bc	runtime
+write_property_free	func	void (int, const char *)	void (int, const char *)	PropertyGenerator.bc	runtime
+write_property_memcleanup	func	void ()	void (void)	PropertyGenerator.bc	runtime
+write_property_memtrack	func	void ()	void (void)	PropertyGenerator.bc	runtime
+write_property_overflow	func	void (int, const char *)	void (int, const char *)	PropertyGenerator.bc	-
+write_property_unknown	func	void ()	void (void)	PropertyGenerator.bc	runtime

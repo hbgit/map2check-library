@@ -1,193 +1,193 @@
-symbol	status	rust_signature
-B_TREE_CREATE	missing	-
-B_TREE_FREE	missing	-
-B_TREE_INSERT	missing	-
-B_TREE_INSERT_NONFULL	missing	-
-B_TREE_PAGE_CREATE	missing	-
-B_TREE_SEARCH	missing	-
-B_TREE_SPLIT_CHILD	missing	-
-CHECK_AND_RELEASE_PAGES	missing	-
-DISK_READ	missing	-
-DISK_WRITE	missing	-
-DumpTree	missing	-
-DumpTreeHelper	missing	-
-DumpTreePage	missing	-
-DumpTreePageChildren	missing	-
-ERROR_DEREF	missing	-
-Map2CheckCurrentStep	missing	-
-__VERIFIER_assert	different	void (int32_t)
-__VERIFIER_error	different	void (void)
-__afl_fuzz_alt	missing	-
-__afl_fuzz_alt_ptr	missing	-
-__afl_sharedmem_fuzzing	missing	-
-allocation_log	missing	-
-allocation_log_to_file	missing	-
-analysis_destroy	missing	-
-analysis_generate_aux_witness_files	missing	-
-analysis_init	missing	-
-analysis_is_program_correct	missing	-
-append_element	missing	-
-check_address_allocation_log	missing	-
-divisionByZeroError	missing	-
-find_row_with_address	missing	-
-free_container	missing	-
-generate_aux_files	missing	-
-generate_confirmation_file	missing	-
-get_element_at	missing	-
-get_next_input_from_afl	missing	-
-get_old_reference	missing	-
-get_type_from_list_log_row	missing	-
-gotError	missing	-
-heap_log	missing	-
-heap_log_file	missing	-
-heap_log_to_file	missing	-
-helper_map2check_nondet_append_element	missing	-
-is_deref_error	missing	-
-is_in_tracked	missing	-
-is_invalid_free	missing	-
-is_memcleanup_error	missing	-
-is_valid_allocation_address	missing	-
-is_valid_heap_address	missing	-
-klee_log_file	missing	-
-list_log	missing	-
-list_log_file	missing	-
-list_log_to_file	missing	-
-main	missing	-
-map2check_add_store_pointer	missing	-
-map2check_afl_data	missing	-
-map2check_afl_size	missing	-
-map2check_alloca	missing	-
-map2check_assert	missing	-
-map2check_assume	missing	-
-map2check_assume_loop	missing	-
-map2check_binop_add	missing	-
-map2check_binop_add_uint	missing	-
-map2check_binop_mul	missing	-
-map2check_binop_mul_uint	missing	-
-map2check_binop_sdiv	missing	-
-map2check_binop_srem	missing	-
-map2check_binop_sub	missing	-
-map2check_binop_sub_uint	missing	-
-map2check_calloc	missing	-
-map2check_check_cstring	missing	-
-map2check_check_deref	different	void (const void *, uint32_t, uint32_t, const char *)
-map2check_crab_assume	missing	-
-map2check_destroy	missing	-
-map2check_error	missing	-
-map2check_exit	missing	-
-map2check_free	missing	-
-map2check_free_resolved_address	missing	-
-map2check_function	missing	-
-map2check_get_current_step	missing	-
-map2check_init	different	void (void)
-map2check_load	missing	-
-map2check_malloc	missing	-
-map2check_next_current_step	missing	-
-map2check_non_det_bool	missing	-
-map2check_non_det_char	missing	-
-map2check_non_det_double	missing	-
-map2check_non_det_float	missing	-
-map2check_non_det_int	missing	-
-map2check_non_det_loff_t	missing	-
-map2check_non_det_long	missing	-
-map2check_non_det_longlong	missing	-
-map2check_non_det_memory	missing	-
-map2check_non_det_pchar	missing	-
-map2check_non_det_pointer	missing	-
-map2check_non_det_sector_t	missing	-
-map2check_non_det_short	missing	-
-map2check_non_det_size_t	missing	-
-map2check_non_det_u16	missing	-
-map2check_non_det_u32	missing	-
-map2check_non_det_u8	missing	-
-map2check_non_det_uchar	missing	-
-map2check_non_det_uint	missing	-
-map2check_non_det_ulong	missing	-
-map2check_non_det_ulonglong	missing	-
-map2check_non_det_unsigned	missing	-
-map2check_non_det_ushort	missing	-
-map2check_non_static_alloca	missing	-
-map2check_nondet_bool	missing	-
-map2check_nondet_char	missing	-
-map2check_nondet_double	missing	-
-map2check_nondet_float	missing	-
-map2check_nondet_get_log	missing	-
-map2check_nondet_int	missing	-
-map2check_nondet_loff_t	missing	-
-map2check_nondet_long	missing	-
-map2check_nondet_longlong	missing	-
-map2check_nondet_memory_byte	missing	-
-map2check_nondet_pchar	missing	-
-map2check_nondet_pointer	missing	-
-map2check_nondet_sector_t	missing	-
-map2check_nondet_short	missing	-
-map2check_nondet_size_t	missing	-
-map2check_nondet_u16	missing	-
-map2check_nondet_u32	missing	-
-map2check_nondet_u8	missing	-
-map2check_nondet_uchar	missing	-
-map2check_nondet_uint	missing	-
-map2check_nondet_ulong	missing	-
-map2check_nondet_ulonglong	missing	-
-map2check_nondet_unsigned	missing	-
-map2check_nondet_ushort	missing	-
-map2check_posix	missing	-
-map2check_success	different	void (void)
-map2check_target_function	missing	-
-map2check_track_bb	missing	-
-map2check_wasm_check_access	same	void (uint64_t, uint64_t)
-map2check_wasm_free	different	void (uint64_t, int64_t)
-map2check_wasm_malloc	same	void (uint64_t, uint64_t)
-mark_allocation_log	missing	-
-mark_deallocation_log	missing	-
-mark_heap_log	missing	-
-new_container	missing	-
-new_heap_row	missing	-
-new_list_row	missing	-
-new_memory_row	missing	-
-new_nondet_call	missing	-
-nondet_assume	missing	-
-nondet_cancel	missing	-
-nondet_destroy	missing	-
-nondet_generate_aux_witness_files	missing	-
-nondet_init	missing	-
-nondet_log	missing	-
-nondet_log_destroy	missing	-
-nondet_log_init	missing	-
-nondet_log_to_file	missing	-
-overflowError	missing	-
-release_unreleased_addresses	missing	-
-sv_comp	missing	-
-trackbb_log	missing	-
-trackbb_log_file	missing	-
-trackbb_log_to_file	missing	-
-trackbb_new_row	missing	-
-unknown_not_supported	missing	-
-update_reference_list_log	missing	-
-valid_allocation_log	missing	-
-violated_property_file	missing	-
-violated_property_file_assert	missing	-
-violated_property_file_deref	missing	-
-violated_property_file_free	missing	-
-violated_property_file_memcleanup	missing	-
-violated_property_file_memtrack	missing	-
-violated_property_file_overflow	missing	-
-violated_property_file_unknown	missing	-
-w2c_wasi__snapshot__preview1_proc_exit	different	(not declared in header)
-wasm_rt_allocate_funcref_table	different	(not declared in header)
-wasm_rt_allocate_memory	different	(not declared in header)
-wasm_rt_free	different	(not declared in header)
-wasm_rt_free_funcref_table	different	(not declared in header)
-wasm_rt_free_memory	different	(not declared in header)
-wasm_rt_grow_memory	different	(not declared in header)
-wasm_rt_init	different	(not declared in header)
-wasm_rt_is_initialized	different	(not declared in header)
-wasm_rt_trap	different	(not declared in header)
-write_property	missing	-
-write_property_assert	missing	-
-write_property_deref	missing	-
-write_property_free	missing	-
-write_property_memcleanup	missing	-
-write_property_memtrack	missing	-
-write_property_overflow	missing	-
-write_property_unknown	missing	-
+symbol	status	rust_signature	rust_canonical_signature
+B_TREE_CREATE	missing	-	-
+B_TREE_FREE	missing	-	-
+B_TREE_INSERT	missing	-	-
+B_TREE_INSERT_NONFULL	missing	-	-
+B_TREE_PAGE_CREATE	missing	-	-
+B_TREE_SEARCH	missing	-	-
+B_TREE_SPLIT_CHILD	missing	-	-
+CHECK_AND_RELEASE_PAGES	missing	-	-
+DISK_READ	missing	-	-
+DISK_WRITE	missing	-	-
+DumpTree	missing	-	-
+DumpTreeHelper	missing	-	-
+DumpTreePage	missing	-	-
+DumpTreePageChildren	missing	-	-
+ERROR_DEREF	missing	-	-
+Map2CheckCurrentStep	missing	-	-
+__VERIFIER_assert	same	void (int32_t)	void (int)
+__VERIFIER_error	same	void (void)	void (void)
+__afl_fuzz_alt	missing	-	-
+__afl_fuzz_alt_ptr	missing	-	-
+__afl_sharedmem_fuzzing	missing	-	-
+allocation_log	missing	-	-
+allocation_log_to_file	missing	-	-
+analysis_destroy	missing	-	-
+analysis_generate_aux_witness_files	missing	-	-
+analysis_init	missing	-	-
+analysis_is_program_correct	missing	-	-
+append_element	missing	-	-
+check_address_allocation_log	missing	-	-
+divisionByZeroError	missing	-	-
+find_row_with_address	missing	-	-
+free_container	missing	-	-
+generate_aux_files	missing	-	-
+generate_confirmation_file	missing	-	-
+get_element_at	missing	-	-
+get_next_input_from_afl	missing	-	-
+get_old_reference	missing	-	-
+get_type_from_list_log_row	missing	-	-
+gotError	missing	-	-
+heap_log	missing	-	-
+heap_log_file	missing	-	-
+heap_log_to_file	missing	-	-
+helper_map2check_nondet_append_element	missing	-	-
+is_deref_error	missing	-	-
+is_in_tracked	missing	-	-
+is_invalid_free	missing	-	-
+is_memcleanup_error	missing	-	-
+is_valid_allocation_address	missing	-	-
+is_valid_heap_address	missing	-	-
+klee_log_file	missing	-	-
+list_log	missing	-	-
+list_log_file	missing	-	-
+list_log_to_file	missing	-	-
+main	missing	-	-
+map2check_add_store_pointer	missing	-	-
+map2check_afl_data	missing	-	-
+map2check_afl_size	missing	-	-
+map2check_alloca	missing	-	-
+map2check_assert	missing	-	-
+map2check_assume	missing	-	-
+map2check_assume_loop	missing	-	-
+map2check_binop_add	missing	-	-
+map2check_binop_add_uint	missing	-	-
+map2check_binop_mul	missing	-	-
+map2check_binop_mul_uint	missing	-	-
+map2check_binop_sdiv	missing	-	-
+map2check_binop_srem	missing	-	-
+map2check_binop_sub	missing	-	-
+map2check_binop_sub_uint	missing	-	-
+map2check_calloc	missing	-	-
+map2check_check_cstring	missing	-	-
+map2check_check_deref	different	void (const void *, uint32_t, uint32_t, const char *)	void (const void *, unsigned int, unsigned int, const char *)
+map2check_crab_assume	missing	-	-
+map2check_destroy	missing	-	-
+map2check_error	missing	-	-
+map2check_exit	missing	-	-
+map2check_free	missing	-	-
+map2check_free_resolved_address	missing	-	-
+map2check_function	missing	-	-
+map2check_get_current_step	missing	-	-
+map2check_init	different	void (void)	void (void)
+map2check_load	missing	-	-
+map2check_malloc	missing	-	-
+map2check_next_current_step	missing	-	-
+map2check_non_det_bool	missing	-	-
+map2check_non_det_char	missing	-	-
+map2check_non_det_double	missing	-	-
+map2check_non_det_float	missing	-	-
+map2check_non_det_int	missing	-	-
+map2check_non_det_loff_t	missing	-	-
+map2check_non_det_long	missing	-	-
+map2check_non_det_longlong	missing	-	-
+map2check_non_det_memory	missing	-	-
+map2check_non_det_pchar	missing	-	-
+map2check_non_det_pointer	missing	-	-
+map2check_non_det_sector_t	missing	-	-
+map2check_non_det_short	missing	-	-
+map2check_non_det_size_t	missing	-	-
+map2check_non_det_u16	missing	-	-
+map2check_non_det_u32	missing	-	-
+map2check_non_det_u8	missing	-	-
+map2check_non_det_uchar	missing	-	-
+map2check_non_det_uint	missing	-	-
+map2check_non_det_ulong	missing	-	-
+map2check_non_det_ulonglong	missing	-	-
+map2check_non_det_unsigned	missing	-	-
+map2check_non_det_ushort	missing	-	-
+map2check_non_static_alloca	missing	-	-
+map2check_nondet_bool	missing	-	-
+map2check_nondet_char	missing	-	-
+map2check_nondet_double	missing	-	-
+map2check_nondet_float	missing	-	-
+map2check_nondet_get_log	missing	-	-
+map2check_nondet_int	missing	-	-
+map2check_nondet_loff_t	missing	-	-
+map2check_nondet_long	missing	-	-
+map2check_nondet_longlong	missing	-	-
+map2check_nondet_memory_byte	missing	-	-
+map2check_nondet_pchar	missing	-	-
+map2check_nondet_pointer	missing	-	-
+map2check_nondet_sector_t	missing	-	-
+map2check_nondet_short	missing	-	-
+map2check_nondet_size_t	missing	-	-
+map2check_nondet_u16	missing	-	-
+map2check_nondet_u32	missing	-	-
+map2check_nondet_u8	missing	-	-
+map2check_nondet_uchar	missing	-	-
+map2check_nondet_uint	missing	-	-
+map2check_nondet_ulong	missing	-	-
+map2check_nondet_ulonglong	missing	-	-
+map2check_nondet_unsigned	missing	-	-
+map2check_nondet_ushort	missing	-	-
+map2check_posix	missing	-	-
+map2check_success	same	void (void)	void (void)
+map2check_target_function	missing	-	-
+map2check_track_bb	missing	-	-
+map2check_wasm_check_access	same	void (uint64_t, uint64_t)	void (unsigned long, unsigned long)
+map2check_wasm_free	different	void (uint64_t, int64_t)	void (unsigned long, long)
+map2check_wasm_malloc	same	void (uint64_t, uint64_t)	void (unsigned long, unsigned long)
+mark_allocation_log	missing	-	-
+mark_deallocation_log	missing	-	-
+mark_heap_log	missing	-	-
+new_container	missing	-	-
+new_heap_row	missing	-	-
+new_list_row	missing	-	-
+new_memory_row	missing	-	-
+new_nondet_call	missing	-	-
+nondet_assume	missing	-	-
+nondet_cancel	missing	-	-
+nondet_destroy	missing	-	-
+nondet_generate_aux_witness_files	missing	-	-
+nondet_init	missing	-	-
+nondet_log	missing	-	-
+nondet_log_destroy	missing	-	-
+nondet_log_init	missing	-	-
+nondet_log_to_file	missing	-	-
+overflowError	missing	-	-
+release_unreleased_addresses	missing	-	-
+sv_comp	missing	-	-
+trackbb_log	missing	-	-
+trackbb_log_file	missing	-	-
+trackbb_log_to_file	missing	-	-
+trackbb_new_row	missing	-	-
+unknown_not_supported	missing	-	-
+update_reference_list_log	missing	-	-
+valid_allocation_log	missing	-	-
+violated_property_file	missing	-	-
+violated_property_file_assert	missing	-	-
+violated_property_file_deref	missing	-	-
+violated_property_file_free	missing	-	-
+violated_property_file_memcleanup	missing	-	-
+violated_property_file_memtrack	missing	-	-
+violated_property_file_overflow	missing	-	-
+violated_property_file_unknown	missing	-	-
+w2c_wasi__snapshot__preview1_proc_exit	undeclared	-	-
+wasm_rt_allocate_funcref_table	undeclared	-	-
+wasm_rt_allocate_memory	undeclared	-	-
+wasm_rt_free	undeclared	-	-
+wasm_rt_free_funcref_table	undeclared	-	-
+wasm_rt_free_memory	undeclared	-	-
+wasm_rt_grow_memory	undeclared	-	-
+wasm_rt_init	undeclared	-	-
+wasm_rt_is_initialized	undeclared	-	-
+wasm_rt_trap	undeclared	-	-
+write_property	missing	-	-
+write_property_assert	missing	-	-
+write_property_deref	missing	-	-
+write_property_free	missing	-	-
+write_property_memcleanup	missing	-	-
+write_property_memtrack	missing	-	-
+write_property_overflow	missing	-	-
+write_property_unknown	missing	-	-
