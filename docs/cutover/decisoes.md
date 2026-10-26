@@ -266,3 +266,7 @@ The C tests drove internal containers with no Rust export, so each assertion goe
 - **D2** (wasm portado) e **D3** (`--btree` usa o mesmo container Rust, sem mudança observável) continuam valendo.
 
 Plano: [docs/superpowers/plans/2026-10-26-runtime-drop-in-map2check.md](../superpowers/plans/2026-10-26-runtime-drop-in-map2check.md).
+
+## Linha de base do C: `array-examples/relax-1` com afl é ERROR (Task 0.4)
+
+**2026-10-26.** Na linha de base `docs/cutover/baselines/c-3e914528ec57.tsv`, a chave `array-examples/relax-1 valid-memsafety afl` dá `ERROR` em 5 de 5 repetições: o frontend C do Map2Check develop aborta logo após o AFL++ ("AFL++ ran: 42 executions", depois "timeout: the monitored command dumped core") sem imprimir linha `VERIFICATION`. É comportamento do C, determinístico, e o gate o trata como um veredito comum. Se o runtime Rust divergir nessa chave (p.ex. dar UNKNOWN ou FAILED), a divergência só passa com um `SD-xx` em `docs/semantic-deltas.md` e uma linha em `docs/cutover/deltas-aceitos.tsv`. Reproduzir o `ERROR` fazendo o runtime Rust abortar de propósito é proibido.

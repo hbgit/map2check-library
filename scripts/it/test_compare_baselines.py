@@ -61,6 +61,8 @@ class CompareBaselinesTest(unittest.TestCase):
         self._yml("d/safe", [("valid-memsafety", "true", None)])
         self._yml("d/bug", [("valid-memsafety", "false", "valid-free")])
         self._yml("d/reach", [("unreach-call", "false", None)])
+        for t in ("d/x", "d/t0", "d/t1", "d/t2", "d/t3", "d/t4"):
+            self._yml(t, [("valid-memsafety", "true", None)])
 
     def tearDown(self):
         shutil.rmtree(self.tmp)
@@ -123,6 +125,43 @@ class CompareBaselinesTest(unittest.TestCase):
         for name in ("keys", "verdict", "failed-details", "witness", "expected",
                      "deltas", "wall", "timeouts", "rss"):
             self.assertIn("PASS", self.criterion(out, name))
+
+    def test_rep_count_mismatch_fails(self):
+        c = rows("d/safe")
+        r = rows("d/safe", verdicts=("SUCCEEDED",) * 4)
+        code, out = self.run_gate(c, r)
+        line = self.criterion(out, "reps")
+        self.assertIn("FAIL", line)
+        self.assertIn("d/safe", line)
+        self.assertGate(code, out, False)
+
+    def test_rep_count_equal_passes(self):
+        code, out = self.run_gate(self.base(), self.base())
+        self.assertIn("PASS", self.criterion(out, "reps"))
+
+    def _expect_exit2(self, corpus, lines):
+        c = self._tsv("c.tsv", lines)
+        err = io.StringIO()
+        with self.assertRaises(SystemExit) as cm:
+            with contextlib.redirect_stderr(err), contextlib.redirect_stdout(io.StringIO()):
+                cb.main([c, c, "--deltas", self.deltas,
+                         "--semantic-deltas", self.semantic, "--corpus", corpus])
+        self.assertEqual(cm.exception.code, 2)
+        return err.getvalue()
+
+    def test_missing_corpus_exits_2(self):
+        msg = self._expect_exit2(os.path.join(self.tmp, "nope"), rows("d/safe"))
+        self.assertIn("expected_verdict", msg)
+
+    def test_corpus_without_yml_exits_2(self):
+        empty = os.path.join(self.tmp, "empty")
+        os.makedirs(empty)
+        msg = self._expect_exit2(empty, rows("d/safe"))
+        self.assertIn("expected_verdict", msg)
+
+    def test_key_without_expectation_exits_2(self):
+        msg = self._expect_exit2(self.corpus, rows("d/unlisted"))
+        self.assertIn("d/unlisted", msg)
 
     def test_missing_key_fails(self):
         code, out = self.run_gate(self.base(), rows("d/safe"))

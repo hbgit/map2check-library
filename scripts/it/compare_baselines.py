@@ -13,6 +13,9 @@ Entradas: TSVs de 11 colunas produzidos por scripts/it/run-corpus.sh
 Os vereditos esperados vêm dos .yml do corpus (--corpus; padrão: a cópia
 somente leitura em vendor/map2check), não do TSV: task é o caminho do .yml
 relativo ao corpus sem a extensão e prp é o nome do .prp sem a extensão.
+Corpus ausente, sem nenhum expected_verdict, ou chave (task, prp) dos TSVs
+sem expectativa no corpus: erro, código de saída 2 (o critério `expected`
+nunca passa por vacuidade).
 
 Agregação: cada chave (task, prp, gen) é reduzida pela moda das repetições
 (veredito; witness; (tag, line, function) entre as repetições FAILED). Empate
@@ -22,6 +25,7 @@ as razões rust/c por chave entram numa mediana global.
 
 Critérios (uma linha cada, `<nome>: PASS|FAIL <detalhe>`):
   keys            mesmo conjunto de chaves nos dois TSVs
+  reps            mesmo número de repetições por chave nos dois TSVs
   verdict         veredito por moda igual
   failed-details  tag, line e function iguais quando ambos dão FAILED
   witness         witness presente onde o C gerou um
@@ -105,6 +109,7 @@ def aggregate(rows):
             "witness": mode([r["witness"] for r in rs]),
             "wall": statistics.median(float(r["wall_s"]) for r in rs),
             "rss": statistics.median(float(r["maxrss_kb"]) for r in rs),
+            "reps": len(rs),
         }
     return out
 
@@ -118,7 +123,8 @@ def load_expected(corpus):
     """{(task, prp): (expected_verdict, subproperty|None)} lido dos .yml."""
     out = {}
     if not corpus or not os.path.isdir(corpus):
-        return out
+        die("corpus %r não existe: sem ele não há expected_verdict "
+            "(use --corpus <dir sv-benchmarks>)" % corpus)
     for dirpath, _, files in os.walk(corpus):
         for name in files:
             if not name.endswith(".yml"):
@@ -141,6 +147,8 @@ def load_expected(corpus):
                     m = re.match(r"subproperty:\s*(\S+)", line)
                     if m and prp and (task, prp) in out:
                         out[(task, prp)] = (out[(task, prp)][0], m.group(1).strip("'\""))
+    if not out:
+        die("nenhum expected_verdict lido de %r (nenhum .yml de tarefa)" % corpus)
     return out
 
 
@@ -169,6 +177,11 @@ def main(argv=None):
     deltas = read_tsv(a.deltas, DELTA_COLUMNS)
     known_sd = sd_ids(a.semantic_deltas)
     expected = load_expected(a.corpus)
+    missing = sorted({(k[0], k[1]) for k in set(c) | set(r)} - set(expected))
+    if missing:
+        die("sem expected_verdict no corpus para: " +
+            ", ".join("%s %s" % m for m in missing[:10]) +
+            (" ..." if len(missing) > 10 else ""))
 
     lines, failed = [], False
 
@@ -190,6 +203,11 @@ def main(argv=None):
     report("keys", not only_c and not only_r,
            "(%d C, %d Rust, só C: %d, só Rust: %d)" % (len(c), len(r), len(only_c), len(only_r)))
     common = sorted(set(c) & set(r))
+    rep_diff = ["%s %s %s %d->%d" % (k + (c[k]["reps"], r[k]["reps"]))
+                for k in common if c[k]["reps"] != r[k]["reps"]]
+    report("reps", not rep_diff,
+           "(%d chaves com contagem diferente)%s" % (
+               len(rep_diff), " " + "; ".join(rep_diff[:5]) if rep_diff else ""))
 
     def diverge(fields):
         bad, ok_acc = [], 0
