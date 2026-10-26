@@ -55,6 +55,19 @@ jobs:
       - name: Verificar ausência de artefatos da era C
         run: scripts/check-no-c-era-artifacts.sh
 
+      - name: Testar guarda de cobertura da ABI do runtime C
+        run: scripts/test-runtime-abi-coverage.sh
+
+      - name: Conferir assinaturas contra os headers do runtime C
+        run: |
+          test -d vendor/map2check/modules/backend/library/header || scripts/fetch-map2check.sh
+          tests/abi/check-signatures.sh vendor/map2check/modules/backend/library/header
+
+      - name: Conferir cobertura da ABI do runtime C (pending.txt)
+        run: |
+          cargo build --release --all-features
+          scripts/runtime-abi-coverage.sh
+
       - name: Instalar cargo-tarpaulin
         uses: taiki-e/install-action@v2
         with:
