@@ -128,10 +128,22 @@ for sym in ("analysis_init", "analysis_destroy", "analysis_is_program_correct",
                                                  "mul_uint", "sdiv", "srem"))):
     IMPLEMENTED[("AnalysisModeOverflow", sym)] = f"__m2c_rt_overflow_{sym}"
 
+# AnalysisModeAssert.c and AnalysisModeNone.c (Task 2.4): the four analysis_*
+# functions of each module, plus map2check_assert. __VERIFIER_assert has no
+# core entry point: its C body is empty (see C_EMPTY). analysis_init selects
+# the mode (the none module serves REACHABILITY_MODE and COVER_BRANCHES_MODE).
+for _mode, _module in (("assert", "AnalysisModeAssert"), ("none", "AnalysisModeNone")):
+    for sym in ("analysis_init", "analysis_destroy", "analysis_is_program_correct",
+                "analysis_generate_aux_witness_files"):
+        IMPLEMENTED[(_module, sym)] = f"__m2c_rt_{_mode}_{sym}"
+IMPLEMENTED[("AnalysisModeAssert", "map2check_assert")] = "__m2c_rt_assert_map2check_assert"
+
 # Functions whose C body is empty, so the unmarked empty define is the C
 # behaviour, not a stub: WitnessGenerationNone.c ("DO NOTHING").
+# AnalysisModeAssert.c:25-27 __VERIFIER_assert ("DO NOTHING").
 C_EMPTY = {("WitnessGenerationNone", "generate_aux_files"),
-           ("WitnessGenerationNone", "generate_confirmation_file")}
+           ("WitnessGenerationNone", "generate_confirmation_file"),
+           ("AnalysisModeAssert", "__VERIFIER_assert")}
 
 # Modules whose symbols are all runtime-internal C helpers (container rows by
 # value, log files): the Rust core keeps that logic private, so the module is

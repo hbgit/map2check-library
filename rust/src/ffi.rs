@@ -863,6 +863,122 @@ pub extern "C" fn __m2c_rt_overflow_map2check_binop_mul_uint(
     );
 }
 
+// ── C runtime ABI: AnalysisModeAssert and AnalysisModeNone (core entry points, D7) ──
+//
+// `AnalysisModeAssert.c` and `AnalysisModeNone.c` of Map2Check `develop`. As
+// for the overflow mode, the C names (`analysis_*`, `map2check_assert`,
+// `__VERIFIER_assert`) are defined only by the generated IR modules
+// `AnalysisModeAssert.bc` and `AnalysisModeNone.bc`
+// (`scripts/runtime-ir/gen_ll.py`), never by this library. `__VERIFIER_assert`
+// is an empty function in the IR (`AnalysisModeAssert.c:25-27`), so it has no
+// core entry point. `analysis_init` of both modules forwards to the entry
+// point that selects the mode: linking the module is what picks it in C
+// (`caller.cpp:575-612`). `REACHABILITY_MODE` and `COVER_BRANCHES_MODE` both
+// link `AnalysisModeNone.c`, so they cannot be told apart at link time; the
+// none module selects `AnalysisMode_None`, whose checks are all inactive,
+// exactly as the C module defines no check.
+
+/// `analysis_init` of the assert mode (`AnalysisModeAssert.c:29-31`). The C
+/// body is empty; the core entry point selects `AnalysisMode_Assert`
+/// (result files and abort on the first violation, SD-14). Nothing else
+/// changes.
+#[no_mangle]
+pub extern "C" fn __m2c_rt_assert_analysis_init() {
+    ffi_guard(
+        || state::update_config(|c| c.mode = Some(AnalysisMode::Assert)),
+        (),
+    );
+}
+
+/// `analysis_destroy` of the assert mode (`AnalysisModeAssert.c:33-35`):
+/// empty.
+#[no_mangle]
+pub extern "C" fn __m2c_rt_assert_analysis_destroy() {
+    ffi_guard(|| (), ());
+}
+
+/// `analysis_is_program_correct` of the assert mode
+/// (`AnalysisModeAssert.c:37`): always TRUE (1).
+#[no_mangle]
+pub extern "C" fn __m2c_rt_assert_analysis_is_program_correct() -> std::os::raw::c_char {
+    ffi_guard(|| 1, 1)
+}
+
+/// `analysis_generate_aux_witness_files` of the assert mode
+/// (`AnalysisModeAssert.c:39-41`): empty.
+#[no_mangle]
+pub extern "C" fn __m2c_rt_assert_analysis_generate_aux_witness_files() {
+    ffi_guard(|| (), ());
+}
+
+/// `map2check_assert` (`AnalysisModeAssert.c:18-23`): when `condition` is 0,
+/// `write_property(ASSERT, line, func_name)` and `map2check_error()`. Here:
+/// records `ASSERT` at `line` in `func_name` (the first violation stays
+/// final, SD-03); with a mode set the property files are written and the
+/// process aborts. NULL reads as "". No mode gate: linking the module is the
+/// mode.
+///
+/// # Safety
+/// `func_name` must be null or a valid null-terminated C string.
+#[no_mangle]
+pub unsafe extern "C" fn __m2c_rt_assert_map2check_assert(
+    condition: std::os::raw::c_int,
+    line: std::os::raw::c_int,
+    func_name: *const std::os::raw::c_char,
+) {
+    ffi_guard(
+        || {
+            // SAFETY: caller guarantees func_name is a valid C string or null.
+            let fname = unsafe { c_str(func_name) };
+            let ctx = VccContext::new(line as u32, 0, fname);
+            match (AssertChecker {
+                expression: condition,
+            })
+            .check(&ctx)
+            {
+                Ok(crate::analysismode::VccOutcome::Violated { property }) => {
+                    record_violation(property, line as u32, fname, false);
+                }
+                Ok(crate::analysismode::VccOutcome::Safe) => {}
+                Err(e) => log_error(&e),
+            }
+        },
+        (),
+    );
+}
+
+/// `analysis_init` of the none mode (`AnalysisModeNone.c:11-13`). The C body
+/// is empty; the core entry point selects `AnalysisMode_None`, which turns on
+/// the result files and the abort of the first violation (SD-14), so that
+/// `map2check_target_function` ends the run as in C.
+#[no_mangle]
+pub extern "C" fn __m2c_rt_none_analysis_init() {
+    ffi_guard(
+        || state::update_config(|c| c.mode = Some(AnalysisMode::None)),
+        (),
+    );
+}
+
+/// `analysis_destroy` of the none mode (`AnalysisModeNone.c:15-17`): empty.
+#[no_mangle]
+pub extern "C" fn __m2c_rt_none_analysis_destroy() {
+    ffi_guard(|| (), ());
+}
+
+/// `analysis_is_program_correct` of the none mode (`AnalysisModeNone.c:19`):
+/// always TRUE (1).
+#[no_mangle]
+pub extern "C" fn __m2c_rt_none_analysis_is_program_correct() -> std::os::raw::c_char {
+    ffi_guard(|| 1, 1)
+}
+
+/// `analysis_generate_aux_witness_files` of the none mode
+/// (`AnalysisModeNone.c:21-23`): empty.
+#[no_mangle]
+pub extern "C" fn __m2c_rt_none_analysis_generate_aux_witness_files() {
+    ffi_guard(|| (), ());
+}
+
 // ── C runtime ABI: NonDetLog ────────────────────────────────────────────────
 //
 // `NonDetLog.c` of Map2Check `develop`. `nondet_log_to_file`,

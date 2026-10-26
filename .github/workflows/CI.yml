@@ -77,11 +77,20 @@ jobs:
           cargo build --release --all-features
           scripts/runtime-ir/test-overflow-link.sh
 
+      # Idem para AnalysisModeAssert.ll e AnalysisModeNone.ll (Task 2.4):
+      # map2check_assert, analysis_* e map2check_target_function chegam ao
+      # núcleo; __VERIFIER_assert é vazio no IR, como no C.
+      - name: Gerar, conferir e ligar os módulos IR AnalysisModeAssert e AnalysisModeNone
+        run: |
+          cargo build --release --all-features
+          scripts/runtime-ir/test-assert-none-link.sh
+
       # Os símbolos C dos modos são definidos só pelos módulos IR: o .ll
       # entra como artefato extra da cobertura.
       # Usa a staticlib e o .ll do passo anterior.
       - name: Conferir cobertura da ABI do runtime C (pending.txt)
-        run: scripts/runtime-abi-coverage.sh target/runtime-ir/AnalysisModeOverflow.ll
+        run: scripts/runtime-abi-coverage.sh target/runtime-ir/AnalysisModeOverflow.ll \
+            target/runtime-ir/AnalysisModeAssert.ll target/runtime-ir/AnalysisModeNone.ll
 
       - name: Instalar cargo-tarpaulin
         uses: taiki-e/install-action@v2

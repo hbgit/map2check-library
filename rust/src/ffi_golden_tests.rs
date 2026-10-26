@@ -1275,3 +1275,152 @@ fn overflow_rt_unsigned_wraparound_is_not_reported_like_c() {
         );
     }
 }
+
+// ── AnalysisModeAssert and AnalysisModeNone through the core entry points
+//    (Task 2.4, D7) ─────────────────────────────────────────────────────────
+//
+// `AnalysisModeAssert.bc` / `AnalysisModeNone.bc` forward the C names to
+// `__m2c_rt_assert_*` / `__m2c_rt_none_*`. The C drivers `drivers/ASSERT.c`
+// and `drivers/TARGET-REACHED.c` call `map2check_assert` and
+// `map2check_target_function`, so the C goldens apply unchanged.
+
+/// As [`start_overflow_rt`], with the init of the module under test.
+fn start_rt(init: extern "C" fn(), witness: bool) {
+    println!("{STARTED}");
+    if witness {
+        map2check_enable_witness();
+    }
+    map2check_init(0);
+    init();
+}
+
+#[test]
+fn assert_rt_child() {
+    if is_child() {
+        start_rt(__m2c_rt_assert_analysis_init, true);
+        tracking();
+        // SAFETY: C-string literal is valid.
+        unsafe { __m2c_rt_assert_map2check_assert(0, 21, c"main".as_ptr()) };
+        map2check_success();
+    }
+}
+
+#[test]
+fn assert_rt_matches_c_runtime() {
+    assert_matches_golden("ASSERT", "assert_rt_child");
+}
+
+#[test]
+fn none_rt_child() {
+    if is_child() {
+        start_rt(__m2c_rt_none_analysis_init, true);
+        tracking();
+        // SAFETY: C-string literal is valid.
+        unsafe { map2check_target_function(c"reach_error".as_ptr(), 0, 22) };
+        map2check_success();
+    }
+}
+
+#[test]
+fn none_rt_target_function_matches_c_runtime() {
+    assert_matches_golden("TARGET-REACHED", "none_rt_child");
+}
+
+/// One `map2check_assert` call per child, without witness. `ASSERT_RT_CASE`
+/// selects the condition.
+#[test]
+fn assert_rt_boundary_child() {
+    if is_child() {
+        start_rt(__m2c_rt_assert_analysis_init, false);
+        let condition: i32 = std::env::var("ASSERT_RT_CASE").unwrap().parse().unwrap();
+        // SAFETY: C-string literal is valid.
+        unsafe { __m2c_rt_assert_map2check_assert(condition, 40, c"f".as_ptr()) };
+        println!("map2check-golden-child-survived");
+        map2check_success();
+        println!("{RETURNED}");
+    }
+}
+
+#[test]
+fn assert_rt_zero_writes_the_c_property_text_and_aborts() {
+    let dir = tempfile::tempdir().unwrap();
+    let output = run_child_with(
+        "assert_rt_boundary_child",
+        dir.path(),
+        &[("ASSERT_RT_CASE", "0")],
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    // map2check_error -> map2check_exit -> abort (Map2CheckFunctions.c:72-102).
+    assert_eq!(output.status.signal(), Some(6), "{stdout}");
+    assert!(!stdout.contains("survived"));
+    // write_property(ASSERT) (PropertyGenerator.c:92-96) writes
+    // map2check_property_assert (write_property_assert, :124-130) and then
+    // map2check_property, with the same text.
+    let text = c_property_text("ASSERT", 40, "f");
+    let actual: BTreeMap<String, String> = files_in(dir.path())
+        .into_iter()
+        .map(|name| {
+            let t = std::fs::read_to_string(dir.path().join(&name)).unwrap();
+            (name, t)
+        })
+        .collect();
+    assert_eq!(
+        actual,
+        BTreeMap::from([
+            ("map2check_property".to_owned(), text.clone()),
+            ("map2check_property_assert".to_owned(), text),
+        ])
+    );
+}
+
+#[test]
+fn assert_rt_nonzero_does_not_report_like_c() {
+    for case in ["1", "-7"] {
+        let dir = tempfile::tempdir().unwrap();
+        let output = run_child_with(
+            "assert_rt_boundary_child",
+            dir.path(),
+            &[("ASSERT_RT_CASE", case)],
+        );
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        assert_eq!(output.status.code(), Some(0), "{case}\n{stdout}");
+        assert!(stdout.contains(RETURNED), "{case}");
+        assert_eq!(
+            std::fs::read(dir.path().join("map2check_property")).unwrap(),
+            b"NONE\n"
+        );
+        assert_eq!(
+            files_in(dir.path()),
+            BTreeSet::from(["map2check_property".to_owned()])
+        );
+    }
+}
+
+/// `map2check_target_function` in mode none (`PropertyGenerator.c:81-85`,
+/// TARGET_REACHED): only `map2check_property`, byte for byte, then abort.
+#[test]
+fn none_rt_target_function_writes_the_c_reachability_property_and_aborts() {
+    let dir = tempfile::tempdir().unwrap();
+    let output = run_child_with("none_rt_boundary_child", dir.path(), &[]);
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert_eq!(output.status.signal(), Some(6), "{stdout}");
+    assert!(!stdout.contains("survived"));
+    assert_eq!(
+        files_in(dir.path()),
+        BTreeSet::from(["map2check_property".to_owned()])
+    );
+    assert_eq!(
+        std::fs::read(dir.path().join("map2check_property")).unwrap(),
+        b"TARGET-REACHED\nLine: 41\nFunction: reach_error\n"
+    );
+}
+
+#[test]
+fn none_rt_boundary_child() {
+    if is_child() {
+        start_rt(__m2c_rt_none_analysis_init, false);
+        // SAFETY: C-string literal is valid.
+        unsafe { map2check_target_function(c"reach_error".as_ptr(), 0, 41) };
+        println!("map2check-golden-child-survived");
+    }
+}

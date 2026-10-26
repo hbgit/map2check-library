@@ -3987,3 +3987,70 @@ fn overflow_rt_binops_called_as_the_ir_forwarders_do() {
     unsafe { __m2c_rt_overflow_map2check_binop_sdiv(INT_MIN, -1, 32, 4, 0, main) };
     assert_violated(ViolatedProperty::Overflow, 4, "main");
 }
+
+// ── C runtime ABI: AnalysisModeAssert and AnalysisModeNone (core entry points, D7) ──
+//
+// `AnalysisModeAssert.bc` and `AnalysisModeNone.bc` are generated IR
+// (scripts/runtime-ir/gen_ll.py). Their `analysis_init` forwards to the
+// `__m2c_rt_<mode>_analysis_init` below, which selects the mode; the files
+// are pinned by the golden tests (`ffi_golden_tests.rs`).
+
+#[test]
+fn assert_rt_analysis_entry_points_match_c() {
+    let _guard = fresh();
+    map2check_init(0);
+    // SAFETY: C-string literal is valid and null-terminated.
+    unsafe { map2check_track_bb(3, c"main".as_ptr()) };
+    // AnalysisModeAssert.c:29-31 analysis_init is empty; linking the module
+    // picks the assert mode.
+    __m2c_rt_assert_analysis_init();
+    assert_eq!(state::config().mode, Some(AnalysisMode::Assert));
+    // :37 analysis_is_program_correct is TRUE; :33-35 and :39-41 are empty.
+    assert_eq!(__m2c_rt_assert_analysis_is_program_correct(), 1);
+    __m2c_rt_assert_analysis_destroy();
+    __m2c_rt_assert_analysis_generate_aux_witness_files();
+    assert_ok();
+    assert_eq!(snapshot(|s| s.bbtrack.len()), 1);
+    // Even after a violation: the C verdict function reads no state.
+    // SAFETY: as above.
+    unsafe { __m2c_rt_assert_map2check_assert(0, 1, c"f".as_ptr()) };
+    assert_eq!(__m2c_rt_assert_analysis_is_program_correct(), 1);
+}
+
+#[test]
+fn assert_rt_map2check_assert_zero_records_assert_and_one_does_not() {
+    let _guard = fresh();
+    map2check_init(0);
+    __m2c_rt_assert_analysis_init();
+    // AnalysisModeAssert.c:18-23: only `!condition` is a violation.
+    for condition in [1, 2, -1, i32::MAX] {
+        // SAFETY: C-string literal is valid and null-terminated.
+        unsafe { __m2c_rt_assert_map2check_assert(condition, 9, c"main".as_ptr()) };
+        assert_ok();
+    }
+    // SAFETY: as above.
+    unsafe { __m2c_rt_assert_map2check_assert(0, 21, c"main".as_ptr()) };
+    assert_violated(ViolatedProperty::Assert, 21, "main");
+    // A NULL name reads as "" (the C would crash in fprintf %s).
+    state::reset();
+    // SAFETY: NULL is accepted.
+    unsafe { __m2c_rt_assert_map2check_assert(0, 22, std::ptr::null()) };
+    assert_violated(ViolatedProperty::Assert, 22, "");
+}
+
+#[test]
+fn none_rt_analysis_init_selects_the_none_mode_and_the_verdict_is_true() {
+    let _guard = fresh();
+    map2check_init(0);
+    // AnalysisModeNone.c:11-13 is empty; REACHABILITY_MODE and
+    // COVER_BRANCHES_MODE both link this module (caller.cpp:600-612).
+    __m2c_rt_none_analysis_init();
+    assert_eq!(state::config().mode, Some(AnalysisMode::None));
+    // SAFETY: C-string literal is valid and null-terminated.
+    unsafe { map2check_target_function(c"reach_error".as_ptr(), 0, 22) };
+    assert_violated(ViolatedProperty::Reachability, 22, "reach_error");
+    // :19 analysis_is_program_correct is TRUE, :15-17 and :21-23 are empty.
+    assert_eq!(__m2c_rt_none_analysis_is_program_correct(), 1);
+    __m2c_rt_none_analysis_destroy();
+    __m2c_rt_none_analysis_generate_aux_witness_files();
+}

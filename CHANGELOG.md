@@ -25,6 +25,16 @@ the C ABI or the JSON report must update them.
 
 ### Added
 
+- The assert and none analysis modes of the Map2Check C runtime ABI (Task 2.4
+  of the drop-in plan): core entry points `__m2c_rt_assert_analysis_{init,
+  destroy,is_program_correct,generate_aux_witness_files}`,
+  `__m2c_rt_assert_map2check_assert` and `__m2c_rt_none_analysis_{init,destroy,
+  is_program_correct,generate_aux_witness_files}`, with the C semantics and
+  property files of `AnalysisModeAssert.c` and `AnalysisModeNone.c`. The C
+  names are defined only by the generated IR modules `AnalysisModeAssert.ll`
+  (where `__VERIFIER_assert` is an empty function, as in C) and
+  `AnalysisModeNone.ll`, never by `libmap2check.a`; each module's
+  `analysis_init` selects its mode.
 - The overflow analysis mode of the Map2Check C runtime ABI (Task 2.3 of the
   drop-in plan): core entry points `__m2c_rt_overflow_analysis_{init,destroy,
   is_program_correct,generate_aux_witness_files}`,

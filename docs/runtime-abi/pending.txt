@@ -3,7 +3,6 @@ __afl_fuzz_alt_ptr
 __afl_sharedmem_fuzzing
 map2check_add_store_pointer
 map2check_alloca
-map2check_assert
 map2check_assume
 map2check_assume_loop
 map2check_calloc

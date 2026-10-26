@@ -268,10 +268,46 @@ class Generated(unittest.TestCase):
 
     def test_other_modes_keep_their_analysis_stubs(self):
         out = run_gen()
-        for m in ("AnalysisModeAssert", "AnalysisModeNone", "AnalysisModeMemtrack", "AnalysisModeMemcleanup"):
+        for m in ("AnalysisModeMemtrack", "AnalysisModeMemcleanup"):
             text = read(os.path.join(out, m + ".ll"))
             self.assertNotIn("__m2c_rt_overflow", text, m)
+            self.assertNotIn("__m2c_rt_assert", text, m)
+            self.assertNotIn("__m2c_rt_none", text, m)
             self.assertIn("define signext i8 @analysis_is_program_correct() { ; m2c-stub\n  ret i8 1\n}", text, m)
+
+    def test_assert_module_forwards_to_the_core_and_verifier_assert_is_empty(self):
+        """AnalysisModeAssert.bc (Task 2.4): map2check_assert and analysis_*
+        forward to __m2c_rt_assert_*; __VERIFIER_assert is an unmarked empty
+        function, as AnalysisModeAssert.c:25-27 ("DO NOTHING")."""
+        text = read(os.path.join(run_gen("--module", "AnalysisModeAssert"), "AnalysisModeAssert.ll"))
+        want = {r["symbol"] for r in inventory_rows()
+                if "AnalysisModeAssert.bc" in r["module"].split("+") and r["kind"] == "func"
+                and r["referenced_by"] != "-"}
+        self.assertEqual(want, {"__VERIFIER_assert", "map2check_assert", "analysis_init", "analysis_destroy",
+                                "analysis_is_program_correct", "analysis_generate_aux_witness_files"})
+        self.assertEqual(defined(text), want)
+        for sym in want - {"__VERIFIER_assert"}:
+            self.assertEqual(gen_ll.IMPLEMENTED[("AnalysisModeAssert", sym)], f"__m2c_rt_assert_{sym}")
+            self.assertRegex(text, rf"tail call [^@]*@__m2c_rt_assert_{sym}\(", sym)
+        self.assertIn("define void @__VERIFIER_assert(i32 %a0) {\n  ret void\n}\n", text)
+        self.assertNotIn("__m2c_rt_assert___VERIFIER_assert", text)
+        self.assertNotIn("m2c-stub", text)
+        self.assertIn("declare void @__m2c_rt_assert_map2check_assert(i32, i32, ptr)\n", text)
+        self.assertIn("define void @map2check_assert(i32 %a0, i32 %a1, ptr %a2) {\n"
+                      "  tail call void @__m2c_rt_assert_map2check_assert(i32 %a0, i32 %a1, ptr %a2)\n"
+                      "  ret void\n}\n", text)
+
+    def test_none_module_forwards_analysis_functions_and_selects_the_mode(self):
+        """AnalysisModeNone.bc (Task 2.4): the four analysis_* functions, each
+        a forwarder to __m2c_rt_none_<name>; analysis_init selects the mode."""
+        text = read(os.path.join(run_gen("--module", "AnalysisModeNone"), "AnalysisModeNone.ll"))
+        want = {"analysis_init", "analysis_destroy", "analysis_is_program_correct",
+                "analysis_generate_aux_witness_files"}
+        self.assertEqual(defined(text), want)
+        for sym in want:
+            self.assertEqual(gen_ll.IMPLEMENTED[("AnalysisModeNone", sym)], f"__m2c_rt_none_{sym}")
+            self.assertRegex(text, rf"tail call [^@]*@__m2c_rt_none_{sym}\(", sym)
+        self.assertNotIn("m2c-stub", text)
 
     def test_stubs_are_marked_and_forwarders_are_not(self):
         """runtime-abi-coverage.sh must not count a stub as delivered: every
@@ -288,11 +324,14 @@ class Generated(unittest.TestCase):
                     self.assertEqual(line.endswith("; m2c-stub"), not real, f"{module}.{sym}")
                 else:
                     self.assertNotIn("m2c-stub", line, f"{module}.{sym}")
-        text = read(os.path.join(out, "AnalysisModeAssert.ll"))
-        self.assertIn("define void @map2check_assert(i32 %a0, i32 %a1, ptr %a2) { ; m2c-stub", text)
-        # WitnessGenerationNone.c: both functions are empty in C ("DO NOTHING").
+        # Still a stub: AnalysisModeMemtrack's map2check_load.
+        text = read(os.path.join(out, "AnalysisModeMemtrack.ll"))
+        self.assertIn("{ ; m2c-stub", text)
+        # The empty C bodies: WitnessGenerationNone.c, AnalysisModeAssert.c:25-27
+        # (__VERIFIER_assert); all "DO NOTHING".
         self.assertEqual(gen_ll.C_EMPTY, {("WitnessGenerationNone", "generate_aux_files"),
-                                          ("WitnessGenerationNone", "generate_confirmation_file")})
+                                          ("WitnessGenerationNone", "generate_confirmation_file"),
+                                          ("AnalysisModeAssert", "__VERIFIER_assert")})
         self.assertIn("define void @generate_confirmation_file() {\n  ret void\n}",
                       read(os.path.join(out, "WitnessGenerationNone.ll")))
 

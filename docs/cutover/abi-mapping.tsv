@@ -3,7 +3,7 @@ map2check_init	map2check_init	2.1	C: void (int isSvComp); exportado com a assina
 map2check_success	map2check_success	-	C: () → núcleo: () (LibraryFunctions.hpp:48)
 map2check_track_bb	map2check_track_bb	2.1	C: (u32 line,ptr fn) → núcleo: a mesma função C (Task 2.1, D6), uma linha por linha de código como Map2CheckFunctions.c:49-55; map2check_save_basic_block_log continua exportada para a API núcleo
 map2check_target_function	map2check_target_function	2.1	C: (ptr fn,i32 scope,i32 line) → núcleo: a mesma função C (Task 2.1, D6); grava TARGET_REACHED e, com modo, encerra como Map2CheckFunctions.c:61-65; sem modo registra e retorna (SD-15); map2check_reach_target continua exportada para a API núcleo
-map2check_assert	map2check_is_valid_assert	-	C: (i32 cond,i32 line,ptr fn) (AssertPass.cpp:23) → núcleo: (line:i32,fn,expression:i32); ORDEM DIFERENTE: cond passa de primeiro a último; C encerra na primeira violação; núcleo registra e continua; SD-03/#36 (Task 2.1) (map2check_error em AnalysisModeAssert.c:20); is_valid_assert imprime o JSON na hora sem encerrar, então um map2check_success posterior imprime um segundo relatório
+map2check_assert	__m2c_rt_assert_map2check_assert	2.4	IR AnalysisModeAssert.ll (gen_ll.py) define map2check_assert e encaminha para o núcleo; mesma assinatura C (i32 cond,i32 line,ptr fn) e semântica de AnalysisModeAssert.c:18-23 (cond 0 grava ASSERT em map2check_property e map2check_property_assert e aborta, com o modo selecionado por analysis_init); o export legado map2check_is_valid_assert fica até a Task 2.10 (Task 2.4)
 map2check_assume	__VERIFIER_assume	-	C: (i32) (NonDetPass.cpp:94) → núcleo: (i32 condition); núcleo faz exit(0) se 0
 map2check_assume_loop	__VERIFIER_assume	-	C: (i1) (LoopPredAssumePass.cpp:28; o C runtime recebe char e faz cast para int) → núcleo: (i32); o passe deve emitir zext i1→i32
 map2check_crab_assume	__VERIFIER_assume	-	idem; sem getOrInsertFunction: nasce do rename de verifier.assume (NonDetPass.cpp:216), o tipo do arg segue o chamador; C runtime recebe char (Map2CheckFunctions.c:46)
@@ -31,7 +31,7 @@ map2check_wasm_free	map2check_wasm_free	2.8	C: (i64,i64) (MemoryTrackPass.cpp:82
 map2check_wasm_check_access	map2check_wasm_check_access	2.8	C: (i64,i64) (MemoryTrackPass.cpp:833); núcleo igual (u64 offset,u64 access_size), feature wasm: AnalysisModeMemtrack.c:416-423; acesso fora de bloco vivo reporta OVERFLOW, linha 0, como o C (FALSE_OVERFLOW; SD-19); só ativo nos modos que checam memória
 __map2check_main__	__map2check_main__	-	definido pelo programa instrumentado, não pela biblioteca
 overflowError	__m2c_rt_overflow_overflowError	2.3	IR AnalysisModeOverflow.ll encaminha; registra OVERFLOW e, com modo, escreve map2check_property(_overflow) e aborta como AnalysisModeOverflow.c:185-188 (Task 2.3)
-__VERIFIER_assert	__VERIFIER_assert	-	
+__VERIFIER_assert	__VERIFIER_assert	2.4	IR AnalysisModeAssert.ll define __VERIFIER_assert vazio, como AnalysisModeAssert.c:25-27 (DO NOTHING); sem ponto de entrada no núcleo; o export legado (libfuzzer.rs, klee.rs) sai na Task 2.10 (Task 2.4)
 __VERIFIER_assume	__VERIFIER_assume	-	
 __VERIFIER_error	__VERIFIER_error	-	
 __VERIFIER_nondet_char	__VERIFIER_nondet_char	-	só comparado pelo nome (exclusões em TrackBasicBlockPass.cpp:113, OverflowPass.cpp:59); não emitido como chamada

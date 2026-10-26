@@ -171,6 +171,15 @@ static void run_pre_init_boundary(void) {
     (void)__m2c_rt_overflow_analysis_is_program_correct();
     __m2c_rt_overflow_analysis_destroy();
     __m2c_rt_overflow_analysis_generate_aux_witness_files();
+    /* AnalysisModeAssert/None core entry points (Task 2.4); analysis_init is
+     * left to the forked scenarios, since it selects the mode. */
+    __m2c_rt_assert_map2check_assert(1, 1, "main");
+    (void)__m2c_rt_assert_analysis_is_program_correct();
+    __m2c_rt_assert_analysis_destroy();
+    __m2c_rt_assert_analysis_generate_aux_witness_files();
+    (void)__m2c_rt_none_analysis_is_program_correct();
+    __m2c_rt_none_analysis_destroy();
+    __m2c_rt_none_analysis_generate_aux_witness_files();
 
     (void)__VERIFIER_nondet_bool();
     (void)__VERIFIER_nondet_char();
@@ -315,6 +324,8 @@ static void run_bad_inputs(void) {
     __m2c_rt_overflow_map2check_binop_sub_uint(0, UINT64_MAX, 0, 12, 0, NULL);
     __m2c_rt_overflow_map2check_binop_mul_uint(UINT64_MAX, UINT64_MAX, 64, 12, 0, NULL);
     __m2c_rt_overflow_overflowError(0xffffffffu, NULL);
+    __m2c_rt_assert_map2check_assert(1, -1, NULL);
+    __m2c_rt_assert_map2check_assert(7, 0x7fffffff, NULL);
 
     /* nondet generators, pre-init */
     (void)__VERIFIER_nondet_bool();
@@ -664,6 +675,19 @@ static void scenario_overflow_rt_srem(void) {
     __m2c_rt_overflow_map2check_binop_srem(5, 0, 32, 7, 0, "main");
 }
 
+static void scenario_assert_rt(void) {
+    map2check_init(0);
+    __m2c_rt_assert_analysis_init();
+    __m2c_rt_assert_map2check_assert(1, 20, "main");
+    __m2c_rt_assert_map2check_assert(0, 21, "main");
+}
+
+static void scenario_none_rt_target(void) {
+    map2check_init(0);
+    __m2c_rt_none_analysis_init();
+    map2check_target_function("reach_error", 0, 22);
+}
+
 static int test_analysis_modes(void) {
     if (run_mode_scenario(scenario_none_mode, 0, "NONE\n", NULL, NULL)) {
         return 1;
@@ -710,6 +734,17 @@ static int test_analysis_modes(void) {
                           "FALSE-DIVBYZERO\nLine: 7\nFunction: main\n",
                           "map2check_property_overflow", NULL)) {
         return 10;
+    }
+    if (run_mode_scenario(scenario_assert_rt, 1,
+                          "ASSERT\nLine: 21\nFunction: main\n",
+                          "map2check_property_assert",
+                          "ASSERT\nLine: 21\nFunction: main\n")) {
+        return 11;
+    }
+    if (run_mode_scenario(scenario_none_rt_target, 1,
+                          "TARGET-REACHED\nLine: 22\nFunction: reach_error\n",
+                          NULL, NULL)) {
+        return 12;
     }
     return 0;
 }
