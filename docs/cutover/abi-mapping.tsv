@@ -1,5 +1,5 @@
 c_symbol	core_symbol	owner_task	notes
-map2check_init	map2check_set_mode+map2check_init	2.3	C: (i32 isSvComp) → núcleo: set_mode(int32_t, valores de enum AnalysisMode 0-5; outro valor é ignorado)+init(void) (Task 2.3; o modo vinha do .bc ligado, caller.cpp:575-612); o arg int isSvComp é morto: Map2CheckFunctions.c:35 grava sv_comp e nenhum arquivo o lê
+map2check_init	map2check_init	2.1	C: void (int isSvComp); exportado com a assinatura C na Task 2.1 (plano de 2026-10-26). O modo vem de analysis_init do módulo de modo ligado (D7). O arg isSvComp é morto: Map2CheckFunctions.c:35 grava sv_comp e nenhum arquivo o lê.
 map2check_success	map2check_success	-	C: () → núcleo: () (LibraryFunctions.hpp:48)
 map2check_track_bb	map2check_track_bb	2.1	C: (u32 line,ptr fn) → núcleo: a mesma função C (Task 2.1, D6), uma linha por linha de código como Map2CheckFunctions.c:49-55; map2check_save_basic_block_log continua exportada para a API núcleo
 map2check_target_function	map2check_target_function	2.1	C: (ptr fn,i32 scope,i32 line) → núcleo: a mesma função C (Task 2.1, D6); grava TARGET_REACHED e, com modo, encerra como Map2CheckFunctions.c:61-65; sem modo registra e retorna (SD-15); map2check_reach_target continua exportada para a API núcleo

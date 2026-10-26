@@ -257,6 +257,7 @@ Em todas as tasks desta fase: a semântica de referência é o `.c` citado na c�
 - Produces: `build-runtime-bc.sh <out-dir>` gera exatamente os 21 arquivos do Global Constraints, segundo a D7, de forma determinística (dois builds dão `sha256` iguais). `overlay-install.sh <c-install> <bc-dir> <out-install>` copia a instalação do C e troca só `lib/*.bc`.
 
 - [ ] **Step 1:** Testes: lista de arquivos exata; `llvm-dis-16` lê todos; determinismo; o overlay não altera `bin/`; `check-link-matrix.sh` dá `matrix: PASS` sobre a saída.
+  Também: no build `.bc`, o núcleo chama os `generate_aux_files`/`generate_confirmation_file` externos (definidos por `WitnessGeneration.bc` → `__m2c_rt_witness_*`, ou vazios em `WitnessGenerationNone.bc`), em vez de decidir por `config.witness`; teste de que uma execução com witness escreve os arquivos auxiliares exatamente uma vez e sem witness nenhuma vez. Os `map2check_assume*` (adiados da Task 2.1) entram aqui com o trecho IR → `nondet_assume` e saem de `pending.txt`.
 - [ ] **Step 2–4:** ver falhar, implementar, ver passar.
 - [ ] **Step 5:** Commit `build: package the runtime as the 21 bitcode modules Map2Check links`.
 

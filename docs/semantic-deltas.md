@@ -83,11 +83,11 @@ property is `MEMSAFETY_FREE`, `MEMSAFETY_DEREF`, `MEMSAFETY_MEMTRACK` or
 ```c
 map2check_init(0);
 map2check_map_malloc((void *)0x1000, 16);
-set_false_result(0 /* Overflow */, 3, "main");
+set_false_result(6 /* Overflow (C FALSE_OVERFLOW) */, 3, "main");
 print_all_containers_as_json();   /* no Container_AllocationLog */
 map2check_reset();                /* the first violation is final (SD-03) */
 map2check_map_malloc((void *)0x1000, 16);
-set_false_result(1 /* MemsafetyFree */, 4, "main");
+set_false_result(2 /* MemsafetyFree (C FALSE_FREE) */, 4, "main");
 print_all_containers_as_json();   /* Container_AllocationLog present */
 ```
 
