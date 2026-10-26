@@ -23,3 +23,6 @@ dist/
 
 # Cópia local do Map2Check para testes de integração (sem versionamento)
 vendor/map2check/
+
+# Cache de bytecode do Python
+__pycache__/
