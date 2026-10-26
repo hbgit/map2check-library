@@ -43,6 +43,21 @@ CTYPE = {
 }
 
 
+class StructByValue(ValueError):
+    """A C struct passed or returned by value: no single IR type for it."""
+
+
+# Runtime-internal C helpers that take or return a struct by value. They have
+# no consumer outside the C runtime (referenced_by = runtime), and the Rust
+# core keeps that logic private (d7-layout.md, approval item 2). Any other
+# signature gen_ll.py cannot translate is a hard error.
+STRUCT_BY_VALUE_EXEMPT = {
+    "B_TREE_CREATE", "get_element_at", "map2check_nondet_get_log",
+    "new_container", "new_heap_row", "new_list_row", "new_memory_row",
+    "nondet_log_to_file", "trackbb_new_row",
+}
+
+
 def ir_type(c):
     c = c.strip()
     if c.endswith("*"):
@@ -50,6 +65,10 @@ def ir_type(c):
     for q in ("const ", "volatile "):
         c = c.replace(q, "")
     c = c.strip()
+    if c.startswith("enum "):
+        return "i32"  # every enum of the C runtime fits int (x86_64 SysV)
+    if c.startswith("struct ") or c.startswith("union "):
+        raise StructByValue(f"struct by value: '{c}'")
     if c not in CTYPE:
         raise ValueError(f"no IR type for C type '{c}'")
     return CTYPE[c]
@@ -58,8 +77,10 @@ def ir_type(c):
 def parse_sig(sig):
     """'void (int, const char *)' -> ('void', ['i32', 'ptr'])"""
     sig = sig.split(" | ")[0]
-    ret, args = sig.split(" (", 1)
-    args = args.rstrip(")").strip()
+    ret, args = sig.split("(", 1)
+    if not args.endswith(")"):
+        raise ValueError(f"unparseable signature '{sig}'")
+    args = args[:-1].strip()
     if args in ("", "void"):
         return ir_type(ret), []
     return ir_type(ret), [ir_type(a) for a in args.split(", ")]
@@ -77,8 +98,13 @@ def load_inventory(path):
                 continue
             try:
                 ret, args = parse_sig(row["canonical_signature"])
-            except ValueError:
-                continue  # struct by value: runtime-internal C helpers
+            except StructByValue:
+                if row["symbol"] in STRUCT_BY_VALUE_EXEMPT:
+                    continue
+                sys.exit(f"gen_ll: {row['symbol']}: struct by value outside the exemption list: "
+                         f"{row['canonical_signature']}")
+            except ValueError as e:
+                sys.exit(f"gen_ll: {row['symbol']}: {e}")
             for m in row["module"].split("+"):
                 mods.setdefault(m[:-3], []).append((row["symbol"], ret, args))
     return mods

@@ -72,6 +72,13 @@ docker run --rm --network none --user "$(id -u):$(id -g)" -v "$OUT:/out" \
   opt-16 -passes=globaldce "$w/c2.bc" -o "$w/c3.bc"
   llvm-dis-16 "$w/c3.bc" -o "$w/c3.ll"
   python3 -I /repo/scripts/klee-lower-intrinsics.py "$w/c3.ll" "$w/c4.ll" >/dev/null
+  # One target triple for every module: the core takes the triple clang-16
+  # gives the program and the C runtime (x86_64-pc-linux-gnu), otherwise
+  # every llvm-link of the frontend prints a triple-mismatch warning (its
+  # stderr is not redirected). The data layouts are already equal.
+  sed -i "s/^target triple = \"x86_64-unknown-linux-gnu\"/target triple = \"x86_64-pc-linux-gnu\"/" "$w/c4.ll"
+  grep -q "^target triple = \"x86_64-pc-linux-gnu\"" "$w/c4.ll"
+  python3 -I /spike/scripts/drop_dwarf_flag.py "$w/c4.ll" "$w/c4.ll"
   llvm-as-16 "$w/c4.ll" -o "$w/c5.bc"
   # Only the C ABI (inventory.tsv) and the __m2c_rt_* entry points stay
   # external; std/core symbols (rust_panic, _ZN4core3fmt...) become internal,
@@ -97,14 +104,20 @@ docker run --rm --network none --user "$(id -u):$(id -g)" -v "$OUT:/out" \
   done
   case "$s" in
     b | b-loop)
-      opt-16 --strip-debug "$w/gen-none.bc" -o "$w/gn.bc"; keep "$w/gn.bc" /out/NonDetGeneratorNone.bc
-      opt-16 --strip-debug "$w/gen-klee.bc" -o "$w/gk.bc"; keep "$w/gk.bc" /out/NonDetGeneratorKlee.bc
+      pin() { # <in.bc> <out.bc>: strip-debug and the same triple as the core
+        opt-16 --strip-debug "$1" -S -o "$2.ll"
+        sed -i "s/^target triple = \"x86_64-unknown-linux-gnu\"/target triple = \"x86_64-pc-linux-gnu\"/" "$2.ll"
+        python3 -I /spike/scripts/drop_dwarf_flag.py "$2.ll" "$2.ll"
+        llvm-as-16 "$2.ll" -o "$2"
+      }
+      pin "$w/gen-none.bc" "$w/gn.bc"; keep "$w/gn.bc" /out/NonDetGeneratorNone.bc
+      pin "$w/gen-klee.bc" "$w/gk.bc"; keep "$w/gk.bc" /out/NonDetGeneratorKlee.bc
       if [ "$s" = b ]; then
-        opt-16 --strip-debug "$w/gen-afl.bc" -o "$w/gen-afl-s.bc"
+        pin "$w/gen-afl.bc" "$w/gen-afl-s.bc"
         llvm-as-16 "$w/ll/b-afl-main.ll" -o "$w/b-afl-main.bc"
         llvm-link-16 "$w/gen-afl-s.bc" "$w/b-afl-main.bc" -o "$w/ga.bc"
       else
-        opt-16 --strip-debug "$w/gen-afl-loop.bc" -o "$w/ga.bc"
+        pin "$w/gen-afl-loop.bc" "$w/ga.bc"
       fi
       keep "$w/ga.bc" /out/NonDetGeneratorAFL.bc ;;
   esac
