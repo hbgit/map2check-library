@@ -12,8 +12,9 @@ for r in "alpha pass" "beta frontend,runtime" "gamma external" "delta runtime" "
 done
 printf 'symbol\tside\treason\ninternal_c\tc-only\tx\n__m2c_rt_*\trust-only\tx\n' > "$T/pol.tsv"
 printf 'symbol\tstatus\trust_signature\trust_canonical_signature\nzeta\tdifferent\tint (void)\tint (void)\n' > "$T/gap.tsv"
-# Biblioteca fixture: alpha e zeta (assinatura em conflito) exportados, beta
-# ausente, __m2c_rt_core é extra do Rust e local_fn é estático.
+# Biblioteca fixture: alpha e zeta (assinatura em conflito) exportados; beta,
+# eps e gamma não estão na lib; __m2c_rt_core é extra do Rust (rust-only,
+# ignorado) e local_fn é estático (não conta como export).
 cat > "$T/lib.c" <<'C'
 void alpha(void) {}
 int zeta(void) { return 0; }
@@ -70,4 +71,24 @@ grep -q '^FAIL  A.h' "$T/out"
 printf 'f_bad\nf_ok\n' > "$T/p.txt"
 if "$CS" "$T/h" --pending "$T/p.txt" --rust-header "$T/rust.h" >"$T/out"; then echo "FALHA: pendente conforme passou" >&2; exit 1; fi
 grep -q 'f_ok' "$T/out"
+# valores de enum: XFAIL com marcador, FAIL se batem com marcador, FAIL sem marcador
+printf 'enum E { A = 0, B = 1 };\n' > "$T/h/A.h"
+printf 'typedef enum E { X, Y } E;\n' > "$T/rust.h"
+printf 'tag\tc_enumerator\trust_enumerator\nE\tA\tX\nE\tB\tY\n' > "$T/em.tsv"
+: > "$T/p.txt"
+ce() { "$CS" "$T/h" --pending "$T/p.txt" --rust-header "$T/rust.h" --enum-map "$T/em.tsv" --pending-enums "$T/pe.txt"; }
+printf 'enum E { A = 0, B = 2 };\n' > "$T/h/A.h"
+echo 'enum:E' > "$T/pe.txt"
+ce > "$T/out" || { cat "$T/out" >&2; echo "FALHA: enum divergente com marcador deveria ser XFAIL" >&2; exit 1; }
+grep -q '^XFAIL A.h' "$T/out"
+: > "$T/pe.txt"
+if ce >"$T/out"; then echo "FALHA: enum divergente sem marcador passou" >&2; exit 1; fi
+grep -q '^FAIL  A.h' "$T/out"
+printf 'enum E { A = 0, B = 1 };\n' > "$T/h/A.h"
+echo 'enum:E' > "$T/pe.txt"
+if ce >"$T/out"; then echo "FALHA: enum igual com marcador passou" >&2; exit 1; fi
+grep -q 'remova o marcador' "$T/out"
+: > "$T/pe.txt"
+ce > "$T/out" || { cat "$T/out" >&2; echo "FALHA: enum igual sem marcador deveria passar" >&2; exit 1; }
+grep -q '^PASS  A.h (n=0' "$T/out"
 echo "test-runtime-abi-coverage: OK"

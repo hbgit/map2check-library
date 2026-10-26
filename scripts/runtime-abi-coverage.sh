@@ -74,11 +74,11 @@ if grep -qE '^\s*(#|$)|\s' "$PEND"; then
 fi
 rc=0
 if comm -23 "$T/expected" "$PEND" | grep -q .; then
-  echo "FAIL: pendências esquecidas (faltam em pending.txt):" >&2
+  echo "FAIL: pendências esquecidas (faltam em pending.txt; a lib deve ter sido construída com --all-features):" >&2
   comm -23 "$T/expected" "$PEND" | sed 's/^/  /' >&2; rc=1
 fi
 if comm -13 "$T/expected" "$PEND" | grep -q .; then
-  echo "FAIL: entregues (ou fora da cobertura) ainda listados em pending.txt:" >&2
+  echo "FAIL: entregues (ou fora da cobertura) ainda listados em pending.txt (a lib deve ter sido construída com --all-features):" >&2
   comm -13 "$T/expected" "$PEND" | sed 's/^/  /' >&2; rc=1
 fi
 [ "$rc" = 0 ] && echo "OK: $(wc -l < "$T/cov") símbolos na cobertura, $(wc -l < "$PEND") pendentes"
