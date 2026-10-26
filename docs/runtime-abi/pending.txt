@@ -21,7 +21,6 @@ map2check_crab_assume
 map2check_free
 map2check_free_resolved_address
 map2check_function
-map2check_init
 map2check_load
 map2check_malloc
 map2check_non_det_bool
@@ -71,7 +70,5 @@ map2check_nondet_ulonglong
 map2check_nondet_unsigned
 map2check_nondet_ushort
 map2check_posix
-map2check_target_function
-map2check_track_bb
 map2check_wasm_free
 overflowError

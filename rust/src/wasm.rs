@@ -33,7 +33,7 @@ fn record(property: ViolatedProperty, line: u32) {
         s.set_false(property, line, "");
         Ok(first)
     }) {
-        Ok(true) => crate::output::termination::on_violation(false),
+        Ok(true) => crate::output::termination::on_violation(),
         Ok(false) => {}
         Err(e) => eprintln!("[map2check] error: {e}"),
     }

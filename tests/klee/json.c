@@ -10,7 +10,7 @@
 #include "m2c.h"
 
 int __map2check_main__(void) {
-  map2check_init();
+  map2check_init(0);
   int x = NONDET(int, int, 15);
   (void)x;
   map2check_success();

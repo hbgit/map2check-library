@@ -13,6 +13,9 @@
 #   PASS   nenhum erro, e nenhum símbolo pendente declarado nos dois headers
 #   XFAIL  todo conflito é de um símbolo em pending.txt (esperado hoje)
 #   FAIL   qualquer outro erro, ou conflito de símbolo que não está pendente
+# Na unidade de conformidade, uma tag alinhada (sem marcador) tem a definição C
+# trocada por declaração antecipada numa cópia temporária dos headers, que a
+# definição do Rust completa; funções que recebem o enum então conformam.
 # Valores de enum: a tag do C é renomeada na unidade (o Rust redefine o enum),
 # então tests/abi/enum-map.tsv liga cada enumerador C ao do Rust e uma unidade
 # gerada tem um _Static_assert por par. Enquanto `enum:<Tag>` estiver em
@@ -50,14 +53,27 @@ T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
 rc=0
 declares() { grep -qE "(^|[^A-Za-z0-9_])$2[[:space:]]*\(" "$1"; }
 
+# Tags alinhadas (sem marcador em pending-enums.txt): na unidade de
+# conformidade a definição C do enum vira declaração antecipada numa cópia dos
+# headers, e a do Rust a completa; assim uma função que recebe o enum é o mesmo
+# tipo nos dois lados. Tags pendentes continuam renomeadas (os valores diferem).
+tags="$(awk -F'\t' 'NR>1 {print $1}' "$EMAP" | sort -u)"
+renamed=""; aligned=""
+for t in $tags; do
+  if grep -qx "enum:$t" "$PENUM"; then renamed="$renamed $t"; else aligned="$aligned $t"; fi
+done
+CH="$T/hdr"; mkdir -p "$CH"; cp "$DIR"/*.h "$CH"/
+for t in $aligned; do
+  perl -0pi -e "s/\\benum\\s+$t\\s*\\{[^}]*\\}\\s*;/enum $t;/g" "$CH"/*.h
+done
+
 for h in "$DIR"/*.h; do
   name="$(basename "$h")"
-  tags="$(awk -F'\t' 'NR>1 {print $1}' "$EMAP" | sort -u)"
-  { for t in $tags; do echo "#define $t C_$t"; done
-    echo "#include \"$h\""
-    for t in $tags; do echo "#undef $t"; done
+  { for t in $renamed; do echo "#define $t C_$t"; done
+    echo "#include \"$CH/$name\""
+    for t in $renamed; do echo "#undef $t"; done
     echo "#include \"$RH\""; } > "$T/u.c"
-  clang -fsyntax-only -Werror -I"$DIR" "$T/u.c" > "$T/diag" 2>&1
+  clang -fsyntax-only -Werror -I"$CH" "$T/u.c" > "$T/diag" 2>&1
   status=$?
   sed -nE "s/.*error: conflicting types for '([^']+)'.*/\1/p" "$T/diag" | sort -u > "$T/conf"
   grep -E 'error:' "$T/diag" | grep -v 'conflicting types for' > "$T/other" || true
@@ -82,8 +98,9 @@ for h in "$DIR"/*.h; do
       awk -F'\t' -v t="$t" 'NR>1 && $1==t {printf "_Static_assert((int)%s == (int)%s, \"enum %s: %s != %s\");\n", $2, $3, t, $2, $3}' "$EMAP"; } > "$T/e.c"
     clang -fsyntax-only -Werror -I"$DIR" "$T/e.c" > "$T/ediag" 2>&1 || true
     nbad="$(grep -c 'static assertion failed\|static_assert failed' "$T/ediag" || true)"
-    if grep 'error:' "$T/ediag" | grep -qv 'static assertion failed\|static_assert failed'; then
-      bad="$bad enum $t: erro de compilação na unidade de valores: $(grep 'error:' "$T/ediag" | grep -v 'static assertion failed\|static_assert failed' | head -3 | tr '\n' '|');"
+    # conflitos de tipo de função são da unidade de conformidade, não desta
+    if grep 'error:' "$T/ediag" | grep -v 'conflicting types for' | grep -qv 'static assertion failed\|static_assert failed'; then
+      bad="$bad enum $t: erro de compilação na unidade de valores: $(grep 'error:' "$T/ediag" | grep -v 'static assertion failed\|static_assert failed\|conflicting types for' | head -3 | tr '\n' '|');"
     fi
     # todo enumerador do C precisa de linha em enum-map.tsv
     clang -E -P -I"$DIR" "$h" 2>/dev/null | tr '\n' ' ' \

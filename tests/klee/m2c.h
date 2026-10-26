@@ -74,7 +74,7 @@ M2C_DECL(bool, int)
 /* Rust runtime: include/map2check.h and docs/cutover/symbol-matrix.tsv */
 void map2check_set_mode(int mode);
 void map2check_enable_witness(void);
-void map2check_init(void);
+void map2check_init(int isSvComp);
 void map2check_success(void);
 void map2check_reach_target(const char *func, int scope, int line);
 void map2check_map_malloc(const void *ptr_address, int size);
@@ -108,7 +108,7 @@ void *map2check_save_nondet_log_bool(int line, int scope, int type_var,
   do {                                                                        \
     map2check_set_mode(mode);                                                 \
     map2check_enable_witness();                                               \
-    map2check_init();                                                         \
+    map2check_init(0);                                                        \
   } while (0)
 #define NONDET(t, ct, line)                                                   \
   ({                                                                          \

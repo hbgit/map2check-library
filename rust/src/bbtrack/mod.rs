@@ -21,6 +21,19 @@ impl BasicBlockEntry {
     }
 }
 
+/// `trackbb_new_row` (`TrackBBLog.c:15-21`), private to the Rust core
+/// (SD-22): a row with `line` and a copy of `function_name`. develop copies
+/// the name into `char[35]`; this library keeps the whole name (SD-17).
+pub(crate) fn trackbb_new_row(step: u64, line: u32, function_name: &str) -> BasicBlockEntry {
+    BasicBlockEntry::new(step, line, function_name)
+}
+
+/// `is_in_tracked` (`TrackBBLog.c:23-33`), private to the Rust core
+/// (SD-22): whether a row of `line` exists, searched from the last row.
+pub(crate) fn is_in_tracked(line: u32, log: &[BasicBlockEntry]) -> bool {
+    log.iter().rev().any(|e| e.line == line)
+}
+
 /// Returns `true` if any tracked basic block is at `line`.
 /// Replaces `map2check_is_in_trackbb_container` (0/1 int) with a proper bool.
 pub fn contains_line(entries: &[BasicBlockEntry], line: u32) -> bool {
@@ -62,5 +75,32 @@ mod tests {
         assert!(json.contains("\"step\":3"));
         assert!(json.contains("\"line\":15"));
         assert!(json.contains("\"check\""));
+    }
+
+    /// `is_in_tracked` (`TrackBBLog.c:23-33`), private in the Rust core
+    /// (SD-22): whether any row has `line`, whatever its function name.
+    #[test]
+    fn is_in_tracked_matches_any_row_of_the_line() {
+        let rows = vec![
+            BasicBlockEntry::new(1, 10, "foo"),
+            BasicBlockEntry::new(2, 20, "bar"),
+        ];
+        assert!(is_in_tracked(10, &rows));
+        assert!(is_in_tracked(20, &rows));
+        assert!(!is_in_tracked(30, &rows));
+        assert!(!is_in_tracked(0, &[]));
+    }
+
+    /// `trackbb_new_row` (`TrackBBLog.c:15-21`), private in the Rust core
+    /// (SD-22): a row with the line and a copy of the name.
+    #[test]
+    fn trackbb_new_row_copies_line_and_name() {
+        let name = String::from("main");
+        let row = trackbb_new_row(5, 7, &name);
+        drop(name);
+        assert_eq!(
+            (row.step, row.line, row.function_name.as_str()),
+            (5, 7, "main")
+        );
     }
 }

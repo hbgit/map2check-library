@@ -72,17 +72,17 @@ map2check_calloc	missing	-	-
 map2check_check_cstring	missing	-	-
 map2check_check_deref	different	void (const void *, uint32_t, uint32_t, const char *)	void (const void *, unsigned int, unsigned int, const char *)
 map2check_crab_assume	missing	-	-
-map2check_destroy	missing	-	-
-map2check_error	missing	-	-
-map2check_exit	missing	-	-
+map2check_destroy	same	void (void)	void (void)
+map2check_error	same	void (void)	void (void)
+map2check_exit	same	void (void)	void (void)
 map2check_free	missing	-	-
 map2check_free_resolved_address	missing	-	-
 map2check_function	missing	-	-
-map2check_get_current_step	missing	-	-
-map2check_init	different	void (void)	void (void)
+map2check_get_current_step	same	unsigned int (void)	unsigned int (void)
+map2check_init	same	void (int)	void (int)
 map2check_load	missing	-	-
 map2check_malloc	missing	-	-
-map2check_next_current_step	missing	-	-
+map2check_next_current_step	same	void (void)	void (void)
 map2check_non_det_bool	missing	-	-
 map2check_non_det_char	missing	-	-
 map2check_non_det_double	missing	-	-
@@ -133,8 +133,8 @@ map2check_nondet_unsigned	missing	-	-
 map2check_nondet_ushort	missing	-	-
 map2check_posix	missing	-	-
 map2check_success	same	void (void)	void (void)
-map2check_target_function	missing	-	-
-map2check_track_bb	missing	-	-
+map2check_target_function	same	void (const char *, int, int)	void (const char *, int, int)
+map2check_track_bb	same	void (unsigned int, const char *)	void (unsigned int, const char *)
 map2check_wasm_check_access	same	void (uint64_t, uint64_t)	void (unsigned long, unsigned long)
 map2check_wasm_free	different	void (uint64_t, int64_t)	void (unsigned long, long)
 map2check_wasm_malloc	same	void (uint64_t, uint64_t)	void (unsigned long, unsigned long)
@@ -183,7 +183,7 @@ wasm_rt_grow_memory	undeclared	-	-
 wasm_rt_init	undeclared	-	-
 wasm_rt_is_initialized	undeclared	-	-
 wasm_rt_trap	undeclared	-	-
-write_property	missing	-	-
+write_property	same	void (enum ViolatedProperty, int, const char *)	void (enum ViolatedProperty, int, const char *)
 write_property_assert	missing	-	-
 write_property_deref	missing	-	-
 write_property_free	missing	-	-

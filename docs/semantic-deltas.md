@@ -62,7 +62,7 @@ Map2Check run (mode set) prints nothing on stdout, as develop.
 **Reproduce:**
 
 ```c
-map2check_init();
+map2check_init(0);
 map2check_save_basic_block_log(10, "main");
 print_all_containers_as_json();
 ```
@@ -81,7 +81,7 @@ property is `MEMSAFETY_FREE`, `MEMSAFETY_DEREF`, `MEMSAFETY_MEMTRACK` or
 **Reproduce:**
 
 ```c
-map2check_init();
+map2check_init(0);
 map2check_map_malloc((void *)0x1000, 16);
 set_false_result(0 /* Overflow */, 3, "main");
 print_all_containers_as_json();   /* no Container_AllocationLog */
@@ -123,7 +123,7 @@ violation is therefore final. `develop` matches `lib_old` here.
 **Reproduce:**
 
 ```c
-map2check_init();
+map2check_init(0);
 map2check_map_malloc((void *)0x1000, 16);
 set_false_result(5 /* Reachability */, 1, "main");
 map2check_check_load((void *)0x1000, 2, 0, 4, "main");
@@ -160,7 +160,7 @@ an empty function name.
 **Reproduce:**
 
 ```c
-map2check_init();
+map2check_init(0);
 map2check_map_malloc((void *)0x1000, 16);
 map2check_check_mem_endprog();   /* MemsafetyMemtrack */
 /* with map2check_set_memcleanup() first: MemsafetyMemcleanup */
@@ -186,7 +186,7 @@ allocation log and sets `ERROR_DEREF` (`AnalysisModeMemtrack.c:156-162`);
 **Reproduce:**
 
 ```c
-map2check_init();
+map2check_init(0);
 map2check_check_load(NULL, 12, 0, 4, "main");   /* MemsafetyDeref */
 map2check_set_null_is_valid();
 map2check_check_load(NULL, 12, 0, 4, "main");   /* None */
@@ -228,7 +228,7 @@ library does not have that mode split.)
 **Reproduce:**
 
 ```c
-map2check_init();
+map2check_init(0);
 map2check_check_free_resolved_address((void *)0x5000, 3, "main", 0);  /* MemsafetyFree (before #37: None) */
 map2check_reset();
 map2check_check_free("p", (void *)0x5000, 0, 4, "main");             /* MemsafetyFree */
@@ -307,11 +307,11 @@ an intentional delta.
 **Reproduce (link with `--features libfuzzer`):**
 
 ```c
-map2check_init();
+map2check_init(0);
 __VERIFIER_error();   /* no mode: prints "REACHABILITY", then SIGABRT */
 
 map2check_set_mode(1);  /* memtrack */
-map2check_init();
+map2check_init(0);
 __VERIFIER_error();   /* returns; nothing recorded */
 ```
 
@@ -337,7 +337,7 @@ at the boundary.
 **Reproduce:**
 
 ```c
-map2check_init();
+map2check_init(0);
 map2check_map_malloc((void *)0x1000, -1);   /* no record */
 set_false_result(99, 1, NULL);              /* ignored; result stays OK */
 ```
@@ -359,7 +359,7 @@ into global lists.
 **Reproduce:**
 
 ```c
-map2check_init();
+map2check_init(0);
 bbtrack_log_t *a = map2check_save_basic_block_log(1, "main");
 bbtrack_log_t *b = map2check_save_basic_block_log(2, "main");
 /* a->tqe_next == NULL && b->tqe_prev == NULL */
@@ -407,7 +407,7 @@ are stack/static slots: `map2check_load` accepts them
 **Reproduce:**
 
 ```c
-map2check_init();
+map2check_init(0);
 int n = 4; int vla[n];
 map2check_map_non_static_alloca("vla", vla, n, sizeof(int), 3, 0);  /* element count */
 map2check_set_memcleanup();
@@ -440,7 +440,7 @@ This is a false positive in `develop`.
 **Reproduce:**
 
 ```c
-map2check_init();
+map2check_init(0);
 map2check_map_malloc((void *)0x1000, 8);
 map2check_check_free_resolved_address((void *)0x1000, 3, "main", 0);  /* None; develop: FALSE_FREE */
 ```
@@ -496,10 +496,10 @@ The differences that remain are these:
 
 ```c
 map2check_set_mode(AnalysisMode_Memcleanup);
-map2check_init();
+map2check_init(0);
 map2check_map_malloc((void *)0x3000, 8);
 map2check_check_mem_endprog();                 /* None: nothing points to it */
-map2check_init();
+map2check_init(0);
 map2check_map_malloc((void *)0x3000, 8);
 map2check_map_store_pointer((void *)0x10, (void *)0x3000, 0, "p", 1, "main");
 map2check_check_mem_endprog();                 /* MemsafetyMemcleanup */
@@ -528,7 +528,7 @@ after the target.
 
 ```c
 map2check_set_mode(AnalysisMode_Target);
-map2check_init();
+map2check_init(0);
 map2check_reach_target("reach_error", 0, 12);   /* Reachability, line 12; returns */
 ```
 
@@ -537,7 +537,7 @@ map2check_reach_target("reach_error", 0, 12);   /* Reachability, line 12; return
 **Classification:** C behaviour preserved on purpose
 **Tests:** `rust/src/output/legacy_files.rs::unknown_uses_legacy_double_underscore_name`, `rust/src/ffi_golden_tests.rs::unknown_matches_c_runtime`
 
-**Rust:** an `UNKNOWN` verdict (`set_false_result(9, ...)`, or a NULL block
+**Rust:** an `UNKNOWN` verdict (`set_false_result(1, ...)`, or a NULL block
 from `map2check_map_malloc`/`_calloc` in the memtrack and memcleanup modes)
 writes `UNKNOWN\n` to `map2check_property__unknown`, with two
 underscores, and writes no `map2check_property`.
@@ -555,7 +555,7 @@ develop.
 
 ```c
 map2check_set_mode(AnalysisMode_Memtrack);
-map2check_init();
+map2check_init(0);
 map2check_map_malloc(NULL, 4);   /* writes map2check_property__unknown, aborts */
 ```
 
@@ -592,7 +592,7 @@ appends before it checks (`AnalysisModeMemtrack.c:346-358`); the golden
 ```c
 map2check_set_mode(AnalysisMode_Overflow);
 map2check_enable_witness();
-map2check_init();
+map2check_init(0);
 map2check_binop_add_signed(INT64_MAX, 1, 64, 1, "main");
 /* klee_log.csv is written; develop's NonDetGeneratorNone.c writes none */
 ```
@@ -684,7 +684,7 @@ Differences:
 
 ```c
 map2check_set_mode(AnalysisMode_Memtrack);
-map2check_init();
+map2check_init(0);
 map2check_wasm_malloc(0x10000, 16);
 map2check_wasm_check_access(0x10010, 4);   /* OVERFLOW, line 0, aborts */
 ```
@@ -802,7 +802,12 @@ int main(void) {
 ### SD-22 — Runtime-internal C names are not exported (D7)
 
 **Classification:** intentional
-**Tests:** `scripts/it/check-link-matrix.sh --ref <c-lib> --policy docs/runtime-abi/export-policy.tsv`, `scripts/it/test-check-link-matrix.sh`
+**Tests:** `rust/src/output/legacy_files.rs::write_property_helpers_match_c_format`, `rust/src/bbtrack/mod.rs::is_in_tracked_matches_any_row_of_the_line`, `rust/src/output/legacy_files.rs::trackbb_log_to_file_matches_c_format`
+
+The symbol sets are checked by `scripts/it/check-link-matrix.sh --ref <c-lib>
+--policy docs/runtime-abi/export-policy.tsv` and its test
+`scripts/it/test-check-link-matrix.sh`; the tests above pin the C-only
+helpers that the Rust core keeps private (Task 2.1).
 
 The user approved this on 2026-10-26 as item 2 of D7 ([d7-layout.md](cutover/d7-layout.md)).
 

@@ -107,7 +107,7 @@ At analysis end, `print_all_containers_as_json()` serializes the state to RFC 82
 
 ## Key Entry Points
 
-- `map2check_init()` — initializes the global analysis state
+- `map2check_init(int isSvComp)` — initializes the global analysis state (C runtime signature)
 - `map2check_success()` / `set_false_result(prp, line, func)` — set final verification result
 - `print_all_containers_as_json()` — emits the JSON result report
 - `map2check_is_valid_assert()`, `map2check_map_malloc()`, `map2check_map_free()` etc. — called by LLVM instrumentation passes in the Map2Check tool

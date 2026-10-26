@@ -52,19 +52,22 @@ fn report(what: &str, result: std::io::Result<()>) {
     }
 }
 
-/// `map2check_init()` with a mode set: removes the property files of an
-/// earlier run before this one writes its own.
-pub(crate) fn on_init() {
-    if let Some(dir) = channel(state::config()) {
-        legacy_files::remove_stale_property_files(&dir);
-    }
-}
+/// Set by the seed exchange of the Map2Check frontend when it replays a
+/// non-violating fuzzer input to learn its nondet values
+/// (`WitnessGeneration.c:23-28`).
+const SEED_REPLAY_ENV: &str = "MAP2CHECK_SEED_REPLAY";
 
-/// `generate_aux_files` (`WitnessGeneration.c:14-25`) when witness
-/// generation is on: the basic-block log, the logs of the memory modes
-/// (`analysis_generate_aux_witness_files`, `AnalysisModeMemtrack.c:148-152`)
-/// and, on a violation, the nondet log.
-fn write_aux_files(dir: &Path, config: Config, s: &AnalysisState, end_of_program: bool) {
+/// `generate_aux_files` (`WitnessGeneration.c:15-29`): the basic-block log,
+/// the logs of the memory modes (`analysis_generate_aux_witness_files`,
+/// `AnalysisModeMemtrack.c:148-152`) and, on a violation or when
+/// `MAP2CHECK_SEED_REPLAY` is set, the nondet log.
+pub(crate) fn generate_aux_files(
+    dir: &Path,
+    config: Config,
+    s: &mut AnalysisState,
+    violation: bool,
+) {
+    super::prepare_for_output(s);
     report(
         legacy_files::TRACKBB_LOG_FILE,
         legacy_files::write_trackbb_log(dir, &s.bbtrack),
@@ -73,7 +76,7 @@ fn write_aux_files(dir: &Path, config: Config, s: &AnalysisState, end_of_program
         &s.memtrack,
         &s.nondets,
         s.failed_free.as_ref(),
-        end_of_program,
+        s.end_of_program,
     );
     if matches!(
         config.mode,
@@ -86,39 +89,149 @@ fn write_aux_files(dir: &Path, config: Config, s: &AnalysisState, end_of_program
         );
         report(legacy_files::LIST_LOG_FILE, logs.write_list_log(dir));
     }
-    if !s.result.ok {
+    if violation || std::env::var_os(SEED_REPLAY_ENV).is_some() {
         report(legacy_files::NONDET_LOG_FILE, logs.write_nondet_log(dir));
     }
 }
 
-/// `map2check_exit` after the verdict is known: aux files, then
-/// `analysis_destroy`, then, on a violation, the confirmation file and the
-/// abort. Returns only when there is no violation.
-fn exit(dir: &Path, config: Config, end_of_program: bool) {
+/// `generate_confirmation_file` (`WitnessGeneration.c:32-36`).
+pub(crate) fn generate_confirmation_file(dir: &Path) {
+    report(
+        legacy_files::CHECKED_ERROR_FILE,
+        legacy_files::write_checked_error(dir),
+    );
+}
+
+/// `__m2c_rt_witness_generate_aux_files`: [`generate_aux_files`] on the
+/// state of the run, into the output directory, whatever the mode and the
+/// witness option (the IR module `WitnessGeneration.bc` is linked only into
+/// witness builds, D7).
+pub(crate) fn rt_generate_aux_files(violation: bool) {
+    let Some(dir) = output_dir() else {
+        return;
+    };
+    let config = state::config();
+    if let Err(e) = state::with_state(|s| {
+        generate_aux_files(&dir, config, s, violation);
+        Ok(())
+    }) {
+        eprintln!("[map2check] error: {e}");
+    }
+}
+
+/// `__m2c_rt_witness_generate_confirmation_file`:
+/// [`generate_confirmation_file`] into the output directory.
+pub(crate) fn rt_generate_confirmation_file() {
+    if let Some(dir) = output_dir() {
+        generate_confirmation_file(&dir);
+    }
+}
+
+/// `write_property` into the output directory (`PropertyGenerator.c:50-106`),
+/// whatever the mode.
+pub(crate) fn write_property(
+    violated: crate::caller::ViolatedProperty,
+    line: i32,
+    function_name: &str,
+) {
+    if let Some(dir) = output_dir() {
+        report(
+            legacy_files::PROPERTY_FILE,
+            legacy_files::write_property(&dir, violated, line, function_name),
+        );
+    }
+}
+
+/// `map2check_destroy` (`Map2CheckFunctions.c:77-87`): releases the
+/// basic-block log and runs `analysis_destroy` of the mode, once per run.
+/// The nondet log belongs to the generator (`nondet_destroy`) and stays.
+pub(crate) fn destroy(config: Config, s: &mut AnalysisState) {
+    if s.destroyed {
+        return;
+    }
+    s.destroyed = true;
+    s.bbtrack.clear();
+    mode::analysis_destroy(config.mode, s);
+}
+
+/// The end of `map2check_exit` (`Map2CheckFunctions.c:94-101`), once the
+/// verdict is known: the aux files (witness on), `map2check_destroy`, and on
+/// an error the confirmation file (witness on) and the abort. With no `dir`
+/// (no mode) nothing is written and nothing aborts. Returns only without an
+/// error, or without `dir`.
+fn finish(dir: Option<&Path>, config: Config) {
     let failed = match state::with_state(|s| {
-        if config.witness {
-            super::prepare_for_output(s);
-            write_aux_files(dir, config, s, end_of_program);
+        let failed = s.got_error || !s.result.ok;
+        if let (Some(dir), true) = (dir, config.witness) {
+            generate_aux_files(dir, config, s, failed);
         }
-        mode::analysis_destroy(config.mode, s);
-        Ok(!s.result.ok)
+        destroy(config, s);
+        Ok(failed)
     }) {
         Ok(failed) => failed,
-        Err(e) => unknown_and_abort(dir, config, &e),
+        Err(e) => match dir {
+            Some(dir) => unknown_and_abort(dir, config, &e),
+            None => {
+                eprintln!("[map2check] error: {e}");
+                return;
+            }
+        },
     };
-    if failed {
-        write_checked_error(dir, config);
+    if let (true, Some(dir)) = (failed, dir) {
+        if config.witness {
+            generate_confirmation_file(dir);
+        }
         std::process::abort();
     }
 }
 
-fn write_checked_error(dir: &Path, config: Config) {
-    if config.witness {
-        report(
-            legacy_files::CHECKED_ERROR_FILE,
-            legacy_files::write_checked_error(dir),
-        );
+/// `map2check_exit` (`Map2CheckFunctions.c:89-102`): with no error
+/// (`gotError` FALSE, no recorded violation) the end-of-program verdict of
+/// the mode runs, and a violation it finds writes its property files, as
+/// `analysis_is_program_correct` of the memory modes does
+/// (`AnalysisModeMemtrack.c:138-146`); then [`finish`]. Without a mode the
+/// verdict is only recorded (SD-03, SD-14).
+pub(crate) fn map2check_exit() {
+    let config = state::config();
+    let dir = channel(config);
+    let verdict = state::with_state(|s| {
+        if s.got_error || !s.result.ok {
+            return Ok(None);
+        }
+        s.end_of_program = true;
+        Ok(
+            mode::analysis_is_program_correct(config, s).map(|property| {
+                s.set_false(property, 0, "");
+                s.result.clone()
+            }),
+        )
+    });
+    match verdict {
+        Ok(Some(result)) => {
+            if let Some(dir) = &dir {
+                write_properties(dir, &result);
+            }
+        }
+        Ok(None) => {}
+        Err(e) => match &dir {
+            Some(dir) => unknown_and_abort(dir, config, &e),
+            None => eprintln!("[map2check] error: {e}"),
+        },
     }
+    finish(dir.as_deref(), config);
+}
+
+/// `map2check_error` (`Map2CheckFunctions.c:72-75`): sets `gotError` and
+/// runs [`map2check_exit`], which then skips the verdict and, with a mode
+/// set, aborts.
+pub(crate) fn map2check_error() {
+    if let Err(e) = state::with_state(|s| {
+        s.got_error = true;
+        Ok(())
+    }) {
+        eprintln!("[map2check] error: {e}");
+    }
+    map2check_exit();
 }
 
 /// The analysis state cannot be read (its lock was poisoned by an earlier
@@ -138,7 +251,9 @@ fn unknown_and_abort(dir: &Path, config: Config, error: &crate::error::Map2Check
         ..AnalysisResult::default()
     };
     write_properties(dir, &unknown);
-    write_checked_error(dir, config);
+    if config.witness {
+        generate_confirmation_file(dir);
+    }
     std::process::abort();
 }
 
@@ -151,10 +266,8 @@ fn write_properties(dir: &Path, result: &AnalysisResult) {
 
 /// The first violation was just recorded (`map2check_error`,
 /// `Map2CheckFunctions.c:72-75`): with a mode set, writes the property
-/// files, ends the run and aborts. `end_of_program` is true when the
-/// violation is the end-of-program verdict, whose check appends rows to
-/// develop's allocation log. Without a mode, returns at once.
-pub(crate) fn on_violation(end_of_program: bool) {
+/// files, ends the run and aborts. Without a mode, returns at once.
+pub(crate) fn on_violation() {
     let config = state::config();
     let Some(dir) = channel(config) else {
         return;
@@ -163,40 +276,21 @@ pub(crate) fn on_violation(end_of_program: bool) {
         Ok(result) => write_properties(&dir, &result),
         Err(e) => unknown_and_abort(&dir, config, &e),
     }
-    exit(&dir, config, end_of_program);
-    // `exit` returns only without a violation, which a recorded violation
+    finish(Some(&dir), config);
+    // `finish` returns only without a violation, which a recorded violation
     // rules out; abort anyway rather than let the program continue.
     std::process::abort();
 }
 
-/// `map2check_success` (`Map2CheckFunctions.c:67-70`, `:89-102`): with a
-/// mode set, writes `NONE`, runs the end-of-program verdict, ends the run,
-/// and returns when the program is correct. Returns whether the file
-/// channel handled the call.
+/// `map2check_success` (`Map2CheckFunctions.c:67-70`): with a mode set,
+/// `write_property(NONE, 0, "")` and [`map2check_exit`], which returns when
+/// the program is correct. Returns whether the file channel handled the call.
 pub(crate) fn on_success() -> bool {
     let config = state::config();
     let Some(dir) = channel(config) else {
         return false;
     };
     write_properties(&dir, &AnalysisResult::default());
-    let verdict = state::with_state(|s| {
-        let end_of_program = s.result.ok;
-        if end_of_program {
-            if let Some(property) = mode::analysis_is_program_correct(config, s) {
-                s.set_false(property, 0, "");
-            }
-        }
-        Ok((end_of_program, s.result.clone()))
-    });
-    let end_of_program = match verdict {
-        Ok((end_of_program, result)) => {
-            if !result.ok {
-                write_properties(&dir, &result);
-            }
-            end_of_program
-        }
-        Err(e) => unknown_and_abort(&dir, config, &e),
-    };
-    exit(&dir, config, end_of_program);
+    map2check_exit();
     true
 }

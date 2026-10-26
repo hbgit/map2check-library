@@ -70,10 +70,13 @@ fn log_error(e: &Map2CheckError) {
 fn record_violation(property: ViolatedProperty, line: u32, fname: &str, end_of_program: bool) {
     match state::with_state(|s| {
         let first = s.result.ok;
+        if first && end_of_program {
+            s.end_of_program = true;
+        }
         s.set_false(property, line, fname);
         Ok(first)
     }) {
-        Ok(true) => termination::on_violation(end_of_program),
+        Ok(true) => termination::on_violation(),
         Ok(false) => {}
         Err(e) => log_error(&e),
     }
@@ -100,21 +103,24 @@ fn check_active(check: Check) -> bool {
     mode::check_enabled(state::config().mode, check)
 }
 
+/// The C value of `enum ViolatedProperty` (`Map2CheckTypes.h:80-91`), the
+/// discriminant of [`ViolatedProperty`]; 10 is `Concurrency`.
 fn violated_property_from_raw(raw: i32) -> Option<ViolatedProperty> {
-    match raw {
-        0 => Some(ViolatedProperty::Overflow),
-        1 => Some(ViolatedProperty::MemsafetyFree),
-        2 => Some(ViolatedProperty::MemsafetyDeref),
-        3 => Some(ViolatedProperty::MemsafetyMemtrack),
-        4 => Some(ViolatedProperty::MemsafetyMemcleanup),
-        5 => Some(ViolatedProperty::Reachability),
-        6 => Some(ViolatedProperty::Concurrency),
-        7 => Some(ViolatedProperty::None),
-        8 => Some(ViolatedProperty::Assert),
-        9 => Some(ViolatedProperty::Unknown),
-        10 => Some(ViolatedProperty::DivByZero),
-        _ => None,
-    }
+    [
+        ViolatedProperty::None,
+        ViolatedProperty::Unknown,
+        ViolatedProperty::MemsafetyFree,
+        ViolatedProperty::MemsafetyDeref,
+        ViolatedProperty::MemsafetyMemtrack,
+        ViolatedProperty::Reachability,
+        ViolatedProperty::Overflow,
+        ViolatedProperty::Assert,
+        ViolatedProperty::MemsafetyMemcleanup,
+        ViolatedProperty::DivByZero,
+        ViolatedProperty::Concurrency,
+    ]
+    .into_iter()
+    .find(|p| *p as i32 == raw)
 }
 
 /// Failure policy at the `extern "C"` boundary (issue #8).
@@ -143,16 +149,19 @@ pub(crate) fn ffi_guard<T>(f: impl FnOnce() -> T, default: T) -> T {
 
 // ── Initialisation ────────────────────────────────────────────────────────────
 
-/// Initialises all containers. Must be called before any tracking function.
-/// With an analysis mode set, also removes the property files
-/// (`map2check_property*`) that an earlier run left in the current
-/// directory, so they cannot be read as this run's verdict.
+/// `map2check_init` of the C runtime (`Map2CheckFunctions.c:29-40`), which
+/// the Map2Check passes call first: starts a fresh analysis through the
+/// `analysis_init` of the selected mode (every container, counter, result and
+/// flag is cleared) and keeps the configuration, mode included. Must be
+/// called before any tracking function. `is_sv_comp` only sets develop's
+/// `sv_comp`, which nothing reads, so it is accepted and ignored. Like
+/// develop, it leaves the property files of an earlier run alone.
 #[no_mangle]
-pub extern "C" fn map2check_init() {
+pub extern "C" fn map2check_init(is_sv_comp: std::os::raw::c_int) {
     ffi_guard(
         || {
+            let _ = is_sv_comp;
             state::init();
-            termination::on_init();
         },
         (),
     );
@@ -257,6 +266,7 @@ pub extern "C" fn vcc_reset_meta_data() {
                 s.result.line = 0;
                 s.result.function_name.clear();
                 s.failed_free = None;
+                s.got_error = false;
                 Ok(())
             }) {
                 log_error(&e);
@@ -384,6 +394,190 @@ pub unsafe extern "C" fn map2check_reach_target(
         },
         (),
     );
+}
+
+// ── C runtime ABI: Map2CheckFunctions, TrackBBLog, PropertyGenerator ────────
+//
+// `Map2CheckFunctions.c`, `TrackBBLog.c` and `PropertyGenerator.c` of
+// Map2Check `develop`, with their C signatures. The C-only helpers of those
+// files (`write_property_<x>`, `trackbb_new_row`, `is_in_tracked`,
+// `trackbb_log_to_file`) are private to the Rust core (SD-22).
+
+/// `map2check_get_current_step` (`Map2CheckFunctions.c:42`): develop's
+/// `Map2CheckCurrentStep`, 0 after `map2check_init`.
+#[no_mangle]
+pub extern "C" fn map2check_get_current_step() -> std::os::raw::c_uint {
+    ffi_guard(|| state::with_state(|s| Ok(s.c_step)).unwrap_or(0), 0)
+}
+
+/// `map2check_next_current_step` (`Map2CheckFunctions.c:43`): adds 1 to the
+/// counter `map2check_get_current_step` reads, wrapping as a C `unsigned`.
+#[no_mangle]
+pub extern "C" fn map2check_next_current_step() {
+    ffi_guard(
+        || {
+            if let Err(e) = state::with_state(|s| {
+                s.c_step = s.c_step.wrapping_add(1);
+                Ok(())
+            }) {
+                log_error(&e);
+            }
+        },
+        (),
+    );
+}
+
+/// `map2check_track_bb` (`Map2CheckFunctions.c:49-55`): appends a row for
+/// the basic block at `line` of `function_name` unless a row of that line
+/// exists (`is_in_tracked`), so the first function name of a line stays.
+/// The rows are `track_bb_log.st` of the witness.
+///
+/// # Safety
+/// `function_name` must be null or a valid null-terminated C string.
+#[no_mangle]
+pub unsafe extern "C" fn map2check_track_bb(
+    line: std::os::raw::c_uint,
+    function_name: *const std::os::raw::c_char,
+) {
+    ffi_guard(
+        || {
+            // SAFETY: caller guarantees function_name is a valid C string or null.
+            let fname = unsafe { c_str(function_name) };
+            if let Err(e) = state::with_state(|s| {
+                if !crate::bbtrack::is_in_tracked(line, &s.bbtrack) {
+                    let step = s.next_step();
+                    s.bbtrack
+                        .push(crate::bbtrack::trackbb_new_row(step, line, fname));
+                }
+                Ok(())
+            }) {
+                log_error(&e);
+            }
+        },
+        (),
+    );
+}
+
+/// `map2check_target_function` (`Map2CheckFunctions.c:61-65`), which the
+/// target pass calls when the target function is reached: records
+/// `TARGET_REACHED` at `line` in `func_name`; `scope` is not used. With a
+/// mode set the run ends as develop's does (`map2check_property` has
+/// `TARGET-REACHED`, abort); unset, it returns (SD-15).
+///
+/// # Safety
+/// `func_name` must be null or a valid null-terminated C string.
+#[no_mangle]
+pub unsafe extern "C" fn map2check_target_function(
+    func_name: *const std::os::raw::c_char,
+    scope: std::os::raw::c_int,
+    line: std::os::raw::c_int,
+) {
+    ffi_guard(
+        || {
+            // SAFETY: caller guarantees func_name is a valid C string or null.
+            unsafe { mark_target_reached(func_name, scope, line) }
+        },
+        (),
+    );
+}
+
+/// `map2check_error` (`Map2CheckFunctions.c:72-75`): marks the run as
+/// failed (`gotError`) and calls `map2check_exit`, which skips the
+/// end-of-program verdict and, with a mode set, writes the witness files
+/// (when enabled) and aborts. It writes no property file; develop's callers
+/// write theirs first. Without a mode it returns (SD-03, SD-14).
+#[no_mangle]
+pub extern "C" fn map2check_error() {
+    ffi_guard(termination::map2check_error, ());
+}
+
+/// `map2check_exit` (`Map2CheckFunctions.c:89-102`): with no error yet, runs
+/// the end-of-program verdict of the mode (a leak writes its property files);
+/// then writes the witness files when enabled, runs `map2check_destroy`, and
+/// on an error writes `map2check_checked_error` (witness on) and aborts.
+/// Unlike `map2check_success` it writes no `NONE`. Without a mode nothing is
+/// written and it returns (SD-03, SD-14).
+#[no_mangle]
+pub extern "C" fn map2check_exit() {
+    ffi_guard(termination::map2check_exit, ());
+}
+
+/// `map2check_destroy` (`Map2CheckFunctions.c:77-87`): releases the
+/// basic-block log and the containers of the mode (`analysis_destroy`),
+/// once per run; a second call does nothing until `map2check_init`.
+#[no_mangle]
+pub extern "C" fn map2check_destroy() {
+    ffi_guard(
+        || {
+            let config = state::config();
+            if let Err(e) = state::with_state(|s| {
+                termination::destroy(config, s);
+                Ok(())
+            }) {
+                log_error(&e);
+            }
+        },
+        (),
+    );
+}
+
+/// `write_property` (`PropertyGenerator.c:50-106`): writes
+/// `map2check_property` with the text of `violated` and, for FALSE-FREE,
+/// FALSE-DEREF, FALSE-MEMTRACK, FALSE-MEMCLEANUP, OVERFLOW and ASSERT, its
+/// `map2check_property_<prp>` file, into the current directory, whatever
+/// the mode; `Line: %d` and `Function: %s` as develop prints them. It does
+/// not record a violation or end the run. `Concurrency`, outside the C
+/// switch, leaves `map2check_property` empty.
+///
+/// # Safety
+/// `violated` must be one of the `ViolatedProperty` values (C `NONE` 0 to
+/// `FALSE_DIVBYZERO` 9, or 10); `function_name` must be null or a valid
+/// null-terminated C string.
+#[no_mangle]
+pub unsafe extern "C" fn write_property(
+    violated: ViolatedProperty,
+    line: std::os::raw::c_int,
+    function_name: *const std::os::raw::c_char,
+) {
+    ffi_guard(
+        || {
+            // SAFETY: caller guarantees function_name is a valid C string or null.
+            let fname = unsafe { c_str(function_name) };
+            termination::write_property(violated, line, fname);
+        },
+        (),
+    );
+}
+
+/// Core entry point of `generate_aux_files` (`WitnessGeneration.c:15-29`),
+/// which the IR module `WitnessGeneration.bc` forwards to (D7): writes
+/// `track_bb_log.st`, the logs of the memory modes and, when `violation` is
+/// nonzero or `MAP2CHECK_SEED_REPLAY` is set, `klee_log.csv`, into the
+/// current directory. `trackbb_log` is develop's container pointer; the core
+/// reads its own state, so it is ignored and may be null.
+///
+/// # Safety
+/// `trackbb_log` is never dereferenced.
+#[no_mangle]
+pub unsafe extern "C" fn __m2c_rt_witness_generate_aux_files(
+    trackbb_log: *mut std::os::raw::c_void,
+    violation: std::os::raw::c_char,
+) {
+    ffi_guard(
+        || {
+            let _ = trackbb_log;
+            termination::rt_generate_aux_files(violation != 0);
+        },
+        (),
+    );
+}
+
+/// Core entry point of `generate_confirmation_file`
+/// (`WitnessGeneration.c:32-36`), which `WitnessGeneration.bc` forwards to
+/// (D7): writes `END OF TIME` to `map2check_checked_error`.
+#[no_mangle]
+pub extern "C" fn __m2c_rt_witness_generate_confirmation_file() {
+    ffi_guard(termination::rt_generate_confirmation_file, ());
 }
 
 // ── NonDet tracking ───────────────────────────────────────────────────────────

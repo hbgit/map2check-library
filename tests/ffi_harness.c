@@ -552,7 +552,7 @@ static int run_mode_scenario(scenario_fn scenario, int aborts,
 
 static void scenario_none_mode(void) {
     map2check_set_mode(AnalysisMode_None);
-    map2check_init();
+    map2check_init(0);
     map2check_check_deref((void *)0xdead, 0, 1, "main");
     if (get_current_property() != None) {
         _exit(91);
@@ -562,7 +562,7 @@ static void scenario_none_mode(void) {
 
 static void scenario_memtrack_deref(void) {
     map2check_set_mode(AnalysisMode_Memtrack);
-    map2check_init();
+    map2check_init(0);
     map2check_check_deref((void *)0xdead, 0, 1, "main");
 }
 
@@ -573,7 +573,7 @@ static void scenario_memtrack_deref_witness(void) {
 
 static void scenario_assert_ignores_overflow(void) {
     map2check_set_mode(AnalysisMode_Assert);
-    map2check_init();
+    map2check_init(0);
     map2check_binop_add_int(2147483647, 1, 2, 0, "main");
     if (get_current_property() != None) {
         _exit(91);
@@ -583,7 +583,7 @@ static void scenario_assert_ignores_overflow(void) {
 
 static void scenario_target(void) {
     map2check_set_mode(AnalysisMode_Target);
-    map2check_init();
+    map2check_init(0);
     map2check_reach_target("reach_error", 0, 12);
 }
 
@@ -593,7 +593,7 @@ static void scenario_out_of_range_keeps_target(void) {
     map2check_set_mode(-1);
     map2check_set_mode(6);
     map2check_set_mode(2147483647);
-    map2check_init();
+    map2check_init(0);
     map2check_check_deref((void *)0xdead, 0, 1, "main");
     if (get_current_property() != None) {
         _exit(91);
@@ -604,7 +604,7 @@ static void scenario_out_of_range_keeps_target(void) {
 /* Memcleanup mode: an unreferenced leak gives no verdict (I-2). */
 static void scenario_memcleanup_unreferenced(void) {
     map2check_set_mode(AnalysisMode_Memcleanup);
-    map2check_init();
+    map2check_init(0);
     map2check_map_malloc((void *)0x3000, 8);
     map2check_check_mem_endprog();
     if (get_current_property() != None) {
@@ -615,7 +615,7 @@ static void scenario_memcleanup_unreferenced(void) {
 
 static void scenario_memcleanup_referenced(void) {
     map2check_set_mode(AnalysisMode_Memcleanup);
-    map2check_init();
+    map2check_init(0);
     map2check_map_malloc((void *)0x3000, 8);
     map2check_map_store_pointer((void *)0x10, (void *)0x3000, 0, "p", 1, "main");
     map2check_check_mem_endprog();
@@ -676,7 +676,7 @@ int main(void) {
     run_bad_inputs();
 
     /* round 2: well-formed use of every export after init */
-    map2check_init();
+    map2check_init(0);
     run_valid_pass();
 
     /* explicit reset between "runs" */

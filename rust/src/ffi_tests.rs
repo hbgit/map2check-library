@@ -48,7 +48,7 @@ fn assert_violated(property: ViolatedProperty, line: u32, function_name: &str) {
 #[test]
 fn init_leaves_state_empty_and_ok() {
     let _guard = fresh();
-    map2check_init();
+    map2check_init(0);
     assert_ok();
     assert_eq!(snapshot(|s| s.current_step()), 0);
     assert!(snapshot(|s| s.memtrack.is_empty()
@@ -59,11 +59,11 @@ fn init_leaves_state_empty_and_ok() {
 #[test]
 fn second_init_starts_from_clean_state() {
     let _guard = fresh();
-    map2check_init();
+    map2check_init(0);
     // SAFETY: fake addresses are only stored, never dereferenced.
     unsafe { map2check_map_malloc(addr(0x1000), 8) };
     // SAFETY: C-string literal is valid and null-terminated.
-    unsafe { set_false_result(5, 7, c"main".as_ptr()) };
+    unsafe { set_false_result(ViolatedProperty::Reachability as i32, 7, c"main".as_ptr()) };
     map2check_set_memcleanup();
     map2check_set_null_is_valid();
     let mut value: i32 = 3;
@@ -72,7 +72,7 @@ fn second_init_starts_from_clean_state() {
     let _ = get_next_step();
     assert!(snapshot(|s| s.current_step() > 0 && !s.nondets.is_empty()));
 
-    map2check_init();
+    map2check_init(0);
 
     assert_ok();
     snapshot(|s| {
@@ -92,7 +92,7 @@ fn reset_clears_records_result_step_and_flags() {
     // SAFETY: null pointer is a valid malloc result.
     unsafe { map2check_map_malloc(addr(0x1000), 16) };
     // SAFETY: C-string literal is valid and null-terminated.
-    unsafe { set_false_result(5, 7, c"main".as_ptr()) };
+    unsafe { set_false_result(ViolatedProperty::Reachability as i32, 7, c"main".as_ptr()) };
     map2check_set_memcleanup();
     map2check_set_null_is_valid();
 
@@ -121,7 +121,7 @@ fn success_does_not_change_state() {
 fn set_false_result_records_property_line_and_function() {
     let _guard = fresh();
     // SAFETY: C-string literal is valid and null-terminated.
-    unsafe { set_false_result(5, 42, c"main".as_ptr()) };
+    unsafe { set_false_result(ViolatedProperty::Reachability as i32, 42, c"main".as_ptr()) };
     assert_violated(ViolatedProperty::Reachability, 42, "main");
 }
 
@@ -137,7 +137,7 @@ fn set_false_result_ignores_unknown_property() {
 fn set_false_result_accepts_null_function_name() {
     let _guard = fresh();
     // SAFETY: null is an accepted function_name.
-    unsafe { set_false_result(0, 3, std::ptr::null()) };
+    unsafe { set_false_result(ViolatedProperty::Overflow as i32, 3, std::ptr::null()) };
     assert_violated(ViolatedProperty::Overflow, 3, "");
 }
 
@@ -146,7 +146,7 @@ fn get_current_property_reflects_last_violation() {
     let _guard = fresh();
     assert_eq!(get_current_property(), ViolatedProperty::None);
     // SAFETY: C-string literal is valid and null-terminated.
-    unsafe { set_false_result(2, 1, c"f".as_ptr()) };
+    unsafe { set_false_result(ViolatedProperty::MemsafetyDeref as i32, 1, c"f".as_ptr()) };
     assert_eq!(get_current_property(), ViolatedProperty::MemsafetyDeref);
 }
 
@@ -184,7 +184,7 @@ fn vcc_reset_meta_data_clears_result_but_keeps_records() {
     // SAFETY: fake address is never dereferenced.
     unsafe { map2check_map_malloc(addr(0x1000), 8) };
     // SAFETY: C-string literal is valid and null-terminated.
-    unsafe { set_false_result(1, 9, c"main".as_ptr()) };
+    unsafe { set_false_result(ViolatedProperty::MemsafetyFree as i32, 9, c"main".as_ptr()) };
 
     vcc_reset_meta_data();
 
@@ -528,7 +528,7 @@ fn posix_memalign_null_block_is_unknown_in_memory_modes() {
     // UNKNOWN, and no store follows.
     let _guard = fresh();
     map2check_set_mode(AnalysisMode::Memtrack as i32);
-    map2check_init();
+    map2check_init(0);
     let mut slot: *const c_void = std::ptr::null();
     // SAFETY: `slot` is a live `void *` for the whole call.
     unsafe { map2check_map_posix_memalign(std::ptr::addr_of_mut!(slot).cast(), 64) };
@@ -1119,7 +1119,7 @@ fn signed_binops_are_gated_like_the_other_binops() {
         for (op, a, b) in calls {
             state::reset();
             map2check_set_mode(mode as i32);
-            map2check_init();
+            map2check_init(0);
             // SAFETY: C-string literal is valid and null-terminated.
             unsafe { op(a, b, 32, 4, c"f".as_ptr()) };
             let reported = !snapshot(|s| s.result.ok);
@@ -1171,7 +1171,7 @@ fn signed_binops_called_as_c_does() {
 fn set_false_result_accepts_div_by_zero() {
     let _guard = fresh();
     // SAFETY: C-string literal is valid and null-terminated.
-    unsafe { set_false_result(10, 3, c"main".as_ptr()) };
+    unsafe { set_false_result(ViolatedProperty::DivByZero as i32, 3, c"main".as_ptr()) };
     assert_violated(ViolatedProperty::DivByZero, 3, "main");
 }
 
@@ -1233,7 +1233,7 @@ fn sd03_safe_check_keeps_earlier_violation() {
     // SAFETY: C-string literals are valid; fake addresses are never dereferenced.
     unsafe {
         map2check_map_malloc(addr(0x1000), 16);
-        set_false_result(5, 1, c"main".as_ptr());
+        set_false_result(ViolatedProperty::Reachability as i32, 1, c"main".as_ptr());
         map2check_check_load(addr(0x1000), 2, 0, 4, c"main".as_ptr());
     }
     assert_violated(ViolatedProperty::Reachability, 1, "main");
@@ -1283,7 +1283,7 @@ fn sd03_later_violation_does_not_overwrite_first() {
             c"main".as_ptr(),
         );
         map2check_check_deref(std::ptr::null(), 0, 9, c"main".as_ptr());
-        set_false_result(5, 10, c"main".as_ptr());
+        set_false_result(ViolatedProperty::Reachability as i32, 10, c"main".as_ptr());
         map2check_binop_add_int(i32::MAX, 1, 11, 0, c"main".as_ptr());
     }
     assert_violated(ViolatedProperty::MemsafetyDeref, 7, "first");
@@ -1294,7 +1294,7 @@ fn sd03_later_violation_does_not_overwrite_first() {
 #[test]
 fn deref_after_free_is_invalid() {
     let _guard = fresh();
-    map2check_init();
+    map2check_init(0);
     // SAFETY: C-string literals are valid; fake addresses are never dereferenced.
     unsafe {
         map2check_map_malloc(addr(0x2000), 16);
@@ -1781,7 +1781,7 @@ fn macro_generated_exports_match_the_hand_written_header_declarations() {
 #[test]
 fn memcleanup_reports_leak_as_memcleanup_at_exit() {
     let _guard = fresh();
-    map2check_init();
+    map2check_init(0);
     map2check_set_memcleanup();
     // SAFETY: fake address is never dereferenced.
     unsafe { map2check_map_malloc(addr(0x3000), 32) };
@@ -1794,7 +1794,7 @@ fn without_memcleanup_leak_is_reported_as_memtrack_at_exit() {
     // develop: analysis_is_program_correct() of AnalysisModeMemtrack.c writes
     // FALSE_MEMTRACK; the leak check runs at exit in both modes.
     let _guard = fresh();
-    map2check_init();
+    map2check_init(0);
     // SAFETY: fake address is never dereferenced.
     unsafe { map2check_map_malloc(addr(0x3000), 32) };
     map2check_check_mem_endprog();
@@ -1830,7 +1830,7 @@ fn endprog_keeps_an_earlier_violation() {
 #[test]
 fn null_is_valid_accepts_null_load() {
     let _guard = fresh();
-    map2check_init();
+    map2check_init(0);
     map2check_set_null_is_valid();
     // SAFETY: null is never dereferenced.
     unsafe { map2check_check_load(std::ptr::null(), 3, 0, 4, c"main".as_ptr()) };
@@ -1861,7 +1861,7 @@ fn options_survive_init_and_reset() {
     let expected = (ViolatedProperty::MemsafetyMemcleanup, true);
     assert_eq!(observed_options(), expected);
 
-    map2check_init();
+    map2check_init(0);
     assert_eq!(observed_options(), expected);
 
     map2check_reset();
@@ -1874,7 +1874,7 @@ fn enable_witness_is_configuration_kept_by_init_and_reset() {
     assert!(!state::config().witness);
     map2check_enable_witness();
     assert!(state::config().witness);
-    map2check_init();
+    map2check_init(0);
     map2check_reset();
     assert!(state::config().witness);
     // Configuration only: it records nothing.
@@ -1958,7 +1958,7 @@ const MODES: [AnalysisMode; 6] = [
 fn start(mode: AnalysisMode) {
     state::reset();
     map2check_set_mode(mode as i32);
-    map2check_init();
+    map2check_init(0);
 }
 
 /// Runs one violating call of each check family on a fresh analysis in
@@ -2014,7 +2014,7 @@ use ViolatedProperty as P;
 fn mode_none_never_reports_memory_errors() {
     let _guard = fresh();
     map2check_set_mode(AnalysisMode::None as i32);
-    map2check_init();
+    map2check_init(0);
     // SAFETY: C-string literal is valid; fake address is never dereferenced.
     unsafe { map2check_check_deref(addr(0xdead), 0, 1, c"main".as_ptr()) };
     assert_ok();
@@ -2024,7 +2024,7 @@ fn mode_none_never_reports_memory_errors() {
 fn mode_memtrack_reports_invalid_deref() {
     let _guard = fresh();
     map2check_set_mode(AnalysisMode::Memtrack as i32);
-    map2check_init();
+    map2check_init(0);
     // SAFETY: C-string literal is valid; fake address is never dereferenced.
     unsafe { map2check_check_deref(addr(0xdead), 0, 1, c"main".as_ptr()) };
     assert_violated(ViolatedProperty::MemsafetyDeref, 1, "main");
@@ -2124,7 +2124,7 @@ fn unset_mode_keeps_every_check_active() {
     ];
     for (slot, run) in out.iter_mut().zip(runs) {
         state::reset();
-        map2check_init();
+        map2check_init(0);
         run();
         *slot = snapshot(|s| s.result.property);
     }
@@ -2174,7 +2174,7 @@ fn set_mode_is_configuration_kept_by_init_and_reset() {
     let _guard = fresh();
     for mode in MODES {
         map2check_set_mode(mode as i32);
-        map2check_init();
+        map2check_init(0);
         assert_eq!(state::config().mode, Some(mode));
         map2check_reset();
         assert_eq!(state::config().mode, Some(mode));
@@ -2185,7 +2185,7 @@ fn set_mode_is_configuration_kept_by_init_and_reset() {
 fn reset_keeps_selected_mode() {
     let _guard = fresh();
     map2check_set_mode(AnalysisMode::Overflow as i32);
-    map2check_init();
+    map2check_init(0);
     map2check_reset();
     assert_eq!(state::config().mode, Some(AnalysisMode::Overflow));
 }
@@ -2194,7 +2194,7 @@ fn reset_keeps_selected_mode() {
 fn reach_target_sets_target_reached() {
     let _guard = fresh();
     map2check_set_mode(AnalysisMode::Target as i32);
-    map2check_init();
+    map2check_init(0);
     // SAFETY: C-string literal is valid and null-terminated.
     unsafe { mark_target_reached(c"reach_error".as_ptr(), 0, 12) };
     assert_violated(ViolatedProperty::Reachability, 12, "reach_error");
@@ -2219,7 +2219,7 @@ fn reach_target_keeps_the_first_violation() {
     start(AnalysisMode::Target);
     // SAFETY: C-string literals are valid and null-terminated.
     unsafe {
-        set_false_result(0, 3, c"f".as_ptr());
+        set_false_result(ViolatedProperty::Overflow as i32, 3, c"f".as_ptr());
         map2check_reach_target(c"reach_error".as_ptr(), 0, 12);
     }
     assert_violated(ViolatedProperty::Overflow, 3, "f");
@@ -2242,11 +2242,11 @@ fn reach_target_works_in_every_mode_and_accepts_null_name() {
 fn set_false_result_accepts_the_appended_properties() {
     let _guard = fresh();
     // SAFETY: C-string literal is valid and null-terminated.
-    unsafe { set_false_result(8, 4, c"main".as_ptr()) };
+    unsafe { set_false_result(ViolatedProperty::Assert as i32, 4, c"main".as_ptr()) };
     assert_violated(ViolatedProperty::Assert, 4, "main");
     state::reset();
     // SAFETY: as above.
-    unsafe { set_false_result(9, 0, c"main".as_ptr()) };
+    unsafe { set_false_result(ViolatedProperty::Unknown as i32, 0, c"main".as_ptr()) };
     assert_violated(ViolatedProperty::Unknown, 0, "main");
 }
 
@@ -2436,7 +2436,7 @@ mod wasm {
         if let Some(m) = mode {
             map2check_set_mode(m as i32);
         }
-        map2check_init();
+        map2check_init(0);
     }
 
     fn mem() -> wasm_rt_memory_t {
@@ -2639,7 +2639,7 @@ mod wasm {
         let _guard = fresh();
         started(Some(AnalysisMode::Memtrack));
         map2check_wasm_malloc(0x1000, 16);
-        map2check_init();
+        map2check_init(0);
         assert!(snapshot(|s| s.wasm_allocs.is_empty()));
         map2check_wasm_malloc(0x1000, 16);
         map2check_reset();
@@ -2785,14 +2785,14 @@ fn alloca_of(address: usize, size: i32, primitive: i32) {
 #[test]
 fn container_is_empty_initially() {
     let _guard = fresh();
-    map2check_init();
+    map2check_init(0);
     assert_eq!(snapshot(|s| s.memtrack.len()), 0);
 }
 
 #[test]
 fn container_add_item_increases_size() {
     let _guard = fresh();
-    map2check_init();
+    map2check_init(0);
     malloc_of(0x1000, 4);
     assert_eq!(snapshot(|s| s.memtrack.len()), 1);
 }
@@ -2800,7 +2800,7 @@ fn container_add_item_increases_size() {
 #[test]
 fn container_added_item_is_set() {
     let _guard = fresh();
-    map2check_init();
+    map2check_init(0);
     malloc_of(42, 4);
     assert_eq!(only_memtrack().points_to, 42);
 }
@@ -2808,7 +2808,7 @@ fn container_added_item_is_set() {
 #[test]
 fn container_multiple_items_added_do_not_break() {
     let _guard = fresh();
-    map2check_init();
+    map2check_init(0);
     let n = 10_000usize;
     for i in 0..n {
         malloc_of(n - i, 4);
@@ -2997,4 +2997,269 @@ fn memtrack_release_after_calloc_leaves_no_leak() {
     free_resolved(0x1000);
     map2check_check_mem_endprog();
     assert_ok();
+}
+
+// ── Map2CheckFunctions, TrackBBLog and PropertyGenerator (Task 2.1) ─────────
+//
+// The C ABI of `Map2CheckFunctions.c`, `TrackBBLog.c` and
+// `PropertyGenerator.c` of Map2Check `develop`. Exports that end the run or
+// write files with a mode set are pinned in `ffi_golden_tests.rs`, in a
+// child process; these tests pin the effect on the analysis state.
+
+#[test]
+fn map2check_init_takes_the_c_sv_comp_argument_and_starts_clean() {
+    let _guard = fresh();
+    // `Map2CheckFunctions.c:29-40`: `isSvComp` only sets `sv_comp`, which
+    // nothing reads; any value starts the same clean analysis.
+    for is_sv_comp in [0, 1, -7] {
+        // SAFETY: fake address is never dereferenced.
+        unsafe { map2check_map_malloc(addr(0x1000), 8) };
+        // SAFETY: C-string literal is valid and null-terminated.
+        unsafe { map2check_track_bb(3, c"main".as_ptr()) };
+        map2check_next_current_step();
+        map2check_init(is_sv_comp);
+        assert_ok();
+        snapshot(|s| {
+            assert!(s.memtrack.is_empty() && s.bbtrack.is_empty());
+            assert_eq!(s.current_step(), 0);
+        });
+        assert_eq!(map2check_get_current_step(), 0);
+    }
+}
+
+#[test]
+fn map2check_get_current_step_is_the_c_step_counter() {
+    let _guard = fresh();
+    map2check_init(0);
+    // `Map2CheckFunctions.c:30,42-43`: 0 after init, +1 per
+    // `map2check_next_current_step`, and nothing else moves it.
+    assert_eq!(map2check_get_current_step(), 0);
+    // SAFETY: C-string literal is valid; fake address is never dereferenced.
+    unsafe {
+        map2check_track_bb(3, c"main".as_ptr());
+        map2check_map_malloc(addr(0x1000), 8);
+    }
+    assert_eq!(map2check_get_current_step(), 0);
+    map2check_next_current_step();
+    map2check_next_current_step();
+    assert_eq!(map2check_get_current_step(), 2);
+    assert_eq!(map2check_get_current_step(), 2, "ler não avança");
+    map2check_init(0);
+    assert_eq!(map2check_get_current_step(), 0);
+}
+
+#[test]
+fn map2check_next_current_step_wraps_like_c_unsigned() {
+    let _guard = fresh();
+    map2check_init(0);
+    state::with_state(|s| {
+        s.c_step = u32::MAX;
+        Ok(())
+    })
+    .unwrap();
+    map2check_next_current_step();
+    assert_eq!(map2check_get_current_step(), 0);
+}
+
+#[test]
+fn map2check_track_bb_appends_each_line_once() {
+    let _guard = fresh();
+    map2check_init(0);
+    // `Map2CheckFunctions.c:49-55`: a row is appended only when
+    // `is_in_tracked` finds no row of that line; the first name stays.
+    // SAFETY: C-string literals are valid and null-terminated.
+    unsafe {
+        map2check_track_bb(3, c"main".as_ptr());
+        map2check_track_bb(4, c"main".as_ptr());
+        map2check_track_bb(3, c"other".as_ptr());
+        map2check_track_bb(u32::MAX, c"f".as_ptr());
+    }
+    let rows = snapshot(|s| {
+        s.bbtrack
+            .iter()
+            .map(|r| (r.line, r.function_name.clone()))
+            .collect::<Vec<_>>()
+    });
+    assert_eq!(
+        rows,
+        [
+            (3, "main".to_owned()),
+            (4, "main".to_owned()),
+            (u32::MAX, "f".to_owned())
+        ]
+    );
+    assert_eq!(map2check_is_in_trackbb_container(4), 1);
+    assert_ok();
+}
+
+#[test]
+fn map2check_track_bb_accepts_null_function_name() {
+    let _guard = fresh();
+    map2check_init(0);
+    // SAFETY: null is an accepted function_name (SD-09).
+    unsafe { map2check_track_bb(9, std::ptr::null()) };
+    assert_eq!(
+        snapshot(|s| s
+            .bbtrack
+            .iter()
+            .map(|r| r.function_name.clone())
+            .collect::<Vec<_>>()),
+        [String::new()]
+    );
+}
+
+#[test]
+fn map2check_target_function_records_target_reached() {
+    let _guard = fresh();
+    map2check_init(0);
+    // `Map2CheckFunctions.c:61-65`: TARGET_REACHED at `line` in `func_name`;
+    // `scope` is not used. Unset mode: recorded, the call returns (SD-15).
+    // SAFETY: C-string literal is valid and null-terminated.
+    unsafe { map2check_target_function(c"reach_error".as_ptr(), 3, 22) };
+    assert_violated(ViolatedProperty::Reachability, 22, "reach_error");
+    // SAFETY: as above; the first violation is final (SD-03).
+    unsafe { map2check_target_function(c"other".as_ptr(), 0, 30) };
+    assert_violated(ViolatedProperty::Reachability, 22, "reach_error");
+}
+
+#[test]
+fn map2check_target_function_accepts_null_name() {
+    let _guard = fresh();
+    start(AnalysisMode::Target);
+    // SAFETY: null is an accepted name (SD-09).
+    unsafe { map2check_target_function(std::ptr::null(), 0, 5) };
+    assert_violated(ViolatedProperty::Reachability, 5, "");
+}
+
+#[test]
+fn map2check_destroy_releases_the_block_log_and_the_mode_containers_once() {
+    let _guard = fresh();
+    start(AnalysisMode::Memtrack);
+    // SAFETY: C-string literal is valid; fake address is never dereferenced.
+    unsafe {
+        map2check_track_bb(3, c"main".as_ptr());
+        map2check_map_malloc(addr(0x1000), 8);
+    }
+    // `Map2CheckFunctions.c:77-87`: frees the basic-block log, then
+    // `analysis_destroy` (memtrack frees its logs), once.
+    map2check_destroy();
+    snapshot(|s| {
+        assert!(s.bbtrack.is_empty());
+        assert!(s.memtrack.is_empty());
+        assert!(s.destroyed);
+    });
+    // SAFETY: as above.
+    unsafe { map2check_track_bb(4, c"main".as_ptr()) };
+    map2check_destroy();
+    assert_eq!(
+        snapshot(|s| s.bbtrack.len()),
+        1,
+        "a segunda chamada não faz nada"
+    );
+    assert_ok();
+}
+
+#[test]
+fn map2check_destroy_keeps_records_of_modes_without_containers() {
+    let _guard = fresh();
+    start(AnalysisMode::Assert);
+    // SAFETY: fake address is never dereferenced.
+    unsafe { map2check_map_malloc(addr(0x1000), 8) };
+    map2check_destroy();
+    // AnalysisModeAssert.c:33-35: `analysis_destroy` does nothing.
+    assert_eq!(snapshot(|s| s.memtrack.len()), 1);
+}
+
+#[test]
+fn map2check_exit_without_mode_runs_the_verdict_and_returns() {
+    let _guard = fresh();
+    map2check_init(0);
+    // SAFETY: fake address is never dereferenced.
+    unsafe { map2check_map_malloc(addr(0x1000), 8) };
+    // `Map2CheckFunctions.c:89-92`: with no error, the verdict of the mode
+    // runs. Unset mode: recorded, no files, no abort (SD-03, SD-14).
+    map2check_exit();
+    assert_violated(ViolatedProperty::MemsafetyMemtrack, 0, "");
+    assert!(snapshot(|s| s.destroyed), "map2check_destroy roda");
+}
+
+#[test]
+fn map2check_exit_skips_the_verdict_after_an_error() {
+    let _guard = fresh();
+    map2check_init(0);
+    // SAFETY: fake address is never dereferenced.
+    unsafe { map2check_map_malloc(addr(0x1000), 8) };
+    // `:90`: `analysis_is_program_correct` runs only when `gotError` is
+    // FALSE; `map2check_error` sets it (`:72-75`).
+    map2check_error();
+    assert!(snapshot(|s| s.got_error));
+    assert!(
+        snapshot(|s| s.result.ok),
+        "nenhuma propriedade é registrada"
+    );
+}
+
+#[test]
+fn map2check_error_without_mode_returns() {
+    let _guard = fresh();
+    map2check_init(0);
+    map2check_error();
+    snapshot(|s| assert!(s.got_error && s.destroyed));
+    map2check_init(0);
+    assert!(!snapshot(|s| s.got_error), "map2check_init recomeça");
+}
+
+#[test]
+fn write_property_without_output_directory_changes_nothing() {
+    let _guard = fresh();
+    map2check_init(0);
+    // A test build without `MAP2CHECK_TEST_OUTPUT_DIR` writes nowhere; the
+    // export never touches the analysis state (`PropertyGenerator.c:50-106`
+    // only writes files). Files: `ffi_golden_tests.rs`.
+    // SAFETY: C-string literal is valid and null-terminated.
+    unsafe { write_property(ViolatedProperty::MemsafetyFree, 7, c"main".as_ptr()) };
+    assert_ok();
+}
+
+#[test]
+fn set_false_result_takes_the_c_enum_values() {
+    let _guard = fresh();
+    // `Map2CheckTypes.h:80-91`: UNKNOWN = 1, FALSE_OVERFLOW = 6.
+    // SAFETY: C-string literal is valid and null-terminated.
+    unsafe { set_false_result(1, 4, c"main".as_ptr()) };
+    assert_violated(ViolatedProperty::Unknown, 4, "main");
+    map2check_reset();
+    // SAFETY: as above.
+    unsafe { set_false_result(6, 5, c"main".as_ptr()) };
+    assert_violated(ViolatedProperty::Overflow, 5, "main");
+    map2check_reset();
+    // SAFETY: as above. 10 is `Concurrency`, 11 is no value.
+    unsafe { set_false_result(10, 6, c"main".as_ptr()) };
+    assert_violated(ViolatedProperty::Concurrency, 6, "main");
+    map2check_reset();
+    // SAFETY: as above.
+    unsafe { set_false_result(11, 6, c"main".as_ptr()) };
+    assert_ok();
+}
+
+#[test]
+fn get_current_property_returns_the_c_enum_value() {
+    let _guard = fresh();
+    // SAFETY: C-string literal is valid and null-terminated.
+    unsafe { set_false_result(3, 1, c"f".as_ptr()) };
+    assert_eq!(get_current_property() as i32, 3, "FALSE_DEREF");
+}
+
+#[test]
+fn m2c_rt_witness_entry_points_without_output_directory_change_nothing() {
+    let _guard = fresh();
+    map2check_init(0);
+    // SAFETY: C-string literal is valid; a NULL log pointer is accepted (D7).
+    unsafe {
+        map2check_track_bb(3, c"main".as_ptr());
+        __m2c_rt_witness_generate_aux_files(std::ptr::null_mut(), 1);
+    }
+    __m2c_rt_witness_generate_confirmation_file();
+    assert_ok();
+    assert_eq!(snapshot(|s| s.bbtrack.len()), 1);
 }

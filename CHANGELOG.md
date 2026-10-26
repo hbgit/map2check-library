@@ -15,6 +15,23 @@ the C ABI or the JSON report must update them.
 
 ## [Unreleased]
 
+### Breaking changes
+
+- `map2check_init` takes the C runtime's `int isSvComp` (ignored), and
+  `ViolatedProperty` has the values of the C runtime's `enum ViolatedProperty`
+  (`NONE` 0 … `FALSE_DIVBYZERO` 9, `Concurrency` 10), which
+  `set_false_result` and `get_current_property` now use. `map2check_init` no
+  longer removes property files of an earlier run, as the C runtime.
+
+### Added
+
+- The core of the Map2Check C runtime ABI (Task 2.1 of the drop-in plan):
+  `map2check_track_bb`, `map2check_target_function`, `map2check_error`,
+  `map2check_exit`, `map2check_destroy`, `map2check_get_current_step`,
+  `map2check_next_current_step` and `write_property`, with the C signatures,
+  and the witness entry points `__m2c_rt_witness_generate_aux_files` and
+  `__m2c_rt_witness_generate_confirmation_file`.
+
 ## [1.1.0-rc1] - 2026-10-17
 
 Release candidate of the cutover work: the library becomes the runtime of

@@ -83,7 +83,7 @@ cc -I include my_program.c lib/libmap2check.a -ldl -lpthread -lm -o my_program
 
 ## Call order
 
-1. `map2check_init()` once, before any other call.
+1. `map2check_init(0)` once, before any other call.
 2. Tracking calls as the program runs: `map2check_save_basic_block_log`,
    `map2check_save_nondet_log_*`, `map2check_map_*`.
 3. Check calls next to the operation they guard: `map2check_check_load`,

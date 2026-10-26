@@ -77,53 +77,6 @@ pub fn c_double(value: f64) -> String {
     }
 }
 
-/// Text of the verdict, as `write_property` prints it
-/// (`PropertyGenerator.c:50-106`), and the extra per-property file the C
-/// runtime writes next to `map2check_property`. `line` is printed with
-/// `%d`, so it is shown as a C `int`.
-fn property_text(result: &AnalysisResult) -> (Option<String>, Option<&'static str>) {
-    let located = |tag: &str| {
-        format!(
-            "{tag}\nLine: {}\nFunction: {}\n",
-            result.line as i32, result.function_name
-        )
-    };
-    if result.ok {
-        return (Some("NONE\n".to_owned()), None);
-    }
-    match result.property {
-        ViolatedProperty::None => (Some("NONE\n".to_owned()), None),
-        ViolatedProperty::MemsafetyFree => {
-            (Some(located("FALSE-FREE")), Some("map2check_property_free"))
-        }
-        ViolatedProperty::MemsafetyDeref => (
-            Some(located("FALSE-DEREF")),
-            Some("map2check_property_deref"),
-        ),
-        ViolatedProperty::Overflow => (
-            Some(located("OVERFLOW")),
-            Some("map2check_property_overflow"),
-        ),
-        ViolatedProperty::Assert => (Some(located("ASSERT")), Some("map2check_property_assert")),
-        ViolatedProperty::MemsafetyMemtrack => (
-            Some("FALSE-MEMTRACK\n".to_owned()),
-            Some("map2check_property_memtrack"),
-        ),
-        ViolatedProperty::MemsafetyMemcleanup => (
-            Some("FALSE-MEMCLEANUP\n".to_owned()),
-            Some("map2check_property_memcleanup"),
-        ),
-        ViolatedProperty::Reachability => (Some(located("TARGET-REACHED")), None),
-        // `:98-102`: no per-property file.
-        ViolatedProperty::DivByZero => (Some(located("FALSE-DIVBYZERO")), None),
-        // The only UNKNOWN the C runtime reports is `write_property_unknown`
-        // (NULL from malloc, AnalysisModeMemtrack.c:305-311): it writes
-        // `map2check_property__unknown` and no `map2check_property`.
-        // Concurrency has no develop counterpart and is reported the same way.
-        ViolatedProperty::Unknown | ViolatedProperty::Concurrency => (None, None),
-    }
-}
-
 /// Writes `contents` to `dir/name` atomically: the full text goes to a
 /// temporary file of the same directory, which is then renamed over the
 /// target. `std::fs::write` truncates the target and writes in separate
@@ -168,20 +121,133 @@ pub fn write_atomic(dir: &Path, name: &str, contents: &str) -> io::Result<()> {
     result
 }
 
-/// Writes the property files of `result` into `dir`, as `write_property`
-/// and the `write_property_*` helpers of `PropertyGenerator.c` do.
-pub fn write_property_files(dir: &Path, result: &AnalysisResult) -> io::Result<()> {
-    let (text, extra) = property_text(result);
-    match text {
-        Some(text) => {
-            write_atomic(dir, PROPERTY_FILE, &text)?;
-            if let Some(extra) = extra {
-                write_atomic(dir, extra, &text)?;
-            }
+/// `"<tag>\nLine: %d\nFunction: %s\n"`, the three `fprintf` calls of the
+/// located properties of `PropertyGenerator.c`.
+fn located(tag: &str, line: i32, function_name: &str) -> String {
+    format!("{tag}\nLine: {line}\nFunction: {function_name}\n")
+}
+
+/// `write_property_unknown` (`PropertyGenerator.c:24-28`). The double
+/// underscore of the file name is kept on purpose (SD-16). Like the other
+/// `write_property_<x>` helpers it is private to the Rust core (SD-22).
+pub(crate) fn write_property_unknown(dir: &Path) -> io::Result<()> {
+    write_atomic(dir, PROPERTY_FILE_UNKNOWN, "UNKNOWN\n")
+}
+
+/// `write_property_memtrack` (`PropertyGenerator.c:30-34`).
+pub(crate) fn write_property_memtrack(dir: &Path) -> io::Result<()> {
+    write_atomic(dir, "map2check_property_memtrack", "FALSE-MEMTRACK\n")
+}
+
+/// `write_property_memcleanup` (`PropertyGenerator.c:36-40`).
+pub(crate) fn write_property_memcleanup(dir: &Path) -> io::Result<()> {
+    write_atomic(dir, "map2check_property_memcleanup", "FALSE-MEMCLEANUP\n")
+}
+
+/// `write_property_deref` (`PropertyGenerator.c:42-48`).
+pub(crate) fn write_property_deref(dir: &Path, line: i32, function_name: &str) -> io::Result<()> {
+    write_atomic(
+        dir,
+        "map2check_property_deref",
+        &located("FALSE-DEREF", line, function_name),
+    )
+}
+
+/// `write_property_free` (`PropertyGenerator.c:108-114`).
+pub(crate) fn write_property_free(dir: &Path, line: i32, function_name: &str) -> io::Result<()> {
+    write_atomic(
+        dir,
+        "map2check_property_free",
+        &located("FALSE-FREE", line, function_name),
+    )
+}
+
+/// `write_property_overflow` (`PropertyGenerator.c:116-122`).
+pub(crate) fn write_property_overflow(
+    dir: &Path,
+    line: i32,
+    function_name: &str,
+) -> io::Result<()> {
+    write_atomic(
+        dir,
+        "map2check_property_overflow",
+        &located("OVERFLOW", line, function_name),
+    )
+}
+
+/// `write_property_assert` (`PropertyGenerator.c:124-130`).
+pub(crate) fn write_property_assert(dir: &Path, line: i32, function_name: &str) -> io::Result<()> {
+    write_atomic(
+        dir,
+        "map2check_property_assert",
+        &located("ASSERT", line, function_name),
+    )
+}
+
+/// `write_property` (`PropertyGenerator.c:50-106`): `map2check_property`
+/// with the text of `violated` and, for the properties that have one, the
+/// file of its `write_property_<x>` helper, written before
+/// `map2check_property` is complete, as the C function calls the helper
+/// before its own `fclose`. `Concurrency`, which has no case in the C
+/// switch, leaves `map2check_property` empty. Each file is replaced
+/// atomically (SD-20).
+pub fn write_property(
+    dir: &Path,
+    violated: ViolatedProperty,
+    line: i32,
+    function_name: &str,
+) -> io::Result<()> {
+    let text = match violated {
+        ViolatedProperty::None => "NONE\n".to_owned(),
+        ViolatedProperty::Unknown => "UNKNOWN\n".to_owned(),
+        ViolatedProperty::MemsafetyFree => {
+            write_property_free(dir, line, function_name)?;
+            located("FALSE-FREE", line, function_name)
         }
-        None => write_atomic(dir, PROPERTY_FILE_UNKNOWN, "UNKNOWN\n")?,
+        ViolatedProperty::MemsafetyDeref => {
+            write_property_deref(dir, line, function_name)?;
+            located("FALSE-DEREF", line, function_name)
+        }
+        ViolatedProperty::MemsafetyMemtrack => {
+            write_property_memtrack(dir)?;
+            "FALSE-MEMTRACK\n".to_owned()
+        }
+        ViolatedProperty::MemsafetyMemcleanup => {
+            write_property_memcleanup(dir)?;
+            "FALSE-MEMCLEANUP\n".to_owned()
+        }
+        ViolatedProperty::Reachability => located("TARGET-REACHED", line, function_name),
+        ViolatedProperty::Overflow => {
+            write_property_overflow(dir, line, function_name)?;
+            located("OVERFLOW", line, function_name)
+        }
+        ViolatedProperty::Assert => {
+            write_property_assert(dir, line, function_name)?;
+            located("ASSERT", line, function_name)
+        }
+        // `:98-102`: no per-property file.
+        ViolatedProperty::DivByZero => located("FALSE-DIVBYZERO", line, function_name),
+        ViolatedProperty::Concurrency => String::new(),
+    };
+    write_atomic(dir, PROPERTY_FILE, &text)
+}
+
+/// Writes the property files of `result` into `dir`, as the C runtime does
+/// on the path that records it: `write_property(NONE, 0, "")` for a correct
+/// run (`map2check_success`, `Map2CheckFunctions.c:67-70`), and
+/// `write_property` of the property otherwise. `line` is printed with `%d`,
+/// so it is shown as a C `int`. The only UNKNOWN the C runtime reports is
+/// `write_property_unknown` (NULL from malloc, `AnalysisModeMemtrack.c:305-311`),
+/// which writes no `map2check_property`; `Concurrency`, which has no develop
+/// counterpart, is reported the same way.
+pub fn write_property_files(dir: &Path, result: &AnalysisResult) -> io::Result<()> {
+    if result.ok {
+        return write_property(dir, ViolatedProperty::None, 0, "");
     }
-    Ok(())
+    match result.property {
+        ViolatedProperty::Unknown | ViolatedProperty::Concurrency => write_property_unknown(dir),
+        property => write_property(dir, property, result.line as i32, &result.function_name),
+    }
 }
 
 /// Removes every property file left in `dir` by an earlier run. A missing
@@ -201,16 +267,28 @@ pub fn write_checked_error(dir: &Path) -> io::Result<()> {
     write_atomic(dir, CHECKED_ERROR_FILE, "END OF TIME\n")
 }
 
-/// `trackbb_log_to_file` (`TrackBBLog.c:35-44`): `%u;%s\n` per row.
-/// `map2check_track_bb` keeps only the first block of each line
-/// (`Map2CheckFunctions.c:49-55`), so later rows of a line are skipped.
-pub fn write_trackbb_log(dir: &Path, rows: &[BasicBlockEntry]) -> io::Result<()> {
-    let mut seen = crate::memtrack::FixedHashSet::default();
+/// `trackbb_log_to_file` (`TrackBBLog.c:35-44`), private to the Rust core
+/// (SD-22): `"%u;"` then `"%s\n"` per row (`:40-41`), in order.
+pub(crate) fn trackbb_log_to_file(dir: &Path, rows: &[BasicBlockEntry]) -> io::Result<()> {
     let mut out = String::new();
-    for row in rows.iter().filter(|r| seen.insert(r.line)) {
+    for row in rows {
         let _ = writeln!(out, "{};{}", row.line, row.function_name);
     }
     write_atomic(dir, TRACKBB_LOG_FILE, &out)
+}
+
+/// The basic-block log of the run: `map2check_track_bb` keeps only the
+/// first block of each line (`Map2CheckFunctions.c:49-55`), and the rows of
+/// `map2check_save_basic_block_log`, which records every block, are reduced
+/// the same way before [`trackbb_log_to_file`].
+pub fn write_trackbb_log(dir: &Path, rows: &[BasicBlockEntry]) -> io::Result<()> {
+    let mut seen = crate::memtrack::FixedHashSet::default();
+    let first: Vec<BasicBlockEntry> = rows
+        .iter()
+        .filter(|r| seen.insert(r.line))
+        .cloned()
+        .collect();
+    trackbb_log_to_file(dir, &first)
 }
 
 /// The value column and the `enum NONDET_TYPE` number
@@ -933,6 +1011,83 @@ mod tests {
         assert_eq!(
             nondet_value_and_type(&V::Double(2.5)),
             ("2.500000".into(), 15)
+        );
+    }
+
+    /// The `write_property_<x>` helpers of `PropertyGenerator.c`, which the
+    /// Rust core keeps private (SD-22): each writes its own file with the
+    /// format strings of the C function.
+    #[test]
+    fn write_property_helpers_match_c_format() {
+        let dir = tempfile::tempdir().unwrap();
+        let d = dir.path();
+        write_property_unknown(d).unwrap(); // :24-28
+        write_property_memtrack(d).unwrap(); // :30-34
+        write_property_memcleanup(d).unwrap(); // :36-40
+        write_property_deref(d, 7, "f").unwrap(); // :42-48
+        write_property_free(d, -2, "g").unwrap(); // :108-114
+        write_property_overflow(d, 0, "").unwrap(); // :116-122
+        write_property_assert(d, i32::MAX, "main").unwrap(); // :124-130
+        let read = |name: &str| std::fs::read_to_string(d.join(name)).unwrap();
+        assert_eq!(read("map2check_property__unknown"), "UNKNOWN\n");
+        assert_eq!(read("map2check_property_memtrack"), "FALSE-MEMTRACK\n");
+        assert_eq!(read("map2check_property_memcleanup"), "FALSE-MEMCLEANUP\n");
+        assert_eq!(
+            read("map2check_property_deref"),
+            "FALSE-DEREF\nLine: 7\nFunction: f\n"
+        );
+        assert_eq!(
+            read("map2check_property_free"),
+            "FALSE-FREE\nLine: -2\nFunction: g\n"
+        );
+        assert_eq!(
+            read("map2check_property_overflow"),
+            "OVERFLOW\nLine: 0\nFunction: \n"
+        );
+        assert_eq!(
+            read("map2check_property_assert"),
+            "ASSERT\nLine: 2147483647\nFunction: main\n"
+        );
+        assert!(
+            !d.join(PROPERTY_FILE).exists(),
+            "nenhum escreve map2check_property"
+        );
+    }
+
+    /// `write_property` replaces `map2check_property` and the file of its
+    /// own property and leaves every other file alone
+    /// (`PropertyGenerator.c:50-106`).
+    #[test]
+    fn write_property_truncates_only_its_own_files() {
+        let dir = tempfile::tempdir().unwrap();
+        for name in PROPERTY_FILES {
+            std::fs::write(dir.path().join(name), "stale\n").unwrap();
+        }
+        write_property(dir.path(), ViolatedProperty::Overflow, 3, "main").unwrap();
+        for name in PROPERTY_FILES {
+            let text = std::fs::read_to_string(dir.path().join(name)).unwrap();
+            if name == PROPERTY_FILE || name == "map2check_property_overflow" {
+                assert_eq!(text, "OVERFLOW\nLine: 3\nFunction: main\n", "{name}");
+            } else {
+                assert_eq!(text, "stale\n", "{name}");
+            }
+        }
+    }
+
+    /// `trackbb_log_to_file` (`TrackBBLog.c:35-44`), private in the Rust
+    /// core (SD-22): `"%u;" "%s\n"` per row, in order.
+    #[test]
+    fn trackbb_log_to_file_matches_c_format() {
+        use crate::bbtrack::BasicBlockEntry;
+        let dir = tempfile::tempdir().unwrap();
+        let rows = [
+            BasicBlockEntry::new(1, 0, "main"),
+            BasicBlockEntry::new(2, u32::MAX, ""),
+        ];
+        trackbb_log_to_file(dir.path(), &rows).unwrap();
+        assert_eq!(
+            std::fs::read(dir.path().join(TRACKBB_LOG_FILE)).unwrap(),
+            b"0;main\n4294967295;\n"
         );
     }
 }

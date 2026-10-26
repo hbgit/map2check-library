@@ -43,11 +43,11 @@ build with `--features libfuzzer`.
 
 | Symbol | Rust declaration (`include/map2check.h`) | Legacy C library | Status | Notes |
 |---|---|---|---|---|
-| `map2check_init` | `void map2check_init(void)` | `map2check_init` | same | Starts a fresh analysis through the `analysis_init` of the selected mode and keeps the options and the mode (#10, SD-14). With a mode set, also removes the `map2check_property*` files left in the current directory (see “Result files”). Map2Check passes call `map2check_init(int)`; see the pass matrix. |
+| `map2check_init` | `void map2check_init(int is_sv_comp)` | `map2check_init` | same | The C runtime's `map2check_init(int isSvComp)` (`Map2CheckFunctions.c:29-40`, Task 2.1): starts a fresh analysis through the `analysis_init` of the selected mode and keeps the options and the mode (#10, SD-14). `is_sv_comp` only sets develop's unread `sv_comp` and is ignored. Like develop, it leaves property files of an earlier run alone (see “Result files”). |
 | `map2check_reset` | `void map2check_reset(void)` | — | new | Clears containers, result and step counter (#9). Keeps the options set by `map2check_set_memcleanup()` and `map2check_set_null_is_valid()` and the mode set by `map2check_set_mode()`: they are configuration, not analysis state (#10, SD-14). |
 | `map2check_success` | `void map2check_success(void)` | `map2check_success` | same | Prints the JSON report when the mode is unset (SD-01). With a mode set it prints nothing and is develop's `map2check_success`: writes `NONE`, runs the end-of-program verdict, writes the witness files when enabled, and returns; a violating verdict writes its property and aborts (see “Result files”). |
-| `set_false_result` | `void set_false_result(int32_t prp, int32_t line_number, const char *function_name)` | `set_false_result` | same | `ViolatedProperty` keeps the C variant order (`caller_lib_result.h:22-31`); the appended `Assert` (8), `Unknown` (9) and `DivByZero` (10) are accepted; unknown values are ignored (SD-09). Ignored when a violation is already recorded (SD-03). |
-| `get_current_property` | `enum ViolatedProperty get_current_property(void)` | `get_current_property` | same |  |
+| `set_false_result` | `void set_false_result(int32_t prp, int32_t line_number, const char *function_name)` | `set_false_result` | changed | `prp` is the C value of `enum ViolatedProperty` (`Map2CheckTypes.h:80-91`: `NONE` 0 … `FALSE_DIVBYZERO` 9) and 10 is `Concurrency` (Task 2.1; before, the order of `caller_lib_result.h:22-31`). Unknown values are ignored (SD-09). Ignored when a violation is already recorded (SD-03). |
+| `get_current_property` | `enum ViolatedProperty get_current_property(void)` | `get_current_property` | changed | Returns the C values of `enum ViolatedProperty` (see `set_false_result`). |
 | `get_current_step` | `uint64_t get_current_step(void)` | `long get_current_step(void)` | changed | Returns `uint64_t` instead of `long`. |
 | `get_next_step` | `uint64_t get_next_step(void)` | `get_next_step()` / `next_current_step()` | same | Advances and returns the step counter. `next_current_step` is not exported; see its row. |
 | `print_all_containers_as_json` | `void print_all_containers_as_json(void)` | `print_all_containers_as_json` | changed | Report shape and whitespace differ (SD-01, SD-02). An additional channel with its own schema, pinned by a snapshot test; Map2Check reads the result files instead (#14, see “Result files”). |
@@ -57,6 +57,16 @@ build with `--features libfuzzer`.
 | `map2check_enable_witness` | `void map2check_enable_witness(void)` | — | new | Turns on witness generation, the run-time counterpart of develop linking `WitnessGeneration.c` instead of `WitnessGenerationNone.c` (`caller.cpp:624-640`). A Map2Check run (mode set) then also writes `track_bb_log.st`, the memory logs and, on a violation, `klee_log.csv` and `map2check_checked_error`. Kept by `map2check_init()` and `map2check_reset()`. The frontend links a constructor that calls it into witness binaries. See “Result files”. |
 | `map2check_set_mode` | `void map2check_set_mode(int32_t mode)` | — | new | Selects the analysis mode at run time; `mode` is one of the `enum AnalysisMode` values the header declares (`AnalysisMode_None` 0, `_Memtrack` 1, `_Memcleanup` 2, `_Overflow` 3, `_Assert` 4, `_Target` 5). Develop selects it at link time. Called before `map2check_init()`; kept by `map2check_init()` and `map2check_reset()`. Never called: mode unset, every check active. Any other value is ignored with a diagnostic on stderr and leaves the mode unchanged. See “Analysis modes” (SD-14). |
 | `map2check_reach_target` | `void map2check_reach_target(const char *func, int32_t scope, int32_t line)` | — | new | Replaces the pass symbol `map2check_target_function`. Records `REACHABILITY` (develop `TARGET-REACHED`) at `line` in `func`, in every mode; `scope` is ignored. With a mode set, ends the run like any first violation; unset, it returns (SD-15). |
+| `map2check_track_bb` | `void map2check_track_bb(unsigned int line, const char *function_name)` | — | new | The C runtime export of the same name (`Map2CheckFunctions.c:49-55`, Task 2.1): records the basic block at `line` unless a block of that line is already recorded, so `track_bb_log.st` has one row per line with its first function name. |
+| `map2check_target_function` | `void map2check_target_function(const char *func_name, int scope, int line)` | — | new | The C runtime export of the same name (`Map2CheckFunctions.c:61-65`, Task 2.1): `map2check_reach_target` under the C name. |
+| `map2check_get_current_step` | `unsigned int map2check_get_current_step(void)` | — | new | develop's `Map2CheckCurrentStep` (`Map2CheckFunctions.c:42`, Task 2.1): 0 after `map2check_init`, advanced only by `map2check_next_current_step`; not the step of `get_current_step`. |
+| `map2check_next_current_step` | `void map2check_next_current_step(void)` | — | new | `Map2CheckFunctions.c:43` (Task 2.1): adds 1, wrapping as a C `unsigned`. |
+| `map2check_error` | `void map2check_error(void)` | — | new | `Map2CheckFunctions.c:72-75` (Task 2.1): marks the run failed and runs `map2check_exit`, which skips the verdict; with a mode set it writes the witness files (when enabled) and aborts, writing no property file. Without a mode it returns (SD-03, SD-14). |
+| `map2check_exit` | `void map2check_exit(void)` | — | new | `Map2CheckFunctions.c:89-102` (Task 2.1): `map2check_success` without the `NONE`: the verdict of the mode when no error is recorded, the witness files when enabled, `map2check_destroy`, and on an error the confirmation file and the abort. Without a mode nothing is written and it returns. |
+| `map2check_destroy` | `void map2check_destroy(void)` | — | new | `Map2CheckFunctions.c:77-87` (Task 2.1): releases the basic-block log and the containers of the mode once per run (develop: once per process). |
+| `write_property` | `void write_property(enum ViolatedProperty violated, int line, const char *function_name)` | — | new | `PropertyGenerator.c:50-106` (Task 2.1): writes `map2check_property` and, when the property has one, `map2check_property_<prp>`, byte for byte as develop, in every mode; records nothing. `violated` takes the C values; `Concurrency` leaves an empty `map2check_property`. The `write_property_<x>` helpers stay private (SD-22). |
+| `__m2c_rt_witness_generate_aux_files` | `void __m2c_rt_witness_generate_aux_files(void *trackbb_log, char violation)` | — | new | Core entry point that the IR module `WitnessGeneration.bc` forwards `generate_aux_files` to (D7, Task 2.1): `track_bb_log.st`, the memory logs in memtrack/memcleanup mode, and `klee_log.csv` when `violation` is nonzero or `MAP2CHECK_SEED_REPLAY` is set (`WitnessGeneration.c:15-29`). `trackbb_log` is ignored and may be NULL. |
+| `__m2c_rt_witness_generate_confirmation_file` | `void __m2c_rt_witness_generate_confirmation_file(void)` | — | new | Core entry point of `generate_confirmation_file` (`WitnessGeneration.c:32-36`, D7, Task 2.1): writes `END OF TIME` to `map2check_checked_error`. |
 | `map2check_save_nondet_log_int` | `non_det_log_t *map2check_save_nondet_log_int(int line, int scope, enum var_type_t type_var, int *value, const char *function_name)` | returns `non_det_log_t *` | same | Returned record is not linked into a list (SD-10). |
 | `map2check_save_nondet_log_uint` | `non_det_log_t *map2check_save_nondet_log_uint(int line, int scope, enum var_type_t type_var, unsigned int *value, const char *function_name)` | returns `non_det_log_t *` | same | Returned record is not linked into a list (SD-10). |
 | `map2check_save_nondet_log_long` | `non_det_log_t *map2check_save_nondet_log_long(int line, int scope, enum var_type_t type_var, long *value, const char *function_name)` | returns `non_det_log_t *` | same | Returned record is not linked into a list (SD-10). |
@@ -148,9 +158,9 @@ Map2Check.
 
 | Symbol | Signature expected by the passes | Status | Notes |
 |---|---|---|---|
-| `map2check_init` | `map2check_init(int)` | changed | Core export takes `void`; the mode the frontend chose at link time comes from `map2check_set_mode()` (Task 2.3, SD-14). |
+| `map2check_init` | `map2check_init(int)` | same | Core export with the C signature since Task 2.1; the mode the frontend chose at link time comes from `map2check_set_mode()` (Task 2.3, SD-14). |
 | `map2check_check_deref` | `map2check_check_deref(i64, ptr)` | changed | Same name, incompatible core signature `(ptr, u32, u32, ptr)`. The plan (§2.1, D1) proposes renaming the core export to `map2check_check_deref_v2` inside the compat layer; decision in #21. |
-| `map2check_track_bb` | `(u32, ptr)` | pending | Core equivalent: `map2check_save_basic_block_log` (#21). |
+| `map2check_track_bb` | `(u32, ptr)` | same | Task 2.1. |
 | `map2check_alloca` | `(ptr, ptr, i64, i64, i64, i64)` | pending | Core equivalent: `map2check_map_alloca` with `int32_t` sizes (#21). |
 | `map2check_non_static_alloca` | `(ptr, ptr, i64, i64, i64, i64)` | pending | Core equivalent: `map2check_map_non_static_alloca` (#21). |
 | `map2check_malloc` | `(ptr, i64)` | pending | Core equivalent: `map2check_map_malloc` (#21). |
@@ -161,7 +171,7 @@ Map2Check.
 | `map2check_load` | `(ptr, i64)` | pending | Core `map2check_check_load` takes 5 arguments (#21). |
 | `map2check_add_store_pointer` | 6 arguments | pending | Core `map2check_map_store_pointer` differs in order and types (#21). |
 | `map2check_function` | `(ptr, ptr)` | pending | Core equivalent: `map2check_map_funct_address` (#21). |
-| `map2check_target_function` | `(ptr, i32, i32)` | pending | Core equivalent: `map2check_reach_target`, same arguments; with a mode set it ends the run as develop does, unset it records and returns (SD-15). The pass switches to it later in the cutover. |
+| `map2check_target_function` | `(ptr, i32, i32)` | same | Task 2.1: records `TARGET-REACHED`; with a mode set it ends the run as develop does, unset it records and returns (SD-15). |
 | `map2check_assume` | — | pending | #21. |
 | `map2check_assume_loop` | — | pending | #21. |
 | `map2check_crab_assume` | — | pending | #21. |
@@ -228,8 +238,9 @@ per-mode `match` is in `rust/src/analysismode/mode.rs`. Tracking calls
 The memcleanup option only changes the tag of the unset/memtrack leak
 verdict; it does not apply the memcleanup-mode reachability rule.
 `map2check_reach_target` and `set_false_result` record in every mode.
-`ViolatedProperty` gained `Assert` (8), `Unknown` (9) and `DivByZero` (10),
-appended after `None`; `Reachability` is the target-reached property.
+`ViolatedProperty` has the values of develop's `enum ViolatedProperty`
+(`Map2CheckTypes.h:80-91`, Task 2.1) plus `Concurrency` (10);
+`Reachability` is the target-reached property.
 
 ## Result files
 
@@ -250,7 +261,9 @@ never change a verdict.
 The channel is tied to the mode. When `map2check_set_mode()` was called
 (a Map2Check-instrumented program):
 
-- `map2check_init()` removes stale `map2check_property*` files;
+- `map2check_init(int)` leaves `map2check_property*` files of an earlier
+  run alone, as develop does: `write_property` replaces only
+  `map2check_property` and the file of the property it writes;
 - the first violation writes the property files, then, with witness on,
   the witness files, runs the mode's `analysis_destroy`, writes
   `map2check_checked_error` (witness on) and calls `abort()`, as develop's

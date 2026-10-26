@@ -938,7 +938,7 @@ mod tests {
         if is_child() {
             println!("{STARTED}");
             crate::ffi::map2check_set_mode(1); // memtrack
-            crate::ffi::map2check_init();
+            crate::ffi::map2check_init(0);
             __VERIFIER_error();
             __VERIFIER_assert(0);
             println!("after-error={:?}", current_property());
@@ -972,7 +972,7 @@ mod tests {
         if is_child() {
             println!("{STARTED}");
             crate::ffi::map2check_set_mode(5); // target
-            crate::ffi::map2check_init();
+            crate::ffi::map2check_init(0);
             __VERIFIER_error();
             __VERIFIER_assert(0);
             println!("after-error={:?}", current_property());

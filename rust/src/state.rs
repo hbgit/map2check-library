@@ -91,6 +91,24 @@ pub struct AnalysisState {
     /// the list log before it checks (`AnalysisModeMemtrack.c:346-358`), so
     /// the legacy logs keep it; it is not a release and no check reads it.
     pub failed_free: Option<MemTrackEntry>,
+    /// develop's `Map2CheckCurrentStep` (`Map2CheckFunctions.c:19`): 0 after
+    /// `map2check_init`, read by `map2check_get_current_step` and advanced
+    /// only by `map2check_next_current_step`, with C `unsigned` wrap-around.
+    /// It is not `result.step`, which every record of this library advances.
+    pub c_step: u32,
+    /// develop's `gotError` (`Map2CheckFunctions.c:27`): set by
+    /// `map2check_error`, so `map2check_exit` skips the end-of-program
+    /// verdict and ends the run as a violation even with no property recorded.
+    pub got_error: bool,
+    /// The end-of-program verdict (`analysis_is_program_correct`) ran in this
+    /// run; develop's allocation log then has the rows `valid_allocation_log`
+    /// appends (`AllocationLog.c:69-101`), which the witness logs replay.
+    pub end_of_program: bool,
+    /// `map2check_destroy` already ran (develop's function-static
+    /// `alreadyReleased`, `Map2CheckFunctions.c:80-83`). Here it belongs to
+    /// the run and `map2check_init` clears it; develop never clears it, which
+    /// only changes what a second run in the same process frees.
+    pub destroyed: bool,
 }
 
 impl AnalysisState {

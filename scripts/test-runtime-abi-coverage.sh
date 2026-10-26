@@ -91,6 +91,16 @@ grep -q 'remova o marcador' "$T/out"
 : > "$T/pe.txt"
 ce > "$T/out" || { cat "$T/out" >&2; echo "FALHA: enum igual sem marcador deveria passar" >&2; exit 1; }
 grep -q '^PASS  A.h (n=0' "$T/out"
+# enum alinhado (sem marcador): uma função que recebe o enum nos dois headers
+# conforma; com outro tipo no parâmetro, conflita
+printf 'enum E { A = 0, B = 1 };\nvoid takes_e(enum E e, int l);\n' > "$T/h/A.h"
+printf 'typedef enum E { X, Y } E;\nvoid takes_e(enum E e, int l);\n' > "$T/rust.h"
+ce > "$T/out" || { cat "$T/out" >&2; echo "FALHA: função com enum alinhado deveria passar" >&2; exit 1; }
+grep -q '^PASS  A.h (n=1' "$T/out"
+printf 'typedef enum E { X, Y } E;\nvoid takes_e(long e, int l);\n' > "$T/rust.h"
+if ce >"$T/out"; then echo "FALHA: parâmetro enum trocado por long passou" >&2; exit 1; fi
+grep -q 'takes_e' "$T/out"
+printf 'typedef enum E { X, Y } E;\n' > "$T/rust.h"
 # o check de enum não falha aberto
 printf 'enum E { A = 0, B = 1 };\n' > "$T/h/A.h"; : > "$T/pe.txt"
 printf 'tag\tc_enumerator\trust_enumerator\nE\tA\tX\nE\tB\tNOPE\n' > "$T/em.tsv"
