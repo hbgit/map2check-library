@@ -163,6 +163,14 @@ static void run_pre_init_boundary(void) {
     map2check_binop_mul_signed(1, 1, 32, 1, "main");
     map2check_binop_div_signed(1, 1, 32, 1, "main");
     map2check_binop_rem_signed(1, 1, 32, 1, "main");
+    /* AnalysisModeOverflow core entry points (Task 2.3); analysis_init is
+     * left to the forked scenarios, since it selects the overflow mode. */
+    __m2c_rt_overflow_map2check_binop_add(1, 1, 32, 1, 0, "main");
+    __m2c_rt_overflow_map2check_binop_sdiv(1, 1, 32, 1, 0, "main");
+    __m2c_rt_overflow_map2check_binop_add_uint(1, 1, 32, 1, 0, "main");
+    (void)__m2c_rt_overflow_analysis_is_program_correct();
+    __m2c_rt_overflow_analysis_destroy();
+    __m2c_rt_overflow_analysis_generate_aux_witness_files();
 
     (void)__VERIFIER_nondet_bool();
     (void)__VERIFIER_nondet_char();
@@ -299,6 +307,14 @@ static void run_bad_inputs(void) {
     map2check_binop_rem_signed(INT64_MIN, -1, 64, 12, NULL);
     map2check_binop_div_signed(1, 0, 0, 12, NULL);
     map2check_binop_rem_signed(1, 0, 4096, 12, NULL);
+    __m2c_rt_overflow_map2check_binop_add(INT64_MAX, 1, 0, 12, 99, NULL);
+    __m2c_rt_overflow_map2check_binop_sub(INT64_MIN, 1, 4096, 12, 0, NULL);
+    __m2c_rt_overflow_map2check_binop_mul(INT64_MIN, -1, 64, 12, 0, NULL);
+    __m2c_rt_overflow_map2check_binop_sdiv(INT64_MIN, -1, 1, 12, 0, NULL);
+    __m2c_rt_overflow_map2check_binop_srem(1, 0, 0xffffffffu, 12, 0, NULL);
+    __m2c_rt_overflow_map2check_binop_sub_uint(0, UINT64_MAX, 0, 12, 0, NULL);
+    __m2c_rt_overflow_map2check_binop_mul_uint(UINT64_MAX, UINT64_MAX, 64, 12, 0, NULL);
+    __m2c_rt_overflow_overflowError(0xffffffffu, NULL);
 
     /* nondet generators, pre-init */
     (void)__VERIFIER_nondet_bool();
@@ -634,6 +650,20 @@ static void scenario_memcleanup_referenced(void) {
     map2check_check_mem_endprog();
 }
 
+/* The drop-in path: AnalysisModeOverflow.bc's analysis_init and binops
+ * forward to these entry points (Task 2.3). */
+static void scenario_overflow_rt_add(void) {
+    map2check_init(0);
+    __m2c_rt_overflow_analysis_init();
+    __m2c_rt_overflow_map2check_binop_add(2147483647, 1, 32, 20, 0, "main");
+}
+
+static void scenario_overflow_rt_srem(void) {
+    map2check_init(0);
+    __m2c_rt_overflow_analysis_init();
+    __m2c_rt_overflow_map2check_binop_srem(5, 0, 32, 7, 0, "main");
+}
+
 static int test_analysis_modes(void) {
     if (run_mode_scenario(scenario_none_mode, 0, "NONE\n", NULL, NULL)) {
         return 1;
@@ -669,6 +699,17 @@ static int test_analysis_modes(void) {
                           "FALSE-MEMCLEANUP\n", "map2check_property_memcleanup",
                           "FALSE-MEMCLEANUP\n")) {
         return 8;
+    }
+    if (run_mode_scenario(scenario_overflow_rt_add, 1,
+                          "OVERFLOW\nLine: 20\nFunction: main\n",
+                          "map2check_property_overflow",
+                          "OVERFLOW\nLine: 20\nFunction: main\n")) {
+        return 9;
+    }
+    if (run_mode_scenario(scenario_overflow_rt_srem, 1,
+                          "FALSE-DIVBYZERO\nLine: 7\nFunction: main\n",
+                          "map2check_property_overflow", NULL)) {
+        return 10;
     }
     return 0;
 }

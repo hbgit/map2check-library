@@ -580,6 +580,289 @@ pub extern "C" fn __m2c_rt_witness_generate_confirmation_file() {
     ffi_guard(termination::rt_generate_confirmation_file, ());
 }
 
+// ── C runtime ABI: AnalysisModeOverflow (core entry points, D7) ─────────────
+//
+// `AnalysisModeOverflow.c` of Map2Check `develop`. The C names
+// (`analysis_*`, `map2check_binop_*`, `overflowError`) are defined only by
+// the generated IR module `AnalysisModeOverflow.bc`
+// (`scripts/runtime-ir/gen_ll.py`), which forwards each one to the
+// `__m2c_rt_overflow_<name>` below: every analysis mode defines
+// `analysis_*`, so the core must not. `divisionByZeroError` and
+// `unknown_not_supported` have no caller outside the C module and stay
+// private (SD-22). The checks are `SignedBinop` (`analysismode::overflow`).
+
+/// The signed binops of `AnalysisModeOverflow.c:197-276`: on a violation,
+/// `overflowError` (FALSE_OVERFLOW, `:185-188`) or `divisionByZeroError`
+/// (FALSE_DIVBYZERO, `:192-195`), which write the property files and call
+/// `map2check_error`. No mode gate: linking the module is the mode. `scope`
+/// is not used, as in C.
+///
+/// # Safety
+/// `function_name` must be null or a valid null-terminated C string.
+unsafe fn rt_overflow_signed(
+    op: SignedOp,
+    param1: i64,
+    param2: i64,
+    width: std::os::raw::c_uint,
+    line: std::os::raw::c_uint,
+    function_name: *const std::os::raw::c_char,
+) {
+    let checker = SignedBinop {
+        op,
+        lhs: param1,
+        rhs: param2,
+        bits: width,
+    };
+    if let Some(property) = checker.violation() {
+        // SAFETY: caller guarantees function_name is valid or null.
+        let fname = unsafe { c_str(function_name) };
+        record_violation(property, line, fname, false);
+    }
+}
+
+/// `analysis_init` of the overflow mode (`AnalysisModeOverflow.c:279`). The C
+/// body is empty: linking this module is what selects the overflow mode
+/// (`caller.cpp:575-612`), so the core entry point selects
+/// `AnalysisMode_Overflow`, which turns on the result files and the abort
+/// of the first violation (SD-14). Nothing else changes.
+#[no_mangle]
+pub extern "C" fn __m2c_rt_overflow_analysis_init() {
+    ffi_guard(
+        || state::update_config(|c| c.mode = Some(AnalysisMode::Overflow)),
+        (),
+    );
+}
+
+/// `analysis_destroy` of the overflow mode (`AnalysisModeOverflow.c:281`):
+/// empty, the mode keeps no data.
+#[no_mangle]
+pub extern "C" fn __m2c_rt_overflow_analysis_destroy() {
+    ffi_guard(|| (), ());
+}
+
+/// `analysis_is_program_correct` of the overflow mode
+/// (`AnalysisModeOverflow.c:283`): always TRUE (1).
+#[no_mangle]
+pub extern "C" fn __m2c_rt_overflow_analysis_is_program_correct() -> std::os::raw::c_char {
+    ffi_guard(|| 1, 1)
+}
+
+/// `analysis_generate_aux_witness_files` of the overflow mode
+/// (`AnalysisModeOverflow.c:285`): empty.
+#[no_mangle]
+pub extern "C" fn __m2c_rt_overflow_analysis_generate_aux_witness_files() {
+    ffi_guard(|| (), ());
+}
+
+/// `overflowError` (`AnalysisModeOverflow.c:185-188`):
+/// `write_property(FALSE_OVERFLOW, line, function_name)` and
+/// `map2check_error()`. Here: records `OVERFLOW` at `line` in
+/// `function_name` (the first violation stays final, SD-03); with a mode set
+/// the property files are written and the process aborts. NULL reads as "".
+///
+/// # Safety
+/// `function_name` must be null or a valid null-terminated C string.
+#[allow(non_snake_case)]
+#[no_mangle]
+pub unsafe extern "C" fn __m2c_rt_overflow_overflowError(
+    line: std::os::raw::c_uint,
+    function_name: *const std::os::raw::c_char,
+) {
+    ffi_guard(
+        || {
+            // SAFETY: caller guarantees function_name is valid or null.
+            let fname = unsafe { c_str(function_name) };
+            record_violation(ViolatedProperty::Overflow, line, fname, false);
+        },
+        (),
+    );
+}
+
+/// `map2check_binop_add` (`AnalysisModeOverflow.c:197-206`): `OVERFLOW` when `param1 + param2` leaves the range of `width`.
+/// Operands sign-extended to 64 bits, `width` the bit width of the result
+/// type (0 or 64 and above mean 64). See `rt_overflow_signed`.
+///
+/// # Safety
+/// `function_name` must be null or a valid null-terminated C string.
+#[no_mangle]
+pub unsafe extern "C" fn __m2c_rt_overflow_map2check_binop_add(
+    param1: i64,
+    param2: i64,
+    width: std::os::raw::c_uint,
+    line: std::os::raw::c_uint,
+    scope: std::os::raw::c_uint,
+    function_name: *const std::os::raw::c_char,
+) {
+    ffi_guard(
+        || {
+            let _ = scope;
+            // SAFETY: forwarded caller contract.
+            unsafe { rt_overflow_signed(SignedOp::Add, param1, param2, width, line, function_name) }
+        },
+        (),
+    );
+}
+
+/// `map2check_binop_sub` (`AnalysisModeOverflow.c:208-217`): `OVERFLOW` when `param1 - param2` leaves the range of `width`.
+/// Operands sign-extended to 64 bits, `width` the bit width of the result
+/// type (0 or 64 and above mean 64). See `rt_overflow_signed`.
+///
+/// # Safety
+/// `function_name` must be null or a valid null-terminated C string.
+#[no_mangle]
+pub unsafe extern "C" fn __m2c_rt_overflow_map2check_binop_sub(
+    param1: i64,
+    param2: i64,
+    width: std::os::raw::c_uint,
+    line: std::os::raw::c_uint,
+    scope: std::os::raw::c_uint,
+    function_name: *const std::os::raw::c_char,
+) {
+    ffi_guard(
+        || {
+            let _ = scope;
+            // SAFETY: forwarded caller contract.
+            unsafe { rt_overflow_signed(SignedOp::Sub, param1, param2, width, line, function_name) }
+        },
+        (),
+    );
+}
+
+/// `map2check_binop_mul` (`AnalysisModeOverflow.c:234-243`): `OVERFLOW` when `param1 * param2` leaves the range of `width`.
+/// Operands sign-extended to 64 bits, `width` the bit width of the result
+/// type (0 or 64 and above mean 64). See `rt_overflow_signed`.
+///
+/// # Safety
+/// `function_name` must be null or a valid null-terminated C string.
+#[no_mangle]
+pub unsafe extern "C" fn __m2c_rt_overflow_map2check_binop_mul(
+    param1: i64,
+    param2: i64,
+    width: std::os::raw::c_uint,
+    line: std::os::raw::c_uint,
+    scope: std::os::raw::c_uint,
+    function_name: *const std::os::raw::c_char,
+) {
+    ffi_guard(
+        || {
+            let _ = scope;
+            // SAFETY: forwarded caller contract.
+            unsafe { rt_overflow_signed(SignedOp::Mul, param1, param2, width, line, function_name) }
+        },
+        (),
+    );
+}
+
+/// `map2check_binop_sdiv` (`AnalysisModeOverflow.c:250-262`): `FALSE-DIVBYZERO` when `param2` is 0, `OVERFLOW` for MIN / -1 of `width`.
+/// Operands sign-extended to 64 bits, `width` the bit width of the result
+/// type (0 or 64 and above mean 64). See `rt_overflow_signed`.
+///
+/// # Safety
+/// `function_name` must be null or a valid null-terminated C string.
+#[no_mangle]
+pub unsafe extern "C" fn __m2c_rt_overflow_map2check_binop_sdiv(
+    param1: i64,
+    param2: i64,
+    width: std::os::raw::c_uint,
+    line: std::os::raw::c_uint,
+    scope: std::os::raw::c_uint,
+    function_name: *const std::os::raw::c_char,
+) {
+    ffi_guard(
+        || {
+            let _ = scope;
+            // SAFETY: forwarded caller contract.
+            unsafe { rt_overflow_signed(SignedOp::Div, param1, param2, width, line, function_name) }
+        },
+        (),
+    );
+}
+
+/// `map2check_binop_srem` (`AnalysisModeOverflow.c:264-276`): `FALSE-DIVBYZERO` when `param2` is 0, `OVERFLOW` for MIN % -1 of `width` (undefined in C).
+/// Operands sign-extended to 64 bits, `width` the bit width of the result
+/// type (0 or 64 and above mean 64). See `rt_overflow_signed`.
+///
+/// # Safety
+/// `function_name` must be null or a valid null-terminated C string.
+#[no_mangle]
+pub unsafe extern "C" fn __m2c_rt_overflow_map2check_binop_srem(
+    param1: i64,
+    param2: i64,
+    width: std::os::raw::c_uint,
+    line: std::os::raw::c_uint,
+    scope: std::os::raw::c_uint,
+    function_name: *const std::os::raw::c_char,
+) {
+    ffi_guard(
+        || {
+            let _ = scope;
+            // SAFETY: forwarded caller contract.
+            unsafe { rt_overflow_signed(SignedOp::Rem, param1, param2, width, line, function_name) }
+        },
+        (),
+    );
+}
+
+/// `map2check_binop_add_uint` (`AnalysisModeOverflow.c:224-227`): a deliberate
+/// no-op, as in C (`:219-223`): unsigned wraparound is well-defined and is
+/// not an overflow under SV-COMP's no-overflow property.
+#[no_mangle]
+pub extern "C" fn __m2c_rt_overflow_map2check_binop_add_uint(
+    param1: u64,
+    param2: u64,
+    width: std::os::raw::c_uint,
+    line: std::os::raw::c_uint,
+    scope: std::os::raw::c_uint,
+    function_name: *const std::os::raw::c_char,
+) {
+    ffi_guard(
+        || {
+            let _ = (param1, param2, width, line, scope, function_name);
+        },
+        (),
+    );
+}
+
+/// `map2check_binop_sub_uint` (`AnalysisModeOverflow.c:229-232`): a deliberate
+/// no-op, as in C (`:219-223`): unsigned wraparound is well-defined and is
+/// not an overflow under SV-COMP's no-overflow property.
+#[no_mangle]
+pub extern "C" fn __m2c_rt_overflow_map2check_binop_sub_uint(
+    param1: u64,
+    param2: u64,
+    width: std::os::raw::c_uint,
+    line: std::os::raw::c_uint,
+    scope: std::os::raw::c_uint,
+    function_name: *const std::os::raw::c_char,
+) {
+    ffi_guard(
+        || {
+            let _ = (param1, param2, width, line, scope, function_name);
+        },
+        (),
+    );
+}
+
+/// `map2check_binop_mul_uint` (`AnalysisModeOverflow.c:245-248`): a deliberate
+/// no-op, as in C (`:219-223`): unsigned wraparound is well-defined and is
+/// not an overflow under SV-COMP's no-overflow property.
+#[no_mangle]
+pub extern "C" fn __m2c_rt_overflow_map2check_binop_mul_uint(
+    param1: u64,
+    param2: u64,
+    width: std::os::raw::c_uint,
+    line: std::os::raw::c_uint,
+    scope: std::os::raw::c_uint,
+    function_name: *const std::os::raw::c_char,
+) {
+    ffi_guard(
+        || {
+            let _ = (param1, param2, width, line, scope, function_name);
+        },
+        (),
+    );
+}
+
 // ── C runtime ABI: NonDetLog ────────────────────────────────────────────────
 //
 // `NonDetLog.c` of Map2Check `develop`. `nondet_log_to_file`,

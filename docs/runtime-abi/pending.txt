@@ -6,14 +6,6 @@ map2check_alloca
 map2check_assert
 map2check_assume
 map2check_assume_loop
-map2check_binop_add
-map2check_binop_add_uint
-map2check_binop_mul
-map2check_binop_mul_uint
-map2check_binop_sdiv
-map2check_binop_srem
-map2check_binop_sub
-map2check_binop_sub_uint
 map2check_calloc
 map2check_check_cstring
 map2check_check_deref
@@ -49,4 +41,3 @@ map2check_non_det_ushort
 map2check_non_static_alloca
 map2check_posix
 map2check_wasm_free
-overflowError

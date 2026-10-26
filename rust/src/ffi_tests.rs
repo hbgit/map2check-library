@@ -3761,3 +3761,228 @@ fn legacy_nondet_log_reaches_klee_log_csv_through_the_one_c_log_writer() {
         )
     );
 }
+
+// ── C runtime ABI: AnalysisModeOverflow (core entry points, D7) ─────────────
+//
+// `AnalysisModeOverflow.bc` is generated IR whose functions forward to these
+// `__m2c_rt_overflow_*` entry points (scripts/runtime-ir/gen_ll.py). The C
+// semantics are `AnalysisModeOverflow.c` of Map2Check `develop`; the files
+// they write are pinned by the golden tests (`ffi_golden_tests.rs`).
+
+/// `map2check_binop_{add,sub,mul,sdiv,srem}` of the C runtime
+/// (`AnalysisModeOverflow.c:41-108`).
+type RtSignedBinop = unsafe extern "C" fn(
+    i64,
+    i64,
+    std::os::raw::c_uint,
+    std::os::raw::c_uint,
+    std::os::raw::c_uint,
+    *const std::os::raw::c_char,
+);
+
+/// `map2check_binop_{add,sub,mul}_uint` (`AnalysisModeOverflow.c:44-82`).
+type RtUnsignedBinop = unsafe extern "C" fn(
+    u64,
+    u64,
+    std::os::raw::c_uint,
+    std::os::raw::c_uint,
+    std::os::raw::c_uint,
+    *const std::os::raw::c_char,
+);
+
+const INT_MAX: i64 = i32::MAX as i64;
+const INT_MIN: i64 = i32::MIN as i64;
+const UINT_MAX: u64 = u32::MAX as u64;
+
+/// Calls `op` on a fresh state as the pass does (width 32, scope 0) at
+/// `line` in `main` and returns the recorded verdict.
+fn rt_signed(op: RtSignedBinop, a: i64, b: i64, width: u32, line: u32) -> Option<P> {
+    state::reset();
+    // SAFETY: C-string literal is valid and null-terminated.
+    unsafe { op(a, b, width, line, 0, c"main".as_ptr()) };
+    let result = snapshot(|s| s.result.clone());
+    if result.ok {
+        return None;
+    }
+    assert_eq!(result.line, line);
+    assert_eq!(result.function_name, "main");
+    Some(result.property)
+}
+
+#[test]
+fn overflow_rt_binops_report_the_c_tag_at_the_boundaries() {
+    let _guard = fresh();
+    let add: RtSignedBinop = __m2c_rt_overflow_map2check_binop_add;
+    let sub: RtSignedBinop = __m2c_rt_overflow_map2check_binop_sub;
+    let mul: RtSignedBinop = __m2c_rt_overflow_map2check_binop_mul;
+    let sdiv: RtSignedBinop = __m2c_rt_overflow_map2check_binop_sdiv;
+    let srem: RtSignedBinop = __m2c_rt_overflow_map2check_binop_srem;
+    // overflowError (FALSE_OVERFLOW, `:185-188`) and divisionByZeroError
+    // (FALSE_DIVBYZERO, `:192-195`) as the C binops call them (`:197-276`).
+    let cases: [(&str, RtSignedBinop, i64, i64, Option<P>); 16] = [
+        ("INT_MAX + 1", add, INT_MAX, 1, Some(P::Overflow)),
+        ("INT_MAX + 0", add, INT_MAX, 0, None),
+        ("INT_MIN - 1", sub, INT_MIN, 1, Some(P::Overflow)),
+        ("INT_MIN - 0", sub, INT_MIN, 0, None),
+        ("INT_MAX * 2", mul, INT_MAX, 2, Some(P::Overflow)),
+        ("INT_MIN * -1", mul, INT_MIN, -1, Some(P::Overflow)),
+        ("INT_MAX * -1", mul, INT_MAX, -1, None),
+        ("INT_MIN / -1", sdiv, INT_MIN, -1, Some(P::Overflow)),
+        ("INT_MIN / 1", sdiv, INT_MIN, 1, None),
+        ("7 / 0", sdiv, 7, 0, Some(P::DivByZero)),
+        ("0 / 0", sdiv, 0, 0, Some(P::DivByZero)),
+        ("7 % 0", srem, 7, 0, Some(P::DivByZero)),
+        ("INT_MIN % 0", srem, INT_MIN, 0, Some(P::DivByZero)),
+        ("INT_MIN % -1", srem, INT_MIN, -1, Some(P::Overflow)),
+        ("INT_MAX % -1", srem, INT_MAX, -1, None),
+        ("-5 % 3", srem, -5, 3, None),
+    ];
+    for (name, op, a, b, expected) in cases {
+        assert_eq!(rt_signed(op, a, b, 32, 20), expected, "{name}");
+    }
+}
+
+#[test]
+fn overflow_rt_binops_use_the_width_like_c() {
+    let _guard = fresh();
+    let add: RtSignedBinop = __m2c_rt_overflow_map2check_binop_add;
+    let sub: RtSignedBinop = __m2c_rt_overflow_map2check_binop_sub;
+    let mul: RtSignedBinop = __m2c_rt_overflow_map2check_binop_mul;
+    let sdiv: RtSignedBinop = __m2c_rt_overflow_map2check_binop_sdiv;
+    // fits_in_width (`:126-134`) after the 64-bit predicates (`:141-183`);
+    // width 0 or >= 64 means 64 bits (`:111-124`).
+    assert_eq!(rt_signed(add, 127, 1, 8, 3), Some(P::Overflow));
+    assert_eq!(rt_signed(add, 126, 1, 8, 3), None);
+    assert_eq!(rt_signed(sub, -32768, 1, 16, 3), Some(P::Overflow));
+    assert_eq!(rt_signed(add, INT_MAX, 1, 64, 3), None);
+    assert_eq!(rt_signed(add, i64::MAX, 1, 64, 3), Some(P::Overflow));
+    assert_eq!(rt_signed(add, i64::MAX, 1, 0, 3), Some(P::Overflow));
+    assert_eq!(rt_signed(mul, i64::MAX, 2, 8, 3), Some(P::Overflow));
+    assert_eq!(rt_signed(sub, i64::MIN, 1, 64, 3), Some(P::Overflow));
+    // Only the width's own minimum overflows the division (`:259`).
+    assert_eq!(rt_signed(sdiv, INT_MIN, -1, 64, 3), None);
+    assert_eq!(rt_signed(sdiv, i64::MIN, -1, 64, 3), Some(P::Overflow));
+    assert_eq!(rt_signed(sdiv, -128, -1, 8, 3), Some(P::Overflow));
+}
+
+#[test]
+fn overflow_rt_unsigned_binops_never_report_like_c() {
+    let _guard = fresh();
+    // "Unsigned wraparound is well-defined in C and is not an overflow under
+    // SV-COMP's no-overflow property, so these remain deliberate no-ops"
+    // (`AnalysisModeOverflow.c:219-248`).
+    let ops: [(&str, RtUnsignedBinop); 3] = [
+        ("add_uint", __m2c_rt_overflow_map2check_binop_add_uint),
+        ("sub_uint", __m2c_rt_overflow_map2check_binop_sub_uint),
+        ("mul_uint", __m2c_rt_overflow_map2check_binop_mul_uint),
+    ];
+    for (name, op) in ops {
+        for (a, b) in [(UINT_MAX, 1), (0, 1), (UINT_MAX, 2), (u64::MAX, u64::MAX)] {
+            state::reset();
+            // SAFETY: C-string literal is valid and null-terminated.
+            unsafe { op(a, b, 32, 20, 0, c"main".as_ptr()) };
+            assert_ok();
+            assert!(snapshot(|s| !s.got_error), "{name}({a}, {b})");
+        }
+        // A null name is accepted: the C body never reads it.
+        // SAFETY: null is allowed.
+        unsafe { op(UINT_MAX, 1, 32, 20, 0, std::ptr::null()) };
+        assert_ok();
+    }
+}
+
+#[test]
+fn overflow_rt_overflow_error_records_false_overflow() {
+    let _guard = fresh();
+    // SAFETY: C-string literal is valid and null-terminated.
+    unsafe { __m2c_rt_overflow_overflowError(12, c"f".as_ptr()) };
+    assert_violated(ViolatedProperty::Overflow, 12, "f");
+    state::reset();
+    // SAFETY: null is allowed.
+    unsafe { __m2c_rt_overflow_overflowError(13, std::ptr::null()) };
+    assert_violated(ViolatedProperty::Overflow, 13, "");
+}
+
+#[test]
+fn overflow_rt_first_violation_is_final() {
+    let _guard = fresh();
+    // SAFETY: C-string literals are valid and null-terminated.
+    unsafe {
+        __m2c_rt_overflow_map2check_binop_srem(1, 0, 32, 4, 0, c"f".as_ptr());
+        __m2c_rt_overflow_map2check_binop_add(INT_MAX, 1, 32, 9, 0, c"g".as_ptr());
+        __m2c_rt_overflow_overflowError(10, c"h".as_ptr());
+    }
+    assert_violated(ViolatedProperty::DivByZero, 4, "f");
+}
+
+#[test]
+fn overflow_rt_binops_check_whatever_mode_is_set() {
+    let _guard = fresh();
+    // The C module has no mode test: being linked is what selects it
+    // (`caller.cpp:575-612`), so the core entry points always check.
+    for mode in MODES {
+        state::reset();
+        map2check_set_mode(mode as i32);
+        map2check_init(0);
+        // SAFETY: C-string literal is valid and null-terminated.
+        unsafe { __m2c_rt_overflow_map2check_binop_add(INT_MAX, 1, 32, 4, 0, c"f".as_ptr()) };
+        assert_violated(ViolatedProperty::Overflow, 4, "f");
+    }
+}
+
+#[test]
+fn overflow_rt_analysis_entry_points_match_c() {
+    let _guard = fresh();
+    map2check_init(0);
+    // SAFETY: C-string literal is valid and null-terminated.
+    unsafe { map2check_track_bb(3, c"main".as_ptr()) };
+    // analysis_init (`:279`) is empty in C; linking the module is what picks
+    // the overflow mode, so the core entry point selects it.
+    __m2c_rt_overflow_analysis_init();
+    assert_eq!(state::config().mode, Some(AnalysisMode::Overflow));
+    // analysis_is_program_correct (`:283`): always TRUE (1).
+    assert_eq!(__m2c_rt_overflow_analysis_is_program_correct(), 1);
+    // analysis_destroy (`:281`), analysis_generate_aux_witness_files
+    // (`:285`): empty.
+    __m2c_rt_overflow_analysis_destroy();
+    __m2c_rt_overflow_analysis_generate_aux_witness_files();
+    assert_ok();
+    assert_eq!(snapshot(|s| s.bbtrack.len()), 1);
+    assert_eq!(__m2c_rt_overflow_analysis_is_program_correct(), 1);
+    // Even after a violation: the C verdict function reads no state.
+    // SAFETY: C-string literal is valid and null-terminated.
+    unsafe { __m2c_rt_overflow_overflowError(1, c"f".as_ptr()) };
+    assert_eq!(__m2c_rt_overflow_analysis_is_program_correct(), 1);
+}
+
+#[test]
+fn overflow_rt_binops_called_as_the_ir_forwarders_do() {
+    let _guard = fresh();
+    let main = c"main".as_ptr();
+    // Safe operations, each entry point called directly with the C
+    // arguments the pass gives `map2check_binop_*` (operands, width, line,
+    // scope, name).
+    // SAFETY: C-string literal is valid and null-terminated.
+    unsafe {
+        __m2c_rt_overflow_map2check_binop_add(-5, 3, 32, 1, 0, main);
+        __m2c_rt_overflow_map2check_binop_sub(-5, 3, 32, 1, 0, main);
+        __m2c_rt_overflow_map2check_binop_mul(-5, 3, 32, 1, 0, main);
+        __m2c_rt_overflow_map2check_binop_sdiv(-5, 3, 32, 1, 0, main);
+        __m2c_rt_overflow_map2check_binop_srem(-5, 3, 32, 1, 0, main);
+    }
+    __m2c_rt_overflow_map2check_binop_add_uint(UINT_MAX, 1, 32, 1, 0, main);
+    __m2c_rt_overflow_map2check_binop_sub_uint(0, 1, 32, 1, 0, main);
+    __m2c_rt_overflow_map2check_binop_mul_uint(UINT_MAX, 2, 32, 1, 0, main);
+    assert_ok();
+    // SAFETY: as above.
+    unsafe { __m2c_rt_overflow_map2check_binop_sub(INT_MIN, 1, 32, 2, 0, main) };
+    assert_violated(ViolatedProperty::Overflow, 2, "main");
+    state::reset();
+    // SAFETY: as above.
+    unsafe { __m2c_rt_overflow_map2check_binop_mul(INT_MAX, 2, 32, 3, 0, main) };
+    assert_violated(ViolatedProperty::Overflow, 3, "main");
+    state::reset();
+    // SAFETY: as above.
+    unsafe { __m2c_rt_overflow_map2check_binop_sdiv(INT_MIN, -1, 32, 4, 0, main) };
+    assert_violated(ViolatedProperty::Overflow, 4, "main");
+}

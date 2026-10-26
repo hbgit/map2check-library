@@ -63,10 +63,26 @@ jobs:
           test -d vendor/map2check/modules/backend/library/header || scripts/fetch-map2check.sh
           tests/abi/check-signatures.sh vendor/map2check/modules/backend/library/header
 
+      # Gerador dos módulos IR do layout A-fwd (D7). O teste de paridade de
+      # ABI compila cada assinatura com o clang instalado acima.
+      - name: Testar o gerador de IR do runtime (scripts/runtime-ir/gen_ll.py)
+        run: python3 -I -m unittest discover -s scripts/runtime-ir
+
+      # Gera target/runtime-ir/AnalysisModeOverflow.ll (não versionado),
+      # confere a sintaxe com clang -c -x ir e liga um driver C ao .ll e à
+      # staticlib: cada encaminhador precisa chegar ao __m2c_rt_overflow_*
+      # do núcleo e escrever os arquivos de propriedade do C.
+      - name: Gerar, conferir e ligar o módulo IR AnalysisModeOverflow
+        run: |
+          cargo build --release --all-features
+          scripts/runtime-ir/test-overflow-link.sh
+
+      # Os símbolos C dos modos são definidos só pelos módulos IR: o .ll
+      # entra como artefato extra da cobertura.
       - name: Conferir cobertura da ABI do runtime C (pending.txt)
         run: |
           cargo build --release --all-features
-          scripts/runtime-abi-coverage.sh
+          scripts/runtime-abi-coverage.sh target/runtime-ir/AnalysisModeOverflow.ll
 
       - name: Instalar cargo-tarpaulin
         uses: taiki-e/install-action@v2

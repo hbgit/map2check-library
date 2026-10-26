@@ -13,7 +13,7 @@
 // variable a test build writes no files and never aborts
 // (`output::termination::output_dir`).
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::os::raw::{c_char, c_long, c_void};
 use std::os::unix::process::ExitStatusExt;
 use std::path::Path;
@@ -1079,4 +1079,199 @@ fn generate_confirmation_file_matches_c_format() {
         std::fs::read(dir.path().join("map2check_checked_error")).unwrap(),
         b"END OF TIME\n"
     );
+}
+
+// ── AnalysisModeOverflow through the core entry points (Task 2.3, D7) ───────
+//
+// The IR module `AnalysisModeOverflow.bc` forwards the C names to these
+// entry points. The C drivers `drivers/OVERFLOW.c` and `drivers/DIVBYZERO.c`
+// call develop's `map2check_binop_add` / `map2check_binop_sdiv` with exactly
+// these arguments, so the C goldens apply unchanged.
+
+/// Starts a run as the drop-in runtime does: `map2check_init` (which in C
+/// calls `analysis_init`, `Map2CheckFunctions.c:29-40`), then the overflow
+/// module's `analysis_init`, which selects the mode.
+fn start_overflow_rt(witness: bool) {
+    println!("{STARTED}");
+    if witness {
+        map2check_enable_witness();
+    }
+    map2check_init(0);
+    __m2c_rt_overflow_analysis_init();
+}
+
+#[test]
+fn overflow_rt_child() {
+    if is_child() {
+        start_overflow_rt(true);
+        tracking();
+        // SAFETY: C-string literal is valid.
+        unsafe {
+            __m2c_rt_overflow_map2check_binop_add(
+                i64::from(i32::MAX),
+                1,
+                32,
+                20,
+                0,
+                c"main".as_ptr(),
+            )
+        };
+        map2check_success();
+    }
+}
+
+#[test]
+fn overflow_rt_matches_c_runtime() {
+    assert_matches_golden("OVERFLOW", "overflow_rt_child");
+}
+
+#[test]
+fn div_by_zero_rt_child() {
+    if is_child() {
+        start_overflow_rt(true);
+        tracking();
+        // SAFETY: C-string literal is valid.
+        unsafe { __m2c_rt_overflow_map2check_binop_sdiv(7, 0, 32, 23, 0, c"main".as_ptr()) };
+        map2check_success();
+    }
+}
+
+#[test]
+fn div_by_zero_rt_matches_c_runtime() {
+    assert_matches_golden("DIVBYZERO", "div_by_zero_rt_child");
+}
+
+/// One boundary operation per child, without witness. `OVERFLOW_RT_CASE`
+/// selects it.
+#[test]
+fn overflow_rt_boundary_child() {
+    if is_child() {
+        start_overflow_rt(false);
+        let case = std::env::var("OVERFLOW_RT_CASE").unwrap();
+        let main = c"main".as_ptr();
+        // SAFETY: C-string literals are valid.
+        unsafe {
+            match case.as_str() {
+                "INT_MAX + 1" => {
+                    __m2c_rt_overflow_map2check_binop_add(i64::from(i32::MAX), 1, 32, 30, 0, main)
+                }
+                "INT_MIN - 1" => {
+                    __m2c_rt_overflow_map2check_binop_sub(i64::from(i32::MIN), 1, 32, 31, 0, main)
+                }
+                "INT_MIN / -1" => {
+                    __m2c_rt_overflow_map2check_binop_sdiv(i64::from(i32::MIN), -1, 32, 32, 0, main)
+                }
+                "INT_MIN % -1" => {
+                    __m2c_rt_overflow_map2check_binop_srem(i64::from(i32::MIN), -1, 32, 33, 0, main)
+                }
+                "x % 0" => __m2c_rt_overflow_map2check_binop_srem(5, 0, 32, 34, 0, main),
+                "INT_MAX * 2" => {
+                    __m2c_rt_overflow_map2check_binop_mul(i64::from(i32::MAX), 2, 32, 35, 0, main)
+                }
+                "overflowError" => __m2c_rt_overflow_overflowError(36, c"f".as_ptr()),
+                "UINT_MAX + 1" => __m2c_rt_overflow_map2check_binop_add_uint(
+                    u64::from(u32::MAX),
+                    1,
+                    32,
+                    37,
+                    0,
+                    main,
+                ),
+                "0 - 1u" => __m2c_rt_overflow_map2check_binop_sub_uint(0, 1, 32, 38, 0, main),
+                "UINT_MAX * 2" => __m2c_rt_overflow_map2check_binop_mul_uint(
+                    u64::from(u32::MAX),
+                    2,
+                    32,
+                    39,
+                    0,
+                    main,
+                ),
+                other => panic!("caso desconhecido {other}"),
+            }
+        }
+        println!("map2check-golden-child-survived");
+        map2check_success();
+        println!("{RETURNED}");
+    }
+}
+
+/// The property text of the C runtime for `prp` at `line` in `function`:
+/// `write_property` (`PropertyGenerator.c:86-91` for FALSE_OVERFLOW,
+/// `:98-102` for FALSE_DIVBYZERO) and `write_property_overflow` (`:116-122`).
+fn c_property_text(tag: &str, line: u32, function: &str) -> String {
+    format!("{tag}\nLine: {line}\nFunction: {function}\n")
+}
+
+#[test]
+fn overflow_rt_boundaries_write_the_c_property_text_and_abort() {
+    let overflow = |line, function| {
+        let text = c_property_text("OVERFLOW", line, function);
+        BTreeMap::from([
+            ("map2check_property".to_owned(), text.clone()),
+            ("map2check_property_overflow".to_owned(), text),
+        ])
+    };
+    let cases = [
+        ("INT_MAX + 1", overflow(30, "main")),
+        ("INT_MIN - 1", overflow(31, "main")),
+        ("INT_MIN / -1", overflow(32, "main")),
+        ("INT_MIN % -1", overflow(33, "main")),
+        (
+            "x % 0",
+            // FALSE_DIVBYZERO writes only map2check_property (:98-102).
+            BTreeMap::from([(
+                "map2check_property".to_owned(),
+                c_property_text("FALSE-DIVBYZERO", 34, "main"),
+            )]),
+        ),
+        ("INT_MAX * 2", overflow(35, "main")),
+        ("overflowError", overflow(36, "f")),
+    ];
+    for (case, expected) in cases {
+        let dir = tempfile::tempdir().unwrap();
+        let output = run_child_with(
+            "overflow_rt_boundary_child",
+            dir.path(),
+            &[("OVERFLOW_RT_CASE", case)],
+        );
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        // map2check_error -> map2check_exit -> abort (Map2CheckFunctions.c:72-102).
+        assert_eq!(output.status.signal(), Some(6), "{case}: SIGABRT\n{stdout}");
+        assert!(!stdout.contains("survived"), "{case}: o processo continuou");
+        let actual: BTreeMap<String, String> = files_in(dir.path())
+            .into_iter()
+            .map(|name| {
+                let text = std::fs::read_to_string(dir.path().join(&name)).unwrap();
+                (name, text)
+            })
+            .collect();
+        assert_eq!(actual, expected, "{case}");
+    }
+}
+
+#[test]
+fn overflow_rt_unsigned_wraparound_is_not_reported_like_c() {
+    // AnalysisModeOverflow.c:219-248: the _uint binops are no-ops, so the
+    // run goes on to map2check_success, which writes NONE and returns.
+    for case in ["UINT_MAX + 1", "0 - 1u", "UINT_MAX * 2"] {
+        let dir = tempfile::tempdir().unwrap();
+        let output = run_child_with(
+            "overflow_rt_boundary_child",
+            dir.path(),
+            &[("OVERFLOW_RT_CASE", case)],
+        );
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        assert_eq!(output.status.code(), Some(0), "{case}\n{stdout}");
+        assert!(stdout.contains(RETURNED), "{case}");
+        assert_eq!(
+            files_in(dir.path()),
+            BTreeSet::from(["map2check_property".to_owned()]),
+            "{case}"
+        );
+        assert_eq!(
+            std::fs::read(dir.path().join("map2check_property")).unwrap(),
+            b"NONE\n",
+            "{case}"
+        );
+    }
 }

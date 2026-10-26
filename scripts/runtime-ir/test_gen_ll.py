@@ -243,6 +243,35 @@ class Generated(unittest.TestCase):
         self.assertIn("define void @generate_aux_files(ptr %a0, i8 signext %a1)", text)
         self.assertIn("tail call void @__m2c_rt_witness_generate_aux_files(ptr %a0, i8 signext %a1)", text)
 
+    def test_overflow_module_forwards_every_c_function_to_the_core(self):
+        """AnalysisModeOverflow.bc (Task 2.3): the C functions with a consumer
+        outside the module, each a forwarder to __m2c_rt_overflow_<name>;
+        divisionByZeroError and unknown_not_supported stay private (SD-22)."""
+        text = read(os.path.join(run_gen("--module", "AnalysisModeOverflow"), "AnalysisModeOverflow.ll"))
+        want = {r["symbol"] for r in inventory_rows()
+                if "AnalysisModeOverflow.bc" in r["module"].split("+") and r["kind"] == "func"
+                and r["referenced_by"] != "-"}
+        self.assertEqual(len(want), 13)
+        self.assertEqual(defined(text), want)
+        self.assertNotIn("divisionByZeroError", text)
+        self.assertNotIn("unknown_not_supported", text)
+        for sym in want:
+            self.assertEqual(gen_ll.IMPLEMENTED[("AnalysisModeOverflow", sym)], f"__m2c_rt_overflow_{sym}")
+            self.assertRegex(text, rf"tail call [^@]*@__m2c_rt_overflow_{sym}\(", sym)
+        self.assertIn("declare signext i8 @__m2c_rt_overflow_analysis_is_program_correct()\n", text)
+        self.assertIn("define signext i8 @analysis_is_program_correct() {\n"
+                      "  %r = tail call signext i8 @__m2c_rt_overflow_analysis_is_program_correct()\n"
+                      "  ret i8 %r\n}\n", text)
+        self.assertIn("define void @map2check_binop_add(i64 %a0, i64 %a1, i32 %a2, i32 %a3, i32 %a4, ptr %a5)",
+                      text)
+
+    def test_other_modes_keep_their_analysis_stubs(self):
+        out = run_gen()
+        for m in ("AnalysisModeAssert", "AnalysisModeNone", "AnalysisModeMemtrack", "AnalysisModeMemcleanup"):
+            text = read(os.path.join(out, m + ".ll"))
+            self.assertNotIn("__m2c_rt_overflow", text, m)
+            self.assertIn("define signext i8 @analysis_is_program_correct() {\n  ret i8 1\n}", text, m)
+
     def test_every_forwarder_target_is_a_rust_core_export(self):
         src = read(FFI_RS)
         exported = set(re.findall(r'#\[no_mangle\]\s*(?:#\[[^\]]*\]\s*)*pub (?:unsafe )?extern "C" fn (\w+)\(',

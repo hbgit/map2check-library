@@ -118,6 +118,15 @@ IMPLEMENTED = {
     ("WitnessGeneration", "generate_aux_files"): "__m2c_rt_witness_generate_aux_files",
     ("WitnessGeneration", "generate_confirmation_file"): "__m2c_rt_witness_generate_confirmation_file",
 }
+# AnalysisModeOverflow.c (Task 2.3): every function with a consumer outside
+# the module. divisionByZeroError and unknown_not_supported are internal to
+# the C module (referenced_by '-', SD-22), so they are neither defined nor
+# forwarded.
+for sym in ("analysis_init", "analysis_destroy", "analysis_is_program_correct",
+            "analysis_generate_aux_witness_files", "overflowError",
+            *(f"map2check_binop_{op}" for op in ("add", "sub", "mul", "add_uint", "sub_uint",
+                                                 "mul_uint", "sdiv", "srem"))):
+    IMPLEMENTED[("AnalysisModeOverflow", sym)] = f"__m2c_rt_overflow_{sym}"
 
 # Modules whose symbols are all runtime-internal C helpers (container rows by
 # value, log files): the Rust core keeps that logic private, so the module is

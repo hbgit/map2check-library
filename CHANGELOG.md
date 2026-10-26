@@ -25,6 +25,17 @@ the C ABI or the JSON report must update them.
 
 ### Added
 
+- The overflow analysis mode of the Map2Check C runtime ABI (Task 2.3 of the
+  drop-in plan): core entry points `__m2c_rt_overflow_analysis_{init,destroy,
+  is_program_correct,generate_aux_witness_files}`,
+  `__m2c_rt_overflow_map2check_binop_{add,sub,mul,sdiv,srem}`,
+  `__m2c_rt_overflow_map2check_binop_{add,sub,mul}_uint` (no-ops, as in C) and
+  `__m2c_rt_overflow_overflowError`, with the C semantics and property files of
+  `AnalysisModeOverflow.c`. The C names are defined only by the generated IR
+  module `AnalysisModeOverflow.ll` (`scripts/runtime-ir/gen_ll.py --module
+  AnalysisModeOverflow`), never by `libmap2check.a`. The IR generator moved
+  from the D7 spike to `scripts/runtime-ir/` and now emits the
+  `signext`/`zeroext` attributes clang-16 gives `char`, `short` and `_Bool`.
 - The nondet log of the Map2Check C runtime ABI (Task 2.2 of the drop-in
   plan): the 23 `map2check_nondet_<t>` exports of `NonDetLog.h` (`u8`, `u16`,
   `u32`, `memory_byte`, `longlong` and `ulonglong` included), `nondet_log_init`,
