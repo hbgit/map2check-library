@@ -46,4 +46,12 @@ docker run --rm --user "$(id -u):$(id -g)" -e HOME=/out/home \
     # O Map2Check instala o binário na raiz do prefixo (release/map2check);
     # bin/map2check é o caminho acordado com os testes de integração.
     ln -sf ../map2check /out/c/bin/map2check
+    # Runtime do KLEE e diretório de recursos do clang não têm regra de
+    # instalação; o CI do próprio Map2Check (.github/workflows/ci.yml, e2e)
+    # cria estes dois links. Sem lib/klee/runtime o KLEE não carrega
+    # klee-uclibc.bca e todo run symex/híbrido termina UNKNOWN. Os alvos
+    # existem dentro da imagem, onde o Map2Check roda.
+    mkdir -p /out/c/lib/klee
+    ln -sfn /opt/klee/lib/klee/runtime /out/c/lib/klee/runtime
+    ln -sfn /usr/lib/llvm-16/lib/clang /out/c/lib/clang
   '

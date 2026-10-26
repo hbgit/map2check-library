@@ -32,6 +32,9 @@ after="$(manifest | sha256sum)"
   || bad "vendor/map2check foi modificado pelo build"
 
 [ -x "$INSTALL/bin/map2check" ] && ok "bin/map2check instalado" || bad "bin/map2check ausente"
+[ "$(readlink "$INSTALL/lib/klee/runtime")" = /opt/klee/lib/klee/runtime ] \
+  && ok "lib/klee/runtime aponta para o runtime do KLEE da imagem" \
+  || bad "lib/klee/runtime ausente (symex e híbrido terminariam UNKNOWN)"
 
 commit12="$(sed -n 's/^commit=//p' "$ROOT/vendor/MAP2CHECK_VERSION" | cut -c1-12)"
 IMG="map2check-dev:develop-${commit12}-time"
