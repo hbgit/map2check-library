@@ -79,6 +79,10 @@ pub(crate) fn reset_config() {
 pub struct AnalysisState {
     pub result: AnalysisResult,
     pub nondets: Vec<NonDetEntry>,
+    /// The rows of develop's `nondet_log` (`NonDetLog.c:144`), appended by
+    /// the `map2check_nondet_<t>` exports and written to `klee_log.csv` by
+    /// `__m2c_rt_nondet_log_to_file`.
+    pub c_nondet: Vec<crate::nondet::c_log::CNondetCall>,
     pub memtrack: Vec<MemTrackEntry>,
     /// The offset-keyed allocation table of the wasm2c runtime
     /// (`map2check_wasm_*`, Task 2.8).

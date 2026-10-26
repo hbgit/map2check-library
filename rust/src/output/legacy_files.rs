@@ -90,6 +90,12 @@ pub fn c_double(value: f64) -> String {
 /// share the pid and each has a copy of the counter, so the file is created
 /// with `create_new` and a name that already exists is skipped.
 pub fn write_atomic(dir: &Path, name: &str, contents: &str) -> io::Result<()> {
+    write_atomic_bytes(dir, name, contents.as_bytes())
+}
+
+/// [`write_atomic`] for contents that need not be UTF-8 (a function name is
+/// a C byte string).
+pub fn write_atomic_bytes(dir: &Path, name: &str, contents: &[u8]) -> io::Result<()> {
     use std::io::Write as _;
     use std::sync::atomic::{AtomicU64, Ordering};
     static COUNTER: AtomicU64 = AtomicU64::new(0);
@@ -111,7 +117,7 @@ pub fn write_atomic(dir: &Path, name: &str, contents: &str) -> io::Result<()> {
             Err(e) => return Err(e),
         }
     };
-    let result = file.write_all(contents.as_bytes()).and_then(|()| {
+    let result = file.write_all(contents).and_then(|()| {
         drop(file);
         std::fs::rename(&tmp, dir.join(name))
     });

@@ -96,6 +96,9 @@ impl NonDetEntry {
     }
 }
 
+/// The nondet log of the C runtime (`NonDetLog.c`) and its `klee_log.csv`.
+pub mod c_log;
+
 /// LibFuzzer nondeterministic value generator — feature-gated.
 #[cfg(feature = "libfuzzer")]
 pub mod libfuzzer;

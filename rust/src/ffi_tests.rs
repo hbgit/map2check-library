@@ -3263,3 +3263,433 @@ fn m2c_rt_witness_entry_points_without_output_directory_change_nothing() {
     assert_ok();
     assert_eq!(snapshot(|s| s.bbtrack.len()), 1);
 }
+
+// ── C runtime ABI: NonDetLog ────────────────────────────────────────────────
+//
+// `map2check_nondet_<t>` of develop's `NonDetLog.c`: each call appends a row
+// that takes `map2check_get_current_step()` and then advances it
+// (`:96-113`), and `nondet_log_to_file` writes `klee_log.csv` from the rows.
+
+use crate::nondet::c_log::{self, CNondetCall};
+
+fn c_nondet_rows() -> Vec<CNondetCall> {
+    snapshot(|s| s.c_nondet.clone())
+}
+
+/// Calls `$export` with the extreme `$value` of its width and sign, reads the
+/// row back and compares the stored bits, the type number and the CSV line
+/// that `nondet_log_to_file` prints for it.
+macro_rules! nondet_roundtrip {
+    ($test:ident, $call:expr, $value:expr, $kind:expr, $bits:expr, $csv_value:expr) => {
+        #[test]
+        fn $test() {
+            let _guard = fresh();
+            map2check_init(0);
+            // `$call` is a closure over the export under test.
+            let call = $call;
+            call($value, c"main".as_ptr());
+            let rows = c_nondet_rows();
+            assert_eq!(rows.len(), 1);
+            let row = &rows[0];
+            assert_eq!(row.kind, $kind);
+            assert_eq!(row.value_bits(), $bits);
+            assert_eq!((row.line, row.scope, row.step), (7, 3, 0));
+            assert_eq!(row.function_name(), b"main");
+            assert_eq!(map2check_get_current_step(), 1);
+            assert_eq!(
+                String::from_utf8(row.csv_row(0)).unwrap(),
+                format!("0;7;3;main;0;{};{}\n", $csv_value, $kind)
+            );
+        }
+    };
+}
+
+// `enum NONDET_TYPE` numbers: Map2CheckTypes.h:41-58.
+nondet_roundtrip!(
+    nondet_roundtrip_int,
+    |v, n| // SAFETY: `n` is a valid C string.
+        unsafe { map2check_nondet_int(7, 3, v, n) },
+    i32::MIN,
+    0,
+    0x8000_0000,
+    "-2147483648"
+);
+nondet_roundtrip!(
+    nondet_roundtrip_char,
+    |v, n| // SAFETY: `n` is a valid C string.
+        unsafe { map2check_nondet_char(7, 3, v, n) },
+    -128,
+    1,
+    0xffff_ff80,
+    "-128"
+);
+nondet_roundtrip!(
+    nondet_roundtrip_pointer,
+    |v, n| // SAFETY: `n` is a valid C string.
+        unsafe { map2check_nondet_pointer(7, 3, v, n) },
+    i32::MIN,
+    2,
+    0x8000_0000,
+    "-2147483648"
+);
+nondet_roundtrip!(
+    nondet_roundtrip_ushort,
+    |v, n| // SAFETY: `n` is a valid C string.
+        unsafe { map2check_nondet_ushort(7, 3, v, n) },
+    65535,
+    3,
+    65535,
+    "65535"
+);
+nondet_roundtrip!(
+    nondet_roundtrip_long,
+    |v, n| // SAFETY: `n` is a valid C string.
+        unsafe { map2check_nondet_long(7, 3, v, n) },
+    i32::MIN,
+    4,
+    0x8000_0000,
+    "-2147483648"
+);
+nondet_roundtrip!(
+    nondet_roundtrip_unsigned,
+    |v, n| // SAFETY: `n` is a valid C string.
+        unsafe { map2check_nondet_unsigned(7, 3, v, n) },
+    u32::MAX,
+    5,
+    0xffff_ffff,
+    "4294967295"
+);
+nondet_roundtrip!(
+    nondet_roundtrip_ulong,
+    |v, n| // SAFETY: `n` is a valid C string.
+        unsafe { map2check_nondet_ulong(7, 3, v, n) },
+    -1,
+    6,
+    0xffff_ffff,
+    "-1"
+);
+nondet_roundtrip!(
+    nondet_roundtrip_bool,
+    |v, n| // SAFETY: `n` is a valid C string.
+        unsafe { map2check_nondet_bool(7, 3, v, n) },
+    1,
+    7,
+    1,
+    "1"
+);
+nondet_roundtrip!(
+    nondet_roundtrip_uchar,
+    |v, n| // SAFETY: `n` is a valid C string.
+        unsafe { map2check_nondet_uchar(7, 3, v, n) },
+    255,
+    8,
+    255,
+    "255"
+);
+nondet_roundtrip!(
+    nondet_roundtrip_pchar,
+    |v, n| // SAFETY: `n` is a valid C string.
+        unsafe { map2check_nondet_pchar(7, 3, v, n) },
+    i32::MAX,
+    9,
+    0x7fff_ffff,
+    "2147483647"
+);
+nondet_roundtrip!(
+    nondet_roundtrip_size_t,
+    |v, n| // SAFETY: `n` is a valid C string.
+        unsafe { map2check_nondet_size_t(7, 3, v, n) },
+    i32::MAX,
+    10,
+    0x7fff_ffff,
+    "2147483647"
+);
+nondet_roundtrip!(
+    nondet_roundtrip_loff_t,
+    |v, n| // SAFETY: `n` is a valid C string.
+        unsafe { map2check_nondet_loff_t(7, 3, v, n) },
+    i32::MIN,
+    11,
+    0x8000_0000,
+    "-2147483648"
+);
+nondet_roundtrip!(
+    nondet_roundtrip_sector_t,
+    |v, n| // SAFETY: `n` is a valid C string.
+        unsafe { map2check_nondet_sector_t(7, 3, v, n) },
+    i32::MAX,
+    12,
+    0x7fff_ffff,
+    "2147483647"
+);
+nondet_roundtrip!(
+    nondet_roundtrip_uint,
+    |v, n| // SAFETY: `n` is a valid C string.
+        unsafe { map2check_nondet_uint(7, 3, v, n) },
+    -1,
+    13,
+    0xffff_ffff,
+    "-1"
+);
+nondet_roundtrip!(
+    nondet_roundtrip_short,
+    |v, n| // SAFETY: `n` is a valid C string.
+        unsafe { map2check_nondet_short(7, 3, v, n) },
+    -32768,
+    14,
+    0xffff_8000,
+    "-32768"
+);
+nondet_roundtrip!(
+    nondet_roundtrip_double,
+    |v, n| // SAFETY: `n` is a valid C string.
+        unsafe { map2check_nondet_double(7, 3, v, n) },
+    f64::MAX,
+    15,
+    f64::MAX.to_bits(),
+    "179769313486231570814527423731704356798070567525844996598917476803157260780028538760589558632766878171540458953514382464234321326889464182768467546703537516986049910576551282076245490090389328944075868508455133942304583236903222948165808559332123348274797826204144723168738177180919299881250404026184124858368.000000"
+);
+nondet_roundtrip!(
+    nondet_roundtrip_float,
+    |v, n| // SAFETY: `n` is a valid C string.
+        unsafe { map2check_nondet_float(7, 3, v, n) },
+    f64::from(f32::MAX),
+    16,
+    f64::from(f32::MAX).to_bits(),
+    "3.40282347e+38"
+);
+nondet_roundtrip!(
+    nondet_roundtrip_longlong,
+    |v, n| // SAFETY: `n` is a valid C string.
+        unsafe { map2check_nondet_longlong(7, 3, v, n) },
+    i64::MIN,
+    17,
+    1 << 63,
+    "-9223372036854775808"
+);
+nondet_roundtrip!(
+    nondet_roundtrip_ulonglong,
+    |v, n| // SAFETY: `n` is a valid C string.
+        unsafe { map2check_nondet_ulonglong(7, 3, v, n) },
+    u64::MAX,
+    18,
+    u64::MAX,
+    "18446744073709551615"
+);
+nondet_roundtrip!(
+    nondet_roundtrip_u8,
+    |v, n| // SAFETY: `n` is a valid C string.
+        unsafe { map2check_nondet_u8(7, 3, v, n) },
+    255,
+    19,
+    255,
+    "255"
+);
+nondet_roundtrip!(
+    nondet_roundtrip_u16,
+    |v, n| // SAFETY: `n` is a valid C string.
+        unsafe { map2check_nondet_u16(7, 3, v, n) },
+    65535,
+    20,
+    65535,
+    "65535"
+);
+// U32 prints through `as_unsigned` like UNSIGNED (NonDetLog.c:91).
+nondet_roundtrip!(
+    nondet_roundtrip_u32,
+    |v, n| // SAFETY: `n` is a valid C string.
+        unsafe { map2check_nondet_u32(7, 3, v, n) },
+    -1,
+    21,
+    0xffff_ffff,
+    "4294967295"
+);
+nondet_roundtrip!(
+    nondet_roundtrip_memory_byte,
+    |v, n| // SAFETY: `n` is a valid C string.
+        unsafe { map2check_nondet_memory_byte(7, 3, v, n) },
+    255,
+    22,
+    255,
+    "255"
+);
+
+#[test]
+fn nondet_calls_take_the_step_then_advance_it() {
+    let _guard = fresh();
+    map2check_init(0);
+    // `NonDetLog.c:96-113`: the row takes `map2check_get_current_step()`, and
+    // `helper_map2check_nondet_append_element` then advances it.
+    // SAFETY: C-string literals are valid and null-terminated.
+    unsafe {
+        map2check_nondet_int(1, 0, 10, c"main".as_ptr());
+        map2check_next_current_step();
+        map2check_nondet_int(2, 0, 11, c"main".as_ptr());
+    }
+    let steps: Vec<u32> = c_nondet_rows().iter().map(|r| r.step).collect();
+    assert_eq!(steps, [0, 2]);
+    assert_eq!(map2check_get_current_step(), 3);
+}
+
+#[test]
+fn nondet_function_name_is_cut_at_35_bytes_and_null_is_empty() {
+    let _guard = fresh();
+    map2check_init(0);
+    let long = std::ffi::CString::new("f".repeat(40)).unwrap();
+    // `strncpy(..., FUNCTION_MAX_LENGTH_NAME = 35)` and `put_string(..., 35)`
+    // (`NonDetLog.c:78,120`, `Map2CheckTypes.h:20`).
+    // SAFETY: the C string is valid; a null name is accepted.
+    unsafe {
+        map2check_nondet_int(1, 0, 1, long.as_ptr());
+        map2check_nondet_int(1, 0, 1, std::ptr::null());
+    }
+    let rows = c_nondet_rows();
+    assert_eq!(rows[0].function_name(), "f".repeat(35).as_bytes());
+    assert_eq!(rows[1].function_name(), b"");
+}
+
+#[test]
+fn nondet_log_init_and_destroy_empty_the_log_and_keep_the_step() {
+    let _guard = fresh();
+    map2check_init(0);
+    // SAFETY: C-string literal is valid and null-terminated.
+    unsafe { map2check_nondet_int(1, 0, 1, c"main".as_ptr()) };
+    assert_eq!(c_nondet_rows().len(), 1);
+    // `NonDetLog.c:150-152`: a new container, or a freed one.
+    nondet_log_init();
+    assert!(c_nondet_rows().is_empty());
+    assert_eq!(map2check_get_current_step(), 1);
+    // SAFETY: as above.
+    unsafe { map2check_nondet_int(1, 0, 1, c"main".as_ptr()) };
+    nondet_log_destroy();
+    assert!(c_nondet_rows().is_empty());
+    // `map2check_init` starts a new log too (`nondet_init`).
+    // SAFETY: as above.
+    unsafe { map2check_nondet_int(1, 0, 1, c"main".as_ptr()) };
+    map2check_init(0);
+    assert!(c_nondet_rows().is_empty());
+}
+
+#[test]
+fn nondet_log_does_not_touch_the_json_report_state() {
+    let _guard = fresh();
+    map2check_init(0);
+    // SAFETY: C-string literal is valid and null-terminated.
+    unsafe { map2check_nondet_int(1, 0, 1, c"main".as_ptr()) };
+    assert!(snapshot(
+        |s| s.nondets.is_empty() && s.legacy_nondet_logs.is_empty()
+    ));
+    assert_eq!(snapshot(|s| s.current_step()), 0);
+    assert_ok();
+}
+
+/// A row of every printing arm, in the text `nondet_log_to_file` writes.
+fn sample_log() -> Vec<CNondetCall> {
+    let rows = [
+        (0, 3, 1, 5, "main", 0xffff_fffe_u64),
+        (5, 17, 2, 9, "main", 5),
+        (21, 4, 0, 10, "f", 0xffff_ffff),
+        (15, 8, 1, 11, "g", 2.5_f64.to_bits()),
+        (16, 9, 1, 12, "g", 0.1_f64.to_bits()),
+        (17, 1, 0, 13, "h", i64::MIN as u64),
+        (18, 1, 0, 14, "h", u64::MAX),
+        (19, 2, 0, 15, "name_of_exactly_thirty_five_chars_xyz", 200),
+    ];
+    rows.iter()
+        .map(|&(kind, line, scope, step, name, bits)| {
+            CNondetCall::from_parts(kind, line, scope, step, name.as_bytes(), bits)
+        })
+        .collect()
+}
+
+#[test]
+fn klee_log_csv_matches_c_format() {
+    // `NonDetLog.c:68-112`: `index;line;scope;function;step;value;type\n`, the
+    // numbers in decimal by hand (`:20-48`). INTEGER `%d` of the int (`:106`);
+    // UNSIGNED and U32 `%u` (`:91-92`) and once, not twice (`:82-90`); DOUBLE
+    // `%lf` (`:93-95`); FLOAT `%.9g` of the double narrowed to float (`:96-100`);
+    // LONGLONG and ULONGLONG at 64 bits (`:101-105`); the name cut at 35.
+    // Row 0 is INTEGER with the bits of -2 (`%d` prints -2); the name of row 7
+    // has 37 characters and is cut at 35.
+    let expected = "\
+0;3;1;main;5;-2;0\n\
+1;17;2;main;9;5;5\n\
+2;4;0;f;10;4294967295;21\n\
+3;8;1;g;11;2.500000;15\n\
+4;9;1;g;12;0.100000001;16\n\
+5;1;0;h;13;-9223372036854775808;17\n\
+6;1;0;h;14;18446744073709551615;18\n\
+7;2;0;name_of_exactly_thirty_five_chars_x;15;200;19\n";
+    let dir = tempfile::tempdir().unwrap();
+    assert!(c_log::nondet_log_to_file(&sample_log(), dir.path()));
+    let written = std::fs::read(dir.path().join("klee_log.csv")).unwrap();
+    assert_eq!(String::from_utf8(written).unwrap(), expected);
+}
+
+#[test]
+fn nondet_log_to_file_writes_an_empty_file_for_an_empty_log_and_fails_without_a_directory() {
+    let dir = tempfile::tempdir().unwrap();
+    // `fopen("w")` creates the file even when there are no rows (`:55`).
+    assert!(c_log::nondet_log_to_file(&[], dir.path()));
+    assert_eq!(std::fs::read(dir.path().join("klee_log.csv")).unwrap(), b"");
+    // `fopen` fails: FALSE (`:56-58`).
+    assert!(!c_log::nondet_log_to_file(
+        &[],
+        &dir.path().join("does-not-exist")
+    ));
+}
+
+#[test]
+fn m2c_rt_nondet_log_to_file_writes_the_log_of_the_run() {
+    let _guard = fresh();
+    map2check_init(0);
+    // SAFETY: C-string literals are valid and null-terminated.
+    unsafe {
+        map2check_nondet_int(3, 1, -7, c"main".as_ptr());
+        map2check_nondet_unsigned(4, 1, 8, c"main".as_ptr());
+    }
+    let dir = tempfile::tempdir().unwrap();
+    std::env::set_var(crate::output::termination::OUTPUT_DIR_ENV, dir.path());
+    let ok = __m2c_rt_nondet_log_to_file();
+    std::env::remove_var(crate::output::termination::OUTPUT_DIR_ENV);
+    assert_eq!(ok, 1);
+    assert_eq!(
+        std::fs::read_to_string(dir.path().join("klee_log.csv")).unwrap(),
+        "0;3;1;main;0;-7;0\n1;4;1;main;1;8;5\n"
+    );
+}
+
+#[test]
+fn float_g9_matches_printf() {
+    // Each expected text is what glibc's `printf("%.9g", (float)d)` printed
+    // for the same `d` (clang 21 on this host).
+    let cases: [(f64, &str); 21] = [
+        (f64::from(f32::MAX), "3.40282347e+38"),
+        (1e-30_f32 as f64, "1e-30"),
+        (0.5, "0.5"),
+        (1.0, "1"),
+        (100.0, "100"),
+        (123_456_789.0, "123456792"),
+        (1e9, "1e+09"),
+        (999_999_999.0, "1e+09"),
+        (0.0001_f32 as f64, "9.99999975e-05"),
+        (0.00001_f32 as f64, "9.99999975e-06"),
+        (-0.0, "-0"),
+        (0.0, "0"),
+        (f64::from(f32::MIN_POSITIVE), "1.17549435e-38"),
+        (f64::from(1.4e-45_f32), "1.40129846e-45"),
+        (16_777_216.0, "16777216"),
+        (f64::from(0.1_f32), "0.100000001"),
+        (-2.5, "-2.5"),
+        (f64::INFINITY, "inf"),
+        (f64::NEG_INFINITY, "-inf"),
+        (f64::NAN, "nan"),
+        (99_999.999_9, "100000"),
+    ];
+    for (value, text) in cases {
+        assert_eq!(c_log::c_float_g9(value as f32), text, "{value}");
+    }
+    assert_eq!(c_log::c_float_g9(f32::from_bits(0xffc0_0000)), "-nan");
+    assert_eq!(c_log::c_float_g9(1e8_f32), "100000000");
+    assert_eq!(c_log::c_float_g9(123_456.79_f32), "123456.789");
+}

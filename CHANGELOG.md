@@ -25,6 +25,13 @@ the C ABI or the JSON report must update them.
 
 ### Added
 
+- The nondet log of the Map2Check C runtime ABI (Task 2.2 of the drop-in
+  plan): the 23 `map2check_nondet_<t>` exports of `NonDetLog.h` (`u8`, `u16`,
+  `u32`, `memory_byte`, `longlong` and `ulonglong` included), `nondet_log_init`,
+  `nondet_log_destroy` and `__m2c_rt_nondet_log_to_file`, which writes
+  `klee_log.csv` byte for byte as `NonDetLog.c` does. The log is separate from
+  the one behind `map2check_save_nondet_log_<t>` and the JSON report, which
+  are unchanged. The `none` generator needs no Rust entry point: it is pure IR.
 - The core of the Map2Check C runtime ABI (Task 2.1 of the drop-in plan):
   `map2check_track_bb`, `map2check_target_function`, `map2check_error`,
   `map2check_exit`, `map2check_destroy`, `map2check_get_current_step`,

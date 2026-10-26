@@ -132,6 +132,19 @@ static void run_pre_init_boundary(void) {
     (void)map2check_save_nondet_log_unsigned(1, 0, 5, NULL, "main");
     (void)map2check_save_nondet_log_pchar(1, 0, 9, NULL, "main");
 
+    /* The nondet log of the C runtime ABI (NonDetLog.h). */
+    nondet_log_init();
+    map2check_nondet_int(1, 0, -1, "main");
+    map2check_nondet_unsigned(1, 0, 0xffffffffu, "main");
+    map2check_nondet_u8(1, 0, 255, "main");
+    map2check_nondet_memory_byte(1, 0, 255, "main");
+    map2check_nondet_double(1, 0, 1.5, "main");
+    map2check_nondet_float(1, 0, 0.25, "main");
+    map2check_nondet_longlong(1, 0, -1LL, "main");
+    map2check_nondet_ulonglong(1, 0, ~0ULL, "main");
+    map2check_nondet_pointer(1, 0, 0, NULL);
+    nondet_log_destroy();
+
     map2check_is_valid_assert(1, "main", 1);
     map2check_binop_add_int(1, 1, 1, 0, "main");
     map2check_binop_sub_int(1, 1, 1, 0, "main");
