@@ -128,6 +128,11 @@ for sym in ("analysis_init", "analysis_destroy", "analysis_is_program_correct",
                                                  "mul_uint", "sdiv", "srem"))):
     IMPLEMENTED[("AnalysisModeOverflow", sym)] = f"__m2c_rt_overflow_{sym}"
 
+# Functions whose C body is empty, so the unmarked empty define is the C
+# behaviour, not a stub: WitnessGenerationNone.c ("DO NOTHING").
+C_EMPTY = {("WitnessGenerationNone", "generate_aux_files"),
+           ("WitnessGenerationNone", "generate_confirmation_file")}
+
 # Modules whose symbols are all runtime-internal C helpers (container rows by
 # value, log files): the Rust core keeps that logic private, so the module is
 # empty. See d7-layout.md, approval item 2.
@@ -156,9 +161,16 @@ def as_ret(t):
     return f"{ext} {ty}" if ext else ty
 
 
-def define(sym, ret, args, body):
+# Marks a define that does not do its C function's work (a placeholder until
+# the function's Phase 2 task). scripts/runtime-abi-coverage.sh does not count
+# a marked define as delivered.
+STUB_MARK = "; m2c-stub"
+
+
+def define(sym, ret, args, body, mark=None):
     params = ", ".join(f"{as_param(t)} %a{i}" for i, t in enumerate(args))
-    return f"define {as_ret(ret)} @{sym}({params}) {{\n{body}}}\n\n"
+    tail = f" {mark}" if mark else ""
+    return f"define {as_ret(ret)} @{sym}({params}) {{{tail}\n{body}}}\n\n"
 
 
 def forwarder(sym, ret, args, target):
@@ -172,20 +184,23 @@ def forwarder(sym, ret, args, target):
     return decl + define(sym, ret, args, body)
 
 
-def stub(sym, ret, args):
+def stub(sym, ret, args, mark=STUB_MARK):
     ty = typed(ret)[0]
     if sym == "analysis_is_program_correct":
-        return define(sym, ret, args, f"  ret {ty} 1\n")
+        return define(sym, ret, args, f"  ret {ty} 1\n", mark)
     if ty == "void":
-        return define(sym, ret, args, "  ret void\n")
-    return define(sym, ret, args, f"  ret {ty} {zero(ty)}\n")
+        return define(sym, ret, args, "  ret void\n", mark)
+    return define(sym, ret, args, f"  ret {ty} {zero(ty)}\n", mark)
 
 
 def plain_module(name, syms):
     out = [HEADER, f"; {name}: forwarders to the Rust core (Map2CheckFunctions.bc) and stubs.\n\n"]
     for sym, ret, args in syms:
         target = IMPLEMENTED.get((name, sym))
-        out.append(forwarder(sym, ret, args, target) if target else stub(sym, ret, args))
+        if target:
+            out.append(forwarder(sym, ret, args, target))
+        else:
+            out.append(stub(sym, ret, args, None if (name, sym) in C_EMPTY else STUB_MARK))
     return "".join(out)
 
 
@@ -316,13 +331,17 @@ def gen_none():
 
 
 KLEE_AUX = """declare i32 @__m2c_rt_nondet_log_len()
-declare ptr @__m2c_rt_nondet_log_value(i32)
-declare void @__m2c_rt_nondet_log_to_file()
+declare i64 @__m2c_rt_nondet_log_get_i64(i32)
+declare void @__m2c_rt_nondet_log_set_i64(i32, i64)
+declare signext i8 @__m2c_rt_nondet_log_to_file()
 declare i64 @klee_get_value_i64(i64)
 declare void @klee_assume(i32)
 
-; Concretize every logged value before writing klee_log.csv, as
-; NonDetGeneratorKlee.c does (at most 1024 rows).
+; nondet_generate_aux_witness_files of NonDetGeneratorKlee.c:33-62: above
+; MAP2CHECK_KLEE_LOG_MAX_ROWS (1024) rows the log is not written; otherwise
+; every row's 64-bit value is pinned (klee_get_value_i64, klee_assume of the
+; equality, written back) and then nondet_log_to_file writes klee_log.csv.
+; The row value goes through the core hooks (memcpy of the union in C).
 define void @nondet_generate_aux_witness_files() {
 entry:
   %n = call i32 @__m2c_rt_nondet_log_len()
@@ -333,17 +352,16 @@ head:
   %c = icmp ult i32 %i, %n
   br i1 %c, label %body, label %write
 body:
-  %p = call ptr @__m2c_rt_nondet_log_value(i32 %i)
-  %v = load i64, ptr %p
+  %v = call i64 @__m2c_rt_nondet_log_get_i64(i32 %i)
   %k = call i64 @klee_get_value_i64(i64 %v)
   %eq = icmp eq i64 %v, %k
   %e = zext i1 %eq to i32
   call void @klee_assume(i32 %e)
-  store i64 %k, ptr %p
+  call void @__m2c_rt_nondet_log_set_i64(i32 %i, i64 %k)
   %i1 = add i32 %i, 1
   br label %head
 write:
-  call void @__m2c_rt_nondet_log_to_file()
+  %w = call signext i8 @__m2c_rt_nondet_log_to_file()
   br label %out
 out:
   ret void
@@ -513,7 +531,7 @@ def gen_afl():
     out.append(AFL_READER)
     out.append(AFL_REJECT)
     out.append("declare void @nondet_log_init()\ndeclare void @nondet_log_destroy()\n"
-               "declare void @__m2c_rt_nondet_log_to_file()\n")
+               "declare signext i8 @__m2c_rt_nondet_log_to_file()\n")
     out.append(cstring(".memname", "__VERIFIER_nondet_memory"))
     out.append("\n")
     for t, (ty, size) in NONDET_TYPES.items():
@@ -532,7 +550,7 @@ def gen_afl():
     out.append(define("nondet_init", "void", [], "  call void @nondet_log_init()\n  ret void\n"))
     out.append(define("nondet_destroy", "void", [], "  call void @nondet_log_destroy()\n  ret void\n"))
     out.append(define("nondet_generate_aux_witness_files", "void", [],
-                      "  call void @__m2c_rt_nondet_log_to_file()\n  ret void\n"))
+                      "  %w = call signext i8 @__m2c_rt_nondet_log_to_file()\n  ret void\n"))
     return "".join(out)
 
 

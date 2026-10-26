@@ -288,6 +288,11 @@ selects `AnalysisMode_Overflow` (what `map2check_set_mode(3)` does), and the
 `__m2c_rt_overflow_map2check_binop_*` checks run whatever the mode, as the C
 module has no mode test.
 
+**NULL function name.** The core entry points (overflow included) write a
+NULL `function_name` as an empty string (`Function: ` in the property
+files), where the C runtime passes it to `fprintf("%s")` and glibc prints
+`(null)`. The Map2Check passes always pass a name.
+
 The memcleanup option only changes the tag of the unset/memtrack leak
 verdict; it does not apply the memcleanup-mode reachability rule.
 `map2check_reach_target` and `set_false_result` record in every mode.

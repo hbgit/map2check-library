@@ -57,6 +57,14 @@ run "$T/extra.ll" >/dev/null 2>&1 || { echo "FALHA: extra .ll não foi contado" 
 # símbolos fora do inventário, estáticos e rust-only não contam como pendência
 printf 'beta\neps\nzeta\nlocal_fn\n' > "$T/pend.txt"
 if run "$T/extra.ll" >/dev/null 2>&1; then echo "FALHA: linha desconhecida em pending passou" >&2; exit 1; fi
+
+# um define marcado `; m2c-stub` (stub do gen_ll.py) não entrega o símbolo
+printf 'define void @gamma() { ; m2c-stub\n  ret void\n}\n' > "$T/stub.ll"
+printf 'beta\neps\nzeta\n' > "$T/pend.txt"
+if run "$T/stub.ll" >"$T/out" 2>&1; then echo "FALHA: stub de .ll contado como entregue" >&2; exit 1; fi
+grep -q 'gamma' "$T/out"
+printf 'beta\neps\ngamma\nzeta\n' > "$T/pend.txt"
+run "$T/stub.ll" >"$T/out" 2>&1 || { cat "$T/out" >&2; echo "FALHA: stub deveria seguir pendente" >&2; exit 1; }
 # tests/abi/check-signatures.sh com headers de fixture
 CS="$HERE/../tests/abi/check-signatures.sh"
 mkdir -p "$T/h"

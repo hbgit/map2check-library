@@ -17,6 +17,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.abspath(os.path.join(HERE, "..", ".."))
 INVENTORY = os.path.join(ROOT, "docs", "runtime-abi", "inventory.tsv")
 FFI_RS = os.path.join(ROOT, "rust", "src", "ffi.rs")
+HEADER_H = os.path.join(ROOT, "include", "map2check.h")
 GEN = os.path.join(HERE, "gen_ll.py")
 sys.path.insert(0, HERE)
 import gen_ll  # noqa: E402
@@ -125,7 +126,7 @@ class AbiAttributes(unittest.TestCase):
 
     def test_stub_return_uses_the_bare_type(self):
         text = gen_ll.stub("analysis_is_program_correct", ("i8", "signext"), [])
-        self.assertEqual(text, "define signext i8 @analysis_is_program_correct() {\n  ret i8 1\n}\n\n")
+        self.assertEqual(text, "define signext i8 @analysis_is_program_correct() { ; m2c-stub\n  ret i8 1\n}\n\n")
 
     @unittest.skipUnless(shutil.which("clang"), "clang not installed")
     def test_every_generated_function_matches_clang_x86_64(self):
@@ -270,7 +271,90 @@ class Generated(unittest.TestCase):
         for m in ("AnalysisModeAssert", "AnalysisModeNone", "AnalysisModeMemtrack", "AnalysisModeMemcleanup"):
             text = read(os.path.join(out, m + ".ll"))
             self.assertNotIn("__m2c_rt_overflow", text, m)
-            self.assertIn("define signext i8 @analysis_is_program_correct() {\n  ret i8 1\n}", text, m)
+            self.assertIn("define signext i8 @analysis_is_program_correct() { ; m2c-stub\n  ret i8 1\n}", text, m)
+
+    def test_stubs_are_marked_and_forwarders_are_not(self):
+        """runtime-abi-coverage.sh must not count a stub as delivered: every
+        define that does not do the C function's work carries `; m2c-stub`."""
+        out = run_gen()
+        for name in os.listdir(out):
+            for line in read(os.path.join(out, name)).splitlines():
+                if not line.startswith("define "):
+                    continue
+                sym = line.split("@", 1)[1].split("(", 1)[0]
+                module = name[:-3]
+                if module in gen_ll.PLAIN:
+                    real = (module, sym) in gen_ll.IMPLEMENTED or (module, sym) in gen_ll.C_EMPTY
+                    self.assertEqual(line.endswith("; m2c-stub"), not real, f"{module}.{sym}")
+                else:
+                    self.assertNotIn("m2c-stub", line, f"{module}.{sym}")
+        text = read(os.path.join(out, "AnalysisModeAssert.ll"))
+        self.assertIn("define void @map2check_assert(i32 %a0, i32 %a1, ptr %a2) { ; m2c-stub", text)
+        # WitnessGenerationNone.c: both functions are empty in C ("DO NOTHING").
+        self.assertEqual(gen_ll.C_EMPTY, {("WitnessGenerationNone", "generate_aux_files"),
+                                          ("WitnessGenerationNone", "generate_confirmation_file")})
+        self.assertIn("define void @generate_confirmation_file() {\n  ret void\n}",
+                      read(os.path.join(out, "WitnessGenerationNone.ll")))
+
+    @unittest.skipUnless(shutil.which("clang"), "clang not installed")
+    def test_every_core_entry_point_referenced_matches_the_header(self):
+        """Every @__m2c_rt_* that any generated module declares or calls is a
+        prototype of include/map2check.h, and its IR declaration and every call
+        have the types and ext attributes clang gives that prototype (D7
+        finding 4: forwarders checked against the header)."""
+        out = run_gen()
+        header = read(HEADER_H)
+        protos = set(re.findall(r"\b(__m2c_rt_\w+)\(", header))
+        decls, calls = {}, []
+        for name in sorted(os.listdir(out)):
+            for line in read(os.path.join(out, name)).splitlines():
+                refs = re.findall(r"@(__m2c_rt_\w+)\(", line)
+                if not refs:
+                    continue
+                if line.startswith("declare "):
+                    sym, ret, args = abi_of(line)
+                    decls.setdefault(sym, set()).add((name, ret, tuple(args)))
+                elif re.search(r"\bcall\b", line):
+                    sym, ret, args = abi_of(line)
+                    calls.append((name, sym, ret, tuple(args)))
+                else:
+                    self.fail(f"{name}: unexpected reference: {line}")
+        referenced = set(decls) | {c[1] for c in calls}
+        self.assertTrue(referenced, "no __m2c_rt_* reference at all")
+        self.assertEqual(sorted(referenced - protos), [], "not exported by the core (not in map2check.h)")
+        tmp = tempfile.mkdtemp()
+        with open(os.path.join(tmp, "refs.c"), "w") as f:
+            f.write('#include "map2check.h"\n')
+            f.write("void *m2c_refs[] = {\n" + "".join(f"  (void *)&{s},\n" for s in sorted(referenced)) + "};\n")
+        ll = subprocess.run(["clang", "-O0", "-w", "-S", "-emit-llvm", "--target=x86_64-pc-linux-gnu",
+                             "-I", os.path.dirname(HEADER_H), os.path.join(tmp, "refs.c"), "-o", "-"],
+                            check=True, capture_output=True, text=True).stdout
+        want = {}
+        for line in ll.splitlines():
+            if line.startswith("declare ") and "@__m2c_rt_" in line:
+                sym, ret, args = abi_of(line)
+                want[sym] = (ret, tuple(args))
+        self.assertEqual(set(want), referenced)
+        for sym, seen in sorted(decls.items()):
+            for module, ret, args in seen:
+                self.assertEqual((ret, args), want[sym], f"{module}: declare {sym}")
+        for module, sym, ret, args in calls:
+            self.assertIn(sym, decls, f"{module}: call {sym} without declare")
+            self.assertEqual((ret, args), want[sym], f"{module}: call {sym}")
+
+    def test_klee_aux_pins_the_log_through_the_core_hooks(self):
+        """nondet_generate_aux_witness_files of NonDetGeneratorKlee.c:33-62:
+        nothing above 1024 rows; else each row's 64-bit value goes through
+        klee_get_value_i64 + klee_assume and back, then nondet_log_to_file."""
+        text = read(os.path.join(run_gen("--module", "NonDetGeneratorKlee"), "NonDetGeneratorKlee.ll"))
+        body = text.split("define void @nondet_generate_aux_witness_files() {", 1)[1].split("\n}\n", 1)[0]
+        for needle in ("call i32 @__m2c_rt_nondet_log_len()", "icmp ugt i32 %n, 1024",
+                       "call i64 @__m2c_rt_nondet_log_get_i64(i32 %i)",
+                       "call i64 @klee_get_value_i64(i64 %v)", "call void @klee_assume(i32 %e)",
+                       "call void @__m2c_rt_nondet_log_set_i64(i32 %i, i64 %k)",
+                       "call signext i8 @__m2c_rt_nondet_log_to_file()"):
+            self.assertIn(needle, body)
+        self.assertNotIn("nondet_log_value", text)
 
     def test_every_forwarder_target_is_a_rust_core_export(self):
         src = read(FFI_RS)

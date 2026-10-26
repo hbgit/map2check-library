@@ -3770,7 +3770,7 @@ fn legacy_nondet_log_reaches_klee_log_csv_through_the_one_c_log_writer() {
 // they write are pinned by the golden tests (`ffi_golden_tests.rs`).
 
 /// `map2check_binop_{add,sub,mul,sdiv,srem}` of the C runtime
-/// (`AnalysisModeOverflow.c:41-108`).
+/// (bodies at `AnalysisModeOverflow.c:197-217`, `:234-243`, `:250-276`).
 type RtSignedBinop = unsafe extern "C" fn(
     i64,
     i64,
@@ -3780,7 +3780,8 @@ type RtSignedBinop = unsafe extern "C" fn(
     *const std::os::raw::c_char,
 );
 
-/// `map2check_binop_{add,sub,mul}_uint` (`AnalysisModeOverflow.c:44-82`).
+/// `map2check_binop_{add,sub,mul}_uint` (bodies at
+/// `AnalysisModeOverflow.c:224-232`, `:245-248`).
 type RtUnsignedBinop = unsafe extern "C" fn(
     u64,
     u64,

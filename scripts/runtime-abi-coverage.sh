@@ -10,7 +10,8 @@
 # Exports: símbolos externos definidos (nm --defined-only --extern-only) da
 # --lib (padrão target/release/libmap2check.a, construída com --all-features)
 # unidos aos dos artefatos extras (os módulos IR das tasks seguintes; .bc usa
-# llvm-nm, .ll é lido como texto). Símbolos `rust-only` da política são
+# llvm-nm, .ll é lido como texto; um define marcado `; m2c-stub` não conta).
+# Símbolos `rust-only` da política são
 # irrelevantes: só se intersecta com o conjunto de cobertura.
 #
 # Um símbolo exportado mas com assinatura canônica diferente do C (status
@@ -47,8 +48,10 @@ T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
 nm_exports() {
   case "$1" in
     *.ll)
-      sed -nE 's/^define[^@]*@("([^"]+)"|[A-Za-z0-9_.$]+)\(.*/\1/p;
-               s/^@("([^"]+)"|[A-Za-z0-9_.$]+) = (dso_local |weak |linkonce |common |hidden )*(global|constant|weak|common).*/\1/p' "$1" \
+      # A define marked `; m2c-stub` (scripts/runtime-ir/gen_ll.py) is a
+      # placeholder, not the C function: it does not count as delivered.
+      { grep -v '^define.*; m2c-stub$' "$1" || true; } | sed -nE 's/^define[^@]*@("([^"]+)"|[A-Za-z0-9_.$]+)\(.*/\1/p;
+               s/^@("([^"]+)"|[A-Za-z0-9_.$]+) = (dso_local |weak |linkonce |common |hidden )*(global|constant|weak|common).*/\1/p' \
         | tr -d '"' ;;
     *.bc)
       local n; n="$(command -v llvm-nm-16 || command -v llvm-nm || true)"

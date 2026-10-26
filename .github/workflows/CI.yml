@@ -79,10 +79,9 @@ jobs:
 
       # Os símbolos C dos modos são definidos só pelos módulos IR: o .ll
       # entra como artefato extra da cobertura.
+      # Usa a staticlib e o .ll do passo anterior.
       - name: Conferir cobertura da ABI do runtime C (pending.txt)
-        run: |
-          cargo build --release --all-features
-          scripts/runtime-abi-coverage.sh target/runtime-ir/AnalysisModeOverflow.ll
+        run: scripts/runtime-abi-coverage.sh target/runtime-ir/AnalysisModeOverflow.ll
 
       - name: Instalar cargo-tarpaulin
         uses: taiki-e/install-action@v2
