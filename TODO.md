@@ -155,6 +155,12 @@ e não repetem as tarefas já listadas.
 
 ### Dependente do repositório externo `hbgit/Map2Check`
 
+> Recomeçado em 2026-10-26: o trabalho do PR #76 saiu do `develop` do Map2Check
+> (force push `a0f8b9cd → fbbcb929`). O novo plano é
+> [docs/superpowers/plans/2026-10-26-runtime-drop-in-map2check.md](docs/superpowers/plans/2026-10-26-runtime-drop-in-map2check.md):
+> a biblioteca exporta o ABI do runtime C do `develop`. Os itens abaixo são do
+> plano anterior e valem só como histórico.
+
 - [ ] **Adicionar uma camada de compatibilidade para os passes atuais.**
   Em `map2check-library`, implementar uma feature isolada que exporte os nomes
   e assinaturas usados pelos passes de `Map2Check@develop`, delegando à API

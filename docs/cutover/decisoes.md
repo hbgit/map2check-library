@@ -252,3 +252,17 @@ The C tests drove internal containers with no Rust export, so each assertion goe
 ## Merge da migração no Map2Check (Task 5.1)
 
 **2026-10-17.** O PR hbgit/Map2Check#76 (`feat/rust-runtime` → `develop`) foi mergeado pelo mantenedor com merge commit **a0f8b9cd4fd97ed71a2f3bc70fa34525d909cfc0** (pais f01e8c3e e 1f91659e). O rollback é `git revert -m 1 a0f8b9cd` em `develop`; o ensaio em clone descartável restaurou o runtime C e passou no `ctest` (10/10). O gate 4.2 passou duas vezes seguidas antes do merge (wall 1,011/1,026; RSS 1,081/1,017). Começa o período de observação de um ciclo de release (Task 5.1, Step 6); a Fase 6 só começa ao fim dele.
+
+## Reinício de 2026-10-26
+
+**Contexto.** O PR hbgit/Map2Check#76 foi mergeado em `develop` como `a0f8b9cd` em 2026-10-17. Em 2026-10-22 um force push do mantenedor moveu `develop` de `a0f8b9cd` para `fbbcb929`, removendo esse merge. Depois disso o `develop` recebeu os PRs #73 (Map2Check 9.0), #85, #86 e #87; o `develop` atual é `3e914528`. A base comum entre `a0f8b9cd` e o `develop` atual é `f01e8c3e`. Portanto as mudanças no Map2Check da migração anterior não existem mais no `develop`, e o merge descrito em "Merge da migração no Map2Check (Task 5.1)" acima deixou de valer.
+
+**Decisões do usuário em 2026-10-26.**
+
+- Recomeçar do zero, sem as mudanças antigas no Map2Check.
+- O agente altera somente este repositório; o Map2Check é lido apenas como cópia local do `develop` (`scripts/fetch-map2check.sh`, commit registrado em `vendor/MAP2CHECK_VERSION`).
+- **D6:** a biblioteca exporta o ABI do runtime C do `develop` (drop-in). D6 **revoga D5**.
+- O código Rust existente é mantido e revalidado contra o novo alvo.
+- **D2** (wasm portado) e **D3** (`--btree` usa o mesmo container Rust, sem mudança observável) continuam valendo.
+
+Plano: [docs/superpowers/plans/2026-10-26-runtime-drop-in-map2check.md](../superpowers/plans/2026-10-26-runtime-drop-in-map2check.md).

@@ -1,0 +1,6 @@
+url=https://github.com/hbgit/Map2Check
+branch=develop
+commit=3e914528ec5742d8ae4bc191589ca4669827c7ad
+commit_date=2026-10-26T15:27:51Z
+commit_subject=ci: limit greetings workflow token permissions
+fetched=2026-10-26T16:44:57Z

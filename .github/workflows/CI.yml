@@ -46,6 +46,9 @@ jobs:
       - name: Testar script de proteção de branches
         run: scripts/test-branch-protection.sh
 
+      - name: Testar download do Map2Check
+        run: scripts/test-fetch-map2check.sh
+
       - name: Testar guard de artefatos da era C
         run: scripts/test-check-no-c-era-artifacts.sh
 
