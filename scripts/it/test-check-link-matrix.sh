@@ -10,6 +10,13 @@
 #   undef  AnalysisModeOverflow.bc passa a chamar uma função que nenhum
 #          módulo nem a libc define -> FAIL exatamente nas 24 combinações do
 #          modo overflow
+#   dso    AnalysisModeAssert.bc passa a referenciar __dso_handle como
+#          símbolo FORTE -> FAIL nas 24 combinações do modo assert (só a
+#          referência weak é aceita)
+#   drop   AnalysisModeMemtrack.bc perde map2check_wasm_malloc (que o
+#          programa de fumaça não chama): com --ref <lib do C>, a paridade de
+#          símbolos definidos falha exatamente nas 24 combinações memtrack;
+#          --ref do C contra ele mesmo dá 120 PASS
 #
 # Pesado (roda a matriz três vezes na imagem do Map2Check). Precisa da
 # instalação do C (scripts/it/build-map2check.sh). NÃO está ligado ao CI.
@@ -36,9 +43,8 @@ IMG="map2check-dev:develop-${commit12}"
 
 work="$ROOT/target/map2check-it/test-link-matrix"
 rm -rf "$work"
-mkdir -p "$work/dup" "$work/undef"
-cp "$C_LIB"/*.bc "$work/dup/"
-cp "$C_LIB"/*.bc "$work/undef/"
+mkdir -p "$work/dup" "$work/undef" "$work/dso" "$work/drop"
+for f in dup undef dso drop; do cp "$C_LIB"/*.bc "$work/$f/"; done
 cat > "$work/dup.ll" <<'EOF'
 target datalayout = "e-m:e-p270:32:32-p271:32:32-p272:64:64-i64:64-f80:128-n8:16:32:64-S128"
 target triple = "x86_64-pc-linux-gnu"
@@ -55,11 +61,25 @@ define void @m2c_link_matrix_caller() {
   ret void
 }
 EOF
+cat > "$work/dso.ll" <<'EOF'
+target datalayout = "e-m:e-p270:32:32-p271:32:32-p272:64:64-i64:64-f80:128-n8:16:32:64-S128"
+target triple = "x86_64-pc-linux-gnu"
+@__dso_handle = external global i8
+define ptr @m2c_link_matrix_dso() {
+  ret ptr @__dso_handle
+}
+EOF
 docker run --rm --user "$(id -u):$(id -g)" -v "$C_LIB:/l:ro" -v "$work:/w" "$IMG" bash -euc '
   llvm-as-16 /w/dup.ll -o /w/dup.bc
   llvm-link-16 /l/HeapLog.bc /w/dup.bc -o /w/dup/HeapLog.bc
   llvm-as-16 /w/undef.ll -o /w/undef.bc
   llvm-link-16 /l/AnalysisModeOverflow.bc /w/undef.bc -o /w/undef/AnalysisModeOverflow.bc
+  llvm-as-16 /w/dso.ll -o /w/dso.bc
+  llvm-link-16 /l/AnalysisModeAssert.bc /w/dso.bc -o /w/dso/AnalysisModeAssert.bc
+  llvm-nm-16 --defined-only --extern-only /l/AnalysisModeMemtrack.bc | awk "{print \$NF}" \
+    | grep -vx map2check_wasm_malloc > /w/drop.api
+  opt-16 -passes=internalize,globaldce -internalize-public-api-file=/w/drop.api \
+    /l/AnalysisModeMemtrack.bc -o /w/drop/AnalysisModeMemtrack.bc
 '
 
 # --- valid -----------------------------------------------------------------
@@ -111,6 +131,39 @@ grep -q '^FAIL container=array mode=overflow gen=symex wasm=0 witness=0 .*m2c_li
   && ok "undef: o FAIL de symex (sem link nativo) nomeia o símbolo indefinido" \
   || bad "undef: FAIL symex sem o símbolo: $(grep '^FAIL.*gen=symex' "$work/undef.out" | head -1)"
 
+# --- dso -------------------------------------------------------------------
+rc=0
+"$SCRIPT" "$work/dso" > "$work/dso.out" 2> "$work/dso.err" || rc=$?
+[ "$rc" -eq 1 ] && ok "dso: exit 1" || bad "dso: exit $rc"
+expected_fail="$(for ct in array btree; do for g in none symex afl; do for wa in 0 1; do for wi in 0 1; do
+  echo "container=$ct mode=assert gen=$g wasm=$wa witness=$wi"; done; done; done; done | sort)"
+got_fail="$(sed -n 's/^FAIL \(container=[a-z]* mode=[a-z]* gen=[a-z]* wasm=[01] witness=[01]\).*/\1/p' "$work/dso.out" | sort)"
+[ "$got_fail" = "$expected_fail" ] && ok "dso: __dso_handle forte falha exatamente nas 24 combinações do modo assert" \
+  || bad "dso: combinações FAIL diferentes do esperado: $(diff <(echo "$expected_fail") <(echo "$got_fail") | head -5 | tr '\n' ' ')"
+grep -q '^FAIL container=array mode=assert gen=symex wasm=0 witness=0 undefined: __dso_handle$' "$work/dso.out" \
+  && ok "dso: o FAIL nomeia __dso_handle" || bad "dso: $(grep '^FAIL.*gen=symex' "$work/dso.out" | head -1)"
+
+# --- paridade (--ref) ------------------------------------------------------
+rc=0
+"$SCRIPT" --ref "$C_LIB" "$C_LIB" > "$work/ref-self.out" 2> "$work/ref-self.err" || rc=$?
+n="$(grep -c '^PASS ' "$work/ref-self.out" || true)"
+[ "$rc" -eq 0 ] && [ "$n" -eq 120 ] && ok "ref: o C contra ele mesmo dá 120 PASS" \
+  || bad "ref: C contra C exit $rc, $n PASS"
+rc=0
+"$SCRIPT" --ref "$C_LIB" "$work/drop" > "$work/drop.out" 2> "$work/drop.err" || rc=$?
+[ "$rc" -eq 1 ] && ok "drop: exit 1" || bad "drop: exit $rc"
+expected_fail="$(for ct in array btree; do for g in none symex afl; do for wa in 0 1; do for wi in 0 1; do
+  echo "container=$ct mode=memtrack gen=$g wasm=$wa witness=$wi"; done; done; done; done | sort)"
+got_fail="$(sed -n 's/^FAIL \(container=[a-z]* mode=[a-z]* gen=[a-z]* wasm=[01] witness=[01]\).*/\1/p' "$work/drop.out" | sort)"
+[ "$got_fail" = "$expected_fail" ] && ok "drop: paridade falha exatamente nas 24 combinações memtrack" \
+  || bad "drop: combinações FAIL diferentes do esperado: $(diff <(echo "$expected_fail") <(echo "$got_fail") | head -5 | tr '\n' ' ')"
+grep -q '^FAIL container=btree mode=memtrack gen=afl wasm=1 witness=1 parity: missing map2check_wasm_malloc$' "$work/drop.out" \
+  && ok "drop: o FAIL nomeia o símbolo que falta" || bad "drop: $(grep '^FAIL' "$work/drop.out" | head -1)"
+printf 'symbol\tside\treason\nmap2check_wasm_malloc\tc-only\tfixture\n' > "$work/policy.tsv"
+rc=0
+"$SCRIPT" --ref "$C_LIB" --policy "$work/policy.tsv" "$work/drop" > /dev/null 2>&1 || rc=$?
+[ "$rc" -eq 0 ] && ok "drop: símbolo listado como c-only na política passa" || bad "drop com política: exit $rc"
+
 # --- uso -------------------------------------------------------------------
 rc=0
 "$SCRIPT" > /dev/null 2>&1 || rc=$?
@@ -118,5 +171,8 @@ rc=0
 rc=0
 "$SCRIPT" "$work/no-such-dir" > /dev/null 2>&1 || rc=$?
 [ "$rc" -eq 2 ] && ok "diretório inexistente: exit 2" || bad "diretório inexistente: exit $rc"
+rc=0
+"$SCRIPT" --ref "$work/no-such-dir" "$C_LIB" > /dev/null 2>&1 || rc=$?
+[ "$rc" -eq 2 ] && ok "--ref inexistente: exit 2" || bad "--ref inexistente: exit $rc"
 
 exit $fail

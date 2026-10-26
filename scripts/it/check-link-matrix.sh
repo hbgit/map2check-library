@@ -4,9 +4,17 @@
 # Caller::linkLLVM (vendor/map2check/modules/frontend/caller.cpp) passa ao
 # llvm-link e confere cada uma sobre um programa de fumaça instrumentado.
 #
-# Uso: scripts/it/check-link-matrix.sh <lib-dir>
+# Uso: scripts/it/check-link-matrix.sh [--ref <c-lib-dir> [--policy <tsv>]] <lib-dir>
 #   <lib-dir>  diretório com os 21 .bc do runtime (p.ex.
 #              target/map2check-it/c/lib, ou a saída do build Rust)
+#   --ref      liga também a combinação com os .bc de <c-lib-dir> (o runtime
+#              C) e exige paridade dos símbolos externos DEFINIDOS
+#              (llvm-nm-16 --defined-only --extern-only) entre as duas, salvo
+#              os listados na política (critério 4)
+#   --policy   política de exportação (padrão docs/runtime-abi/export-policy.tsv):
+#              TSV "symbol side reason"; symbol é um nome ou um glob do bash,
+#              side é c-only (definido só pelo C) ou rust-only (só pelo
+#              <lib-dir>)
 #
 # Combinações (2 x 5 x 3 x 2 x 2 = 120), na ordem do linkLLVM:
 #   <prog>-output.bc Map2CheckFunctions TrackBBLog NonDetLog PropertyGenerator
@@ -25,13 +33,15 @@
 # Critérios de cada combinação (todos dentro da imagem do Map2Check):
 #   1. llvm-link-16 termina sem erro (p.ex. símbolo definido em dois módulos);
 #   2. llvm-nm-16 --undefined-only do resultado contido na lista permitida:
-#      símbolos definidos por libc.so.6/libm.so.6 da imagem e __dso_handle
-#      (definido pelo crtbegin.o de todo executável; o std do Rust o
-#      referencia como weak para os destrutores de thread_local), mais klee_*
+#      símbolos definidos por libc.so.6/libm.so.6 da imagem, mais klee_*
 #      para symex, __afl_* para afl e wasm_rt_* com wasm. Referências weak
-#      contam como as fortes;
+#      contam como as fortes, com uma exceção: __dso_handle é aceito só como
+#      referência WEAK (o std do Rust o referencia assim, para os destrutores
+#      de thread_local; o crtbegin.o de todo executável o define);
 #   3. gen none: link nativo com clang-16; gen afl: link nativo com
-#      afl-clang-fast -g -O2 ... -lm, como Caller::applyNonDetGenerator.
+#      afl-clang-fast -g -O2 ... -lm, como Caller::applyNonDetGenerator;
+#   4. só com --ref: mesmos símbolos externos definidos que a combinação do
+#      C, fora da política. FAIL "parity: missing a b; extra c d".
 #
 # Saída: uma linha por combinação,
 #   PASS container=<c> mode=<m> gen=<g> wasm=<0|1> witness=<0|1>
@@ -53,9 +63,27 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
-[ $# -eq 1 ] || { echo "uso: $0 <lib-dir>" >&2; exit 2; }
+usage() { echo "uso: $0 [--ref <c-lib-dir> [--policy <tsv>]] <lib-dir>" >&2; exit 2; }
+REF=""
+parity=0
+POLICY="$ROOT/docs/runtime-abi/export-policy.tsv"
+while [ $# -gt 1 ]; do
+  case "$1" in
+    --ref) [ $# -ge 3 ] || usage; [ -d "$2" ] || { echo "$2: diretório inexistente" >&2; exit 2; }
+      REF="$(cd "$2" && pwd)"; parity=1; shift 2 ;;
+    --policy) [ $# -ge 3 ] || usage; [ -f "$2" ] || { echo "$2: arquivo inexistente" >&2; exit 2; }
+      POLICY="$(cd "$(dirname "$2")" && pwd)/$(basename "$2")"; shift 2 ;;
+    *) usage ;;
+  esac
+done
+[ $# -eq 1 ] || usage
 [ -d "$1" ] || { echo "$1: diretório inexistente" >&2; exit 2; }
 LIB="$(cd "$1" && pwd)"
+if [ "$parity" = 1 ]; then
+  [ -f "$POLICY" ] || { echo "$POLICY: política inexistente" >&2; exit 2; }
+else
+  REF="$LIB"  # montado mas não usado
+fi
 
 commit="$(sed -n 's/^commit=//p' "$ROOT/vendor/MAP2CHECK_VERSION")"
 IMAGE="${IMAGE:-map2check-dev:develop-${commit:0:12}}"
@@ -126,13 +154,27 @@ INNER='
 set -uo pipefail
 cd /tmp
 { nm -D --defined-only /lib/x86_64-linux-gnu/libc.so.6 /lib/x86_64-linux-gnu/libm.so.6 \
-    | awk "{print \$NF}" | sed "s/@.*//"; echo __dso_handle; } | sort -u > /tmp/allowed-libc.txt
-one() {
-  local idx="$1" ct="$2" m="$3" g="$4" wa="$5" wi="$6" L=/lib-dir d mods out err und pat
-  d="/tmp/c$idx"; mkdir -p "$d"
-  out="$d/out.txt"
-  local name="container=$ct mode=$m gen=$g wasm=$wa witness=$wi"
-  mods="/smoke/$m-output.bc $L/Map2CheckFunctions.bc $L/TrackBBLog.bc $L/NonDetLog.bc $L/PropertyGenerator.bc"
+    | awk "{print \$NF}" | sed "s/@.*//"; } | grep -vx __dso_handle | sort -u > /tmp/allowed-libc.txt
+# Política de exportação: globs c-only e rust-only.
+C_ONLY=(); RUST_ONLY=()
+if [ "$PARITY" = 1 ]; then
+  while IFS=$'"'"'\t'"'"' read -r sym side _; do
+    case "$side" in c-only) C_ONLY+=("$sym") ;; rust-only) RUST_ONLY+=("$sym") ;; esac
+  done < <(tail -n +2 /policy.tsv)
+fi
+export C_ONLY_S="${C_ONLY[*]:-}" RUST_ONLY_S="${RUST_ONLY[*]:-}"
+covered() { # <symbol> <globs...>
+  local s="$1" g; shift
+  for g in "$@"; do
+    # shellcheck disable=SC2053
+    [[ $s == $g ]] && return 0
+  done
+  return 1
+}
+export -f covered
+modules() { # <lib> <ct> <m> <g> <wa> <wi>
+  local L="$1" ct="$2" m="$3" g="$4" wa="$5" wi="$6" mods
+  mods="$L/Map2CheckFunctions.bc $L/TrackBBLog.bc $L/NonDetLog.bc $L/PropertyGenerator.bc"
   case "$ct" in
     array) mods+=" $L/ContainerRealloc.bc" ;;
     btree) mods+=" $L/ContainerBTree.bc $L/BTree.bc" ;;
@@ -151,6 +193,15 @@ one() {
   esac
   [ "$wa" = 1 ] && mods+=" $L/WasmRuntimeStubs.bc"
   if [ "$wi" = 1 ]; then mods+=" $L/WitnessGeneration.bc"; else mods+=" $L/WitnessGenerationNone.bc"; fi
+  echo "$mods"
+}
+export -f modules
+one() {
+  local idx="$1" ct="$2" m="$3" g="$4" wa="$5" wi="$6" d mods out err und pat
+  d="/tmp/c$idx"; mkdir -p "$d"
+  out="$d/out.txt"
+  local name="container=$ct mode=$m gen=$g wasm=$wa witness=$wi"
+  mods="/smoke/$m-output.bc $(modules /lib-dir "$ct" "$m" "$g" "$wa" "$wi")"
   # shellcheck disable=SC2086
   if ! llvm-link-16 $mods -o "$d/r.bc" 2> "$d/link.err"; then
     err="$(grep -m1 "error" "$d/link.err" || head -n1 "$d/link.err")"
@@ -159,10 +210,36 @@ one() {
   pat="^$"
   case "$g" in symex) pat="$pat|^klee_" ;; afl) pat="$pat|^__afl_" ;; esac
   [ "$wa" = 1 ] && pat="$pat|^wasm_rt_"
-  und="$(llvm-nm-16 --undefined-only "$d/r.bc" | awk "{print \$NF}" | sort -u \
-    | comm -23 - /tmp/allowed-libc.txt | grep -Ev "$pat" | tr "\n" " " | sed "s/ $//")"
+  # __dso_handle só como referência weak ("w"); forte cai na regra geral.
+  und="$(llvm-nm-16 --undefined-only "$d/r.bc" | awk "!(\$1 == \"w\" && \$2 == \"__dso_handle\") {print \$NF}" \
+    | sort -u | comm -23 - /tmp/allowed-libc.txt | grep -Ev "$pat" | tr "\n" " " | sed "s/ $//")"
   if [ -n "$und" ]; then
     echo "FAIL $name undefined: $und" > "$out"; return
+  fi
+  if [ "$PARITY" = 1 ]; then
+    local refmods missing="" extra="" sym
+    refmods="/smoke/$m-output.bc $(modules /ref-dir "$ct" "$m" "$g" "$wa" "$wi")"
+    # shellcheck disable=SC2086
+    if ! llvm-link-16 $refmods -o "$d/ref.bc" 2> "$d/ref.err"; then
+      echo "FAIL $name parity: a combinação de referência não liga: $(grep -m1 error "$d/ref.err")" > "$out"; return
+    fi
+    llvm-nm-16 --defined-only --extern-only "$d/r.bc" | awk "{print \$NF}" | sort -u > "$d/def.txt"
+    llvm-nm-16 --defined-only --extern-only "$d/ref.bc" | awk "{print \$NF}" | sort -u > "$d/refdef.txt"
+    read -r -a cg <<< "$C_ONLY_S"; read -r -a rg <<< "$RUST_ONLY_S"
+    while read -r sym; do
+      [ -z "$sym" ] && continue
+      covered "$sym" "${cg[@]}" || missing+=" $sym"
+    done < <(comm -13 "$d/def.txt" "$d/refdef.txt")
+    while read -r sym; do
+      [ -z "$sym" ] && continue
+      covered "$sym" "${rg[@]}" || extra+=" $sym"
+    done < <(comm -23 "$d/def.txt" "$d/refdef.txt")
+    if [ -n "$missing$extra" ]; then
+      local msg="parity:"
+      [ -n "$missing" ] && msg+=" missing$missing"
+      [ -n "$extra" ] && { [ -n "$missing" ] && msg+=";"; msg+=" extra$extra"; }
+      echo "FAIL $name $msg" > "$out"; return
+    fi
   fi
   case "$g" in
     none)
@@ -188,8 +265,10 @@ while [ -f "/tmp/c$i/out.txt" ]; do cat "/tmp/c$i/out.txt"; i=$((i + 1)); done
 tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
 printf '%s' "$combos" > "$tmp/combos.txt"
-docker run --rm --network none --user "$(id -u):$(id -g)" -e HOME=/tmp -e JOBS="$JOBS" \
-  -v "$LIB:/lib-dir:ro" -v "$SMOKE_DIR:/smoke:ro" -v "$tmp/combos.txt:/combos.txt:ro" \
+[ "$parity" = 1 ] || POLICY="$tmp/combos.txt"  # montado mas não lido
+docker run --rm --network none --user "$(id -u):$(id -g)" -e HOME=/tmp -e JOBS="$JOBS" -e PARITY="$parity" \
+  -v "$LIB:/lib-dir:ro" -v "$REF:/ref-dir:ro" -v "$POLICY:/policy.tsv:ro" \
+  -v "$SMOKE_DIR:/smoke:ro" -v "$tmp/combos.txt:/combos.txt:ro" \
   "$IMAGE" bash -c "$INNER" > "$tmp/result.txt"
 
 cat "$tmp/result.txt"
