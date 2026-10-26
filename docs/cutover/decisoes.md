@@ -270,3 +270,14 @@ Plano: [docs/superpowers/plans/2026-10-26-runtime-drop-in-map2check.md](../super
 ## Linha de base do C: `array-examples/relax-1` com afl é ERROR (Task 0.4)
 
 **2026-10-26.** Na linha de base `docs/cutover/baselines/c-3e914528ec57.tsv`, a chave `array-examples/relax-1 valid-memsafety afl` dá `ERROR` em 5 de 5 repetições: o frontend C do Map2Check develop aborta logo após o AFL++ ("AFL++ ran: 42 executions", depois "timeout: the monitored command dumped core") sem imprimir linha `VERIFICATION`. É comportamento do C, determinístico, e o gate o trata como um veredito comum. Se o runtime Rust divergir nessa chave (p.ex. dar UNKNOWN ou FAILED), a divergência só passa com um `SD-xx` em `docs/semantic-deltas.md` e uma linha em `docs/cutover/deltas-aceitos.tsv`. Reproduzir o `ERROR` fazendo o runtime Rust abortar de propósito é proibido.
+
+## D7 — layout dos módulos do runtime (aprovada em 2026-10-26)
+
+Medições e mapa completo em [d7-layout.md](d7-layout.md). O usuário aprovou:
+
+1. **Layout A-fwd, com exceção à restrição de IR.** O núcleo Rust é o `Map2CheckFunctions.bc`. Os outros 20 módulos são LLVM IR textual gerado por `gen_ll.py`, que será promovido a `scripts/`. O IR dos geradores contém lógica de gerador, que passa a ser testada como código (Tasks 2.7/2.8).
+2. **Símbolos internos do C não exportados.** São 76 nomes, listados em `docs/runtime-abi/export-policy.tsv`. O Rust acrescenta os `__m2c_rt_*`. A diferença observável fica registrada como `SD-22` em `docs/semantic-deltas.md`, e `check-link-matrix.sh --ref` confere a política.
+3. **Pós-processamento obrigatório do núcleo:** strip-debug, symbolizer, `rust_eh_personality` → `abort`, intrínsecos rebaixados e `internalize` com a lista do inventário.
+4. **`__dso_handle`** é aceito na matriz só como referência weak.
+5. **O AFL++ mantém `setjmp`/`longjmp` em IR**, como no C.
+6. **Uma só triple** (`x86_64-pc-linux-gnu`) para todos os `.bc`, sem avisos do `llvm-link`.

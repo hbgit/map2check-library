@@ -798,3 +798,29 @@ int main(void) {
   return 0;
 }
 ```
+
+### SD-22 — Runtime-internal C names are not exported (D7)
+
+**Classification:** intentional
+**Tests:** `scripts/it/check-link-matrix.sh --ref <c-lib> --policy docs/runtime-abi/export-policy.tsv`, `scripts/it/test-check-link-matrix.sh`
+
+The user approved this on 2026-10-26 as item 2 of D7 ([d7-layout.md](cutover/d7-layout.md)).
+
+**Rust:** each runtime `.bc` defines only the external symbols that its C
+counterpart defines *and* that have a consumer outside the C runtime
+(`referenced_by` in `docs/runtime-abi/inventory.tsv` contains `pass`,
+`frontend` or `external`). The Rust core also defines new entry points named
+`__m2c_rt_*`, which the generated IR modules call.
+
+**C runtime of Map2Check `develop`:** the C runtime also exports 76 names that
+only the runtime itself uses. They are listed as `c-only` in
+`docs/runtime-abi/export-policy.tsv` and include:
+- globals such as `sv_comp`, `gotError`, `Map2CheckCurrentStep`,
+  `trackbb_log`, `nondet_log` and `violated_property_file*`;
+- functions such as `append_element`, `write_property_*`, `B_TREE_*` and
+  `is_in_tracked`.
+
+**Observable difference:** a program under analysis that defines one of those
+76 names fails to link with the C runtime and links with the Rust one. A
+program that defines a `__m2c_rt_*` name fails to link with the Rust runtime
+only.

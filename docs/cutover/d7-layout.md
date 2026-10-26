@@ -4,7 +4,7 @@ Data: 2026-10-26. Alvo: Map2Check `develop` `3e914528ec57` (cópia em `vendor/ma
 
 Protótipo: `spikes/d7-layout/` (fora do build da crate). Matriz: `scripts/it/check-link-matrix.sh`.
 
-**Status: proposta, aguardando aprovação do usuário (Step 6). As Fases 2 e 3 dependem dela.**
+**Status: aprovada pelo usuário em 2026-10-26: layout A-fwd com exceção à restrição de IR (item 1a), símbolos internos do C não exportados com delta `SD-22` (item 2) e itens 3–6 fixos.**
 
 ## Pergunta
 
