@@ -62,3 +62,29 @@ consult those files before changing how analysis modes are linked.
 - `CLAUDE.md` describes the former C/CMake implementation. For this Rust
   checkout, use `README.md`, `Cargo.toml`, `.github/workflows/CI.yml`, and the
   current Rust sources for build commands and behavior.
+
+## Regras obrigatórias
+
+1. **GitHub CLI e ações remotas somente sob solicitação explícita.**
+   Não execute, sem um pedido explícito do usuário na mensagem atual, comandos `gh` que
+   criem, alterem ou encerrem algo no GitHub: `gh pr create/merge/close/comment/review`,
+   `gh issue create/close/comment/edit`, `gh release`, `gh repo` e similares. O mesmo vale
+   para `git push`, criação de tags remotas e alteração de branches remotos. Comandos apenas
+   de leitura (`gh pr view`, `gh issue list`) são permitidos. Na dúvida, pergunte antes.
+
+2. **Escopo restrito a este repositório.**
+   Todas as modificações de código, testes, configurações e documentação devem ser feitas
+   somente neste repositório. Nunca altere, faça commit ou abra PR/issue no repositório do
+   Map2Check, nem em qualquer outro repositório.
+
+3. **Map2Check para testes de integração: cópia local e sem versionamento.**
+   - Baixe o Map2Check para o diretório `vendor/map2check/` (ou outro que o usuário indicar),
+     por meio de `git clone --depth 1 <url> vendor/map2check` ou do tarball de uma release.
+   - Logo após o download, remova o versionamento com `rm -rf vendor/map2check/.git`, para
+     que nenhum comando git atue sobre o repositório original.
+   - Garanta que `vendor/map2check/` esteja no `.gitignore` deste repositório, para que a
+     cópia não seja commitada aqui.
+   - Registre a versão ou o commit baixado (por exemplo, em `vendor/MAP2CHECK_VERSION`) para
+     tornar os testes reproduzíveis.
+   - Não edite os fontes baixados. Se um teste exigir mudanças no Map2Check, pare e informe
+     o usuário.
