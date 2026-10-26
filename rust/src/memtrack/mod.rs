@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #![deny(unsafe_code)]
 
+pub mod c_mode;
+
 use serde::Serialize;
 use std::collections::{hash_map::DefaultHasher, HashSet};
 use std::hash::BuildHasherDefault;

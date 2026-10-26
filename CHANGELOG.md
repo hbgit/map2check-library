@@ -25,6 +25,21 @@ the C ABI or the JSON report must update them.
 
 ### Added
 
+- The memtrack analysis mode of the Map2Check C runtime ABI (Task 2.5 of the
+  drop-in plan): core entry points `__m2c_rt_memtrack_analysis_{init,destroy,
+  is_program_correct,generate_aux_witness_files}` and
+  `__m2c_rt_memtrack_map2check_{load,check_cstring,check_deref,malloc,calloc,
+  posix,free,free_resolved_address,add_store_pointer,alloca,
+  non_static_alloca,function,wasm_malloc,wasm_free,wasm_check_access}`, with
+  the C signatures and semantics of `AnalysisModeMemtrack.c`, `AllocationLog.c`,
+  `ListLog.c` and `HeapLog.c` over develop's heap, allocation and list logs
+  (`memtrack::c_mode`, one container for the Array and `--btree` builds, D3).
+  The property files and `heap_log.csv`, `allocation_log.csv` and
+  `list_log.csv` are the C runtime's byte for byte. The C names are defined
+  only by the generated IR module `AnalysisModeMemtrack.ll`; the container and
+  log modules (`ContainerRealloc`, `ContainerBTree`, `BTree`, `AllocationLog`,
+  `ListLog`, `HeapLog`) are empty IR. The legacy `map2check_check_deref` and
+  `map2check_wasm_*` exports stay until Task 2.10.
 - The assert and none analysis modes of the Map2Check C runtime ABI (Task 2.4
   of the drop-in plan): core entry points `__m2c_rt_assert_analysis_{init,
   destroy,is_program_correct,generate_aux_witness_files}`,

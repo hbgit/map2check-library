@@ -85,12 +85,22 @@ jobs:
           cargo build --release --all-features
           scripts/runtime-ir/test-assert-none-link.sh
 
+      # Idem para AnalysisModeMemtrack.ll (Task 2.5), ligado com os módulos
+      # vazios de container e de log nos dois conjuntos (Array e --btree, D3):
+      # os cenários golden escrevem os arquivos de tests/legacy_golden/ byte a
+      # byte.
+      - name: Gerar, conferir e ligar o módulo IR AnalysisModeMemtrack
+        run: |
+          cargo build --release --all-features
+          scripts/runtime-ir/test-memtrack-link.sh
+
       # Os símbolos C dos modos são definidos só pelos módulos IR: o .ll
       # entra como artefato extra da cobertura.
       # Usa a staticlib e o .ll do passo anterior.
       - name: Conferir cobertura da ABI do runtime C (pending.txt)
         run: scripts/runtime-abi-coverage.sh target/runtime-ir/AnalysisModeOverflow.ll \
-            target/runtime-ir/AnalysisModeAssert.ll target/runtime-ir/AnalysisModeNone.ll
+            target/runtime-ir/AnalysisModeAssert.ll target/runtime-ir/AnalysisModeNone.ll \
+            target/runtime-ir/AnalysisModeMemtrack.ll
 
       - name: Instalar cargo-tarpaulin
         uses: taiki-e/install-action@v2

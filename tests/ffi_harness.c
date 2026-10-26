@@ -180,6 +180,20 @@ static void run_pre_init_boundary(void) {
     (void)__m2c_rt_none_analysis_is_program_correct();
     __m2c_rt_none_analysis_destroy();
     __m2c_rt_none_analysis_generate_aux_witness_files();
+    /* AnalysisModeMemtrack core entry points (Task 2.5) that write no file;
+     * analysis_init, the verdict and the witness logs are left to the forked
+     * scenarios. */
+    __m2c_rt_memtrack_map2check_alloca("x", (void *)0x5000, 4, 4, 1, 1);
+    __m2c_rt_memtrack_map2check_function("main", (void *)0x5100);
+    __m2c_rt_memtrack_map2check_load((void *)0x5000, 4);
+    __m2c_rt_memtrack_map2check_check_cstring(NULL);
+    __m2c_rt_memtrack_map2check_check_deref(1, "main");
+    __m2c_rt_memtrack_map2check_add_store_pointer((void *)0x10, (void *)0x5000, 1, "p", 1, "main");
+    __m2c_rt_memtrack_map2check_free_resolved_address(NULL, 1, "main", 1);
+    __m2c_rt_memtrack_map2check_wasm_malloc(0x400, 16);
+    __m2c_rt_memtrack_map2check_wasm_check_access(0x400, 4);
+    __m2c_rt_memtrack_map2check_wasm_free(0x400, 1);
+    __m2c_rt_memtrack_analysis_destroy();
 
     (void)__VERIFIER_nondet_bool();
     (void)__VERIFIER_nondet_char();
@@ -326,6 +340,25 @@ static void run_bad_inputs(void) {
     __m2c_rt_overflow_overflowError(0xffffffffu, NULL);
     __m2c_rt_assert_map2check_assert(1, -1, NULL);
     __m2c_rt_assert_map2check_assert(7, 0x7fffffff, NULL);
+    /* memtrack core entry points: NULL names and slots, int wrap-around. */
+    __m2c_rt_memtrack_map2check_alloca(NULL, NULL, -1, INT32_MIN, -1, -1);
+    __m2c_rt_memtrack_map2check_non_static_alloca(NULL, (void *)0x7000, INT32_MAX, INT32_MAX, 0, 0);
+    __m2c_rt_memtrack_map2check_function(NULL, NULL);
+    __m2c_rt_memtrack_map2check_malloc(NULL, -1);
+    __m2c_rt_memtrack_map2check_calloc((void *)0x7100, INT32_MAX, INT32_MAX);
+    __m2c_rt_memtrack_map2check_calloc((void *)0x7200, INT32_MIN, -1);
+    __m2c_rt_memtrack_map2check_load((void *)UINTPTR_MAX, INT32_MIN);
+    __m2c_rt_memtrack_map2check_load(NULL, INT32_MAX);
+    __m2c_rt_memtrack_map2check_add_store_pointer(NULL, NULL, 0xffffffffu, NULL, INT32_MIN, NULL);
+    __m2c_rt_memtrack_map2check_free(NULL, NULL, 0, 0, NULL);
+    __m2c_rt_memtrack_map2check_posix(NULL, -1);
+    __m2c_rt_memtrack_map2check_check_cstring(NULL);
+    __m2c_rt_memtrack_map2check_check_deref(INT32_MIN, NULL);
+    __m2c_rt_memtrack_map2check_free_resolved_address((void *)0x7100, 0xffffffffu, NULL, -1);
+    __m2c_rt_memtrack_map2check_wasm_malloc(UINT64_MAX, UINT64_MAX);
+    __m2c_rt_memtrack_map2check_wasm_check_access(UINT64_MAX, UINT64_MAX);
+    __m2c_rt_memtrack_map2check_wasm_free(UINT64_MAX, INT32_MIN);
+    __m2c_rt_memtrack_analysis_destroy();
 
     /* nondet generators, pre-init */
     (void)__VERIFIER_nondet_bool();
@@ -688,6 +721,47 @@ static void scenario_none_rt_target(void) {
     map2check_target_function("reach_error", 0, 22);
 }
 
+/* The drop-in memtrack path (Task 2.5): AnalysisModeMemtrack.bc forwards
+ * analysis_init and the memory calls to these entry points. */
+static void *harness_slot;
+
+static void scenario_memtrack_rt_double_free(void) {
+    map2check_init(0);
+    __m2c_rt_memtrack_analysis_init();
+    void *block = malloc(16);
+    harness_slot = block;
+    __m2c_rt_memtrack_map2check_alloca("p", &harness_slot, 8, 8, 1, 1);
+    __m2c_rt_memtrack_map2check_malloc(block, 16);
+    __m2c_rt_memtrack_map2check_add_store_pointer(&harness_slot, block, 1, "p", 2, "main");
+    __m2c_rt_memtrack_map2check_free("p", &harness_slot, 1, 3, "main");
+    free(block);
+    __m2c_rt_memtrack_map2check_free("p", &harness_slot, 1, 4, "main");
+}
+
+static void scenario_memtrack_rt_cstring(void) {
+    map2check_enable_witness();
+    map2check_init(0);
+    __m2c_rt_memtrack_analysis_init();
+    char *s = malloc(4);
+    memcpy(s, "abcd", 4);
+    __m2c_rt_memtrack_map2check_malloc(s, 4);
+    __m2c_rt_memtrack_map2check_check_cstring(s);
+    __m2c_rt_memtrack_map2check_check_deref(5, "main");
+}
+
+static void scenario_memtrack_rt_leak(void) {
+    map2check_init(0);
+    __m2c_rt_memtrack_analysis_init();
+    void *block = malloc(8);
+    __m2c_rt_memtrack_map2check_malloc(block, 8);
+    __m2c_rt_memtrack_analysis_generate_aux_witness_files();
+    if (__m2c_rt_memtrack_analysis_is_program_correct() != 0) {
+        _exit(91);
+    }
+    free(block);
+    map2check_success();
+}
+
 static int test_analysis_modes(void) {
     if (run_mode_scenario(scenario_none_mode, 0, "NONE\n", NULL, NULL)) {
         return 1;
@@ -745,6 +819,23 @@ static int test_analysis_modes(void) {
                           "TARGET-REACHED\nLine: 22\nFunction: reach_error\n",
                           NULL, NULL)) {
         return 12;
+    }
+    if (run_mode_scenario(scenario_memtrack_rt_double_free, 1,
+                          "FALSE-FREE\nLine: 4\nFunction: main\n",
+                          "map2check_property_free",
+                          "FALSE-FREE\nLine: 4\nFunction: main\n")) {
+        return 13;
+    }
+    if (run_mode_scenario(scenario_memtrack_rt_cstring, 1,
+                          "FALSE-DEREF\nLine: 5\nFunction: main\n",
+                          "map2check_checked_error", "END OF TIME\n")) {
+        return 14;
+    }
+    /* analysis_is_program_correct wrote FALSE-MEMTRACK and released the
+     * leak; map2check_success then overwrites map2check_property with NONE. */
+    if (run_mode_scenario(scenario_memtrack_rt_leak, 0, "NONE\n",
+                          "map2check_property_memtrack", "FALSE-MEMTRACK\n")) {
+        return 15;
     }
     return 0;
 }

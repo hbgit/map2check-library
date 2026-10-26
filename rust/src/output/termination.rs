@@ -82,15 +82,37 @@ pub(crate) fn generate_aux_files(
         config.mode,
         Some(AnalysisMode::Memtrack | AnalysisMode::Memcleanup)
     ) {
-        report(legacy_files::HEAP_LOG_FILE, logs.write_heap_log(dir));
-        report(
-            legacy_files::ALLOCATION_LOG_FILE,
-            logs.write_allocation_log(dir),
-        );
-        report(legacy_files::LIST_LOG_FILE, logs.write_list_log(dir));
+        // The drop-in entry points keep develop's logs themselves
+        // (`__m2c_rt_memtrack_*`, Task 2.5); the legacy exports are replayed.
+        if s.c_memory.has_rows() {
+            write_c_memory_logs(dir, &s.c_memory);
+        } else {
+            report(legacy_files::HEAP_LOG_FILE, logs.write_heap_log(dir));
+            report(
+                legacy_files::ALLOCATION_LOG_FILE,
+                logs.write_allocation_log(dir),
+            );
+            report(legacy_files::LIST_LOG_FILE, logs.write_list_log(dir));
+        }
     }
     if violation || std::env::var_os(SEED_REPLAY_ENV).is_some() {
         report(legacy_files::NONDET_LOG_FILE, logs.write_nondet_log(dir));
+    }
+}
+
+/// `analysis_generate_aux_witness_files` of the memory modes
+/// (`AnalysisModeMemtrack.c:148-152`): `heap_log.csv`, `allocation_log.csv`
+/// and `list_log.csv`, in that order, from develop's logs.
+pub(crate) fn write_c_memory_logs(dir: &Path, memory: &crate::memtrack::c_mode::CMemory) {
+    for (name, bytes) in [
+        (legacy_files::HEAP_LOG_FILE, memory.heap_log_bytes()),
+        (
+            legacy_files::ALLOCATION_LOG_FILE,
+            memory.allocation_log_bytes(),
+        ),
+        (legacy_files::LIST_LOG_FILE, memory.list_log_bytes()),
+    ] {
+        report(name, legacy_files::write_atomic_bytes(dir, name, &bytes));
     }
 }
 

@@ -1,19 +1,10 @@
 __afl_fuzz_alt
 __afl_fuzz_alt_ptr
 __afl_sharedmem_fuzzing
-map2check_add_store_pointer
-map2check_alloca
 map2check_assume
 map2check_assume_loop
-map2check_calloc
-map2check_check_cstring
 map2check_check_deref
 map2check_crab_assume
-map2check_free
-map2check_free_resolved_address
-map2check_function
-map2check_load
-map2check_malloc
 map2check_non_det_bool
 map2check_non_det_char
 map2check_non_det_double
@@ -37,6 +28,4 @@ map2check_non_det_ulong
 map2check_non_det_ulonglong
 map2check_non_det_unsigned
 map2check_non_det_ushort
-map2check_non_static_alloca
-map2check_posix
 map2check_wasm_free

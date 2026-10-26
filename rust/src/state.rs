@@ -87,6 +87,10 @@ pub struct AnalysisState {
     /// The offset-keyed allocation table of the wasm2c runtime
     /// (`map2check_wasm_*`, Task 2.8).
     pub wasm_allocs: Vec<crate::memtrack::WasmAlloc>,
+    /// develop's `heap_log`, `allocation_log`, `list_log` and `ERROR_DEREF`
+    /// (`AnalysisModeMemtrack.c:120-123`), kept by the `__m2c_rt_memtrack_*`
+    /// core entry points (Task 2.5). Its list rows take `c_step`.
+    pub c_memory: crate::memtrack::c_mode::CMemory,
     pub bbtrack: Vec<BasicBlockEntry>,
     pub legacy_nondet_logs: Vec<Box<crate::ffi::non_det_log_t>>,
     pub legacy_bbtrack_logs: Vec<Box<crate::ffi::bbtrack_log_t>>,

@@ -138,6 +138,23 @@ for _mode, _module in (("assert", "AnalysisModeAssert"), ("none", "AnalysisModeN
         IMPLEMENTED[(_module, sym)] = f"__m2c_rt_{_mode}_{sym}"
 IMPLEMENTED[("AnalysisModeAssert", "map2check_assert")] = "__m2c_rt_assert_map2check_assert"
 
+# AnalysisModeMemtrack.c (Task 2.5): the four analysis_* functions, the 12
+# memory map2check_* the pass calls and map2check_wasm_{malloc,free,
+# check_access}. Each forwarder has the signature of the C definition (the
+# inventory's canonical_signature), not the pass prototype, which differs for
+# map2check_load (ptr, i64), map2check_free_resolved_address (.., i1),
+# map2check_check_deref (i64, ptr), map2check_wasm_free (i64, i64) and the
+# i64 ints of the others (MemoryTrackPass.cpp:885-955); llvm-link reconciles
+# the call and the definition as it does with the C module.
+# update_reference_list_log, the logs and ERROR_DEREF are c-only (SD-22).
+for sym in ("analysis_init", "analysis_destroy", "analysis_is_program_correct",
+            "analysis_generate_aux_witness_files",
+            *(f"map2check_{f}" for f in ("add_store_pointer", "alloca", "calloc", "check_cstring",
+                                         "check_deref", "free", "free_resolved_address", "function",
+                                         "load", "malloc", "non_static_alloca", "posix",
+                                         "wasm_malloc", "wasm_free", "wasm_check_access"))):
+    IMPLEMENTED[("AnalysisModeMemtrack", sym)] = f"__m2c_rt_memtrack_{sym}"
+
 # Functions whose C body is empty, so the unmarked empty define is the C
 # behaviour, not a stub: WitnessGenerationNone.c ("DO NOTHING").
 # AnalysisModeAssert.c:25-27 __VERIFIER_assert ("DO NOTHING").
@@ -147,7 +164,9 @@ C_EMPTY = {("WitnessGenerationNone", "generate_aux_files"),
 
 # Modules whose symbols are all runtime-internal C helpers (container rows by
 # value, log files): the Rust core keeps that logic private, so the module is
-# empty. See d7-layout.md, approval item 2.
+# empty. See d7-layout.md, approval item 2. D3: ContainerRealloc (Array) and
+# ContainerBTree + BTree (--btree) are all empty, so both container builds
+# link the one Rust container (memtrack::c_mode).
 EMPTY = ["TrackBBLog", "NonDetLog", "PropertyGenerator", "ContainerRealloc",
          "ContainerBTree", "BTree", "AllocationLog", "ListLog", "HeapLog"]
 

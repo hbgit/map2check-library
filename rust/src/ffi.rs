@@ -34,6 +34,8 @@ use crate::analysismode::VccContext;
 use crate::bbtrack::BasicBlockEntry;
 use crate::caller::ViolatedProperty;
 use crate::error::Map2CheckError;
+use crate::memtrack::c_mode::FreeOutcome;
+use crate::memtrack::c_mode::MemMode;
 use crate::memtrack::MemOrigin;
 use crate::memtrack::MemTrackEntry;
 use crate::nondet::NonDetEntry;
@@ -977,6 +979,550 @@ pub extern "C" fn __m2c_rt_none_analysis_is_program_correct() -> std::os::raw::c
 #[no_mangle]
 pub extern "C" fn __m2c_rt_none_analysis_generate_aux_witness_files() {
     ffi_guard(|| (), ());
+}
+
+// ── C runtime ABI: AnalysisModeMemtrack (core entry points, D7) ─────────────
+//
+// `AnalysisModeMemtrack.c` of Map2Check `develop`. The C names (`analysis_*`,
+// the 12 memory `map2check_*` the pass calls and `map2check_wasm_*`) are
+// defined only by the generated IR module `AnalysisModeMemtrack.bc`
+// (`scripts/runtime-ir/gen_ll.py`), each forwarding to the
+// `__m2c_rt_memtrack_<name>` below with the signature of the C definition.
+// The logs (`heap_log`, `allocation_log`, `list_log`), `ERROR_DEREF` and
+// `update_reference_list_log` stay private (SD-22): `AnalysisState::c_memory`
+// (`memtrack::c_mode`). `ContainerRealloc.bc`, `ContainerBTree.bc`,
+// `BTree.bc`, `AllocationLog.bc`, `ListLog.bc` and `HeapLog.bc` are empty IR:
+// one Rust container serves the Array and `--btree` builds (D3).
+//
+// The rules take a `MemMode`, and so do the `rt_mem_*` helpers below: the
+// memcleanup module (Task 2.6) shares them. No mode gate: linking the module
+// is the mode. On a violation the C writes the property files and calls
+// `map2check_error()`; here the violation is recorded and, with a mode set,
+// the files are written and the run aborts (`record_violation`). The rows
+// the C appends before it reports are appended first, so the witness logs
+// match. NULL strings read as "".
+
+/// The bytes of a C string, `b""` for NULL.
+///
+/// # Safety
+/// `ptr` must be null or a valid null-terminated C string.
+unsafe fn c_bytes<'a>(ptr: *const std::os::raw::c_char) -> &'a [u8] {
+    if ptr.is_null() {
+        return b"";
+    }
+    // SAFETY: caller guarantees a valid null-terminated C string.
+    unsafe { CStr::from_ptr(ptr) }.to_bytes()
+}
+
+/// Runs `f` on the drop-in memory logs and the C step counter.
+fn with_c_memory<R>(
+    default: R,
+    f: impl FnOnce(&mut crate::memtrack::c_mode::CMemory, &mut u32) -> R,
+) -> R {
+    match state::with_state(|s| Ok(f(&mut s.c_memory, &mut s.c_step))) {
+        Ok(r) => r,
+        Err(e) => {
+            log_error(&e);
+            default
+        }
+    }
+}
+
+/// `analysis_init` of the memory modes (`AnalysisModeMemtrack.c:125-130`):
+/// selects `mode` (linking the module is what picks it in C) and starts new
+/// logs with `ERROR_DEREF` clear.
+fn rt_mem_analysis_init(mode: AnalysisMode) {
+    state::update_config(|c| c.mode = Some(mode));
+    with_c_memory((), |m, _| m.clear());
+}
+
+/// `analysis_is_program_correct` of the memory modes
+/// (`AnalysisModeMemtrack.c:138-146`): on a leak, `write_property` of its
+/// property (which writes `map2check_property` and its own file) and FALSE.
+/// It records nothing and does not end the run; `map2check_exit` does.
+fn rt_mem_is_program_correct(mode: MemMode) -> std::os::raw::c_char {
+    match with_c_memory(None, |m, _| m.is_program_correct(mode)) {
+        Some(property) => {
+            termination::write_property(property, 0, "");
+            0
+        }
+        None => 1,
+    }
+}
+
+/// `analysis_generate_aux_witness_files` of the memory modes
+/// (`AnalysisModeMemtrack.c:148-152`).
+fn rt_mem_generate_aux_witness_files() {
+    if let Some(dir) = termination::output_dir() {
+        if let Err(e) = state::with_state(|s| {
+            termination::write_c_memory_logs(&dir, &s.c_memory);
+            Ok(())
+        }) {
+            log_error(&e);
+        }
+    }
+}
+
+/// `map2check_check_cstring` (`AnalysisModeMemtrack.c:159-166`).
+///
+/// # Safety
+/// `string` must be null, or every byte up to its terminator that lies in a
+/// tracked block must be readable.
+unsafe fn rt_mem_check_cstring(mode: MemMode, string: *const std::os::raw::c_char) {
+    with_c_memory((), |m, _| {
+        m.check_cstring(mode, string as u64, |at| {
+            // SAFETY: `at` is read only after `map2check_load` found it inside
+            // a tracked block, as the C reads `string[i]`; caller contract.
+            unsafe { *(at as usize as *const u8) }
+        })
+    });
+}
+
+/// `map2check_check_deref` (`AnalysisModeMemtrack.c:309-315`).
+///
+/// # Safety
+/// `function_name` must be null or a valid null-terminated C string.
+unsafe fn rt_mem_check_deref(
+    mode: MemMode,
+    line: std::os::raw::c_int,
+    function_name: *const std::os::raw::c_char,
+) {
+    if with_c_memory(false, |m, _| m.check_deref(mode)) {
+        // SAFETY: caller contract.
+        let fname = unsafe { c_str(function_name) };
+        record_violation(ViolatedProperty::MemsafetyDeref, line as u32, fname, false);
+    }
+}
+
+/// `map2check_free_resolved_address` (`AnalysisModeMemtrack.c:176-195`).
+///
+/// # Safety
+/// `function_name` must be null or a valid null-terminated C string.
+unsafe fn rt_mem_free_resolved_address(
+    mode: MemMode,
+    ptr: *const std::os::raw::c_void,
+    line: std::os::raw::c_uint,
+    function_name: *const std::os::raw::c_char,
+    is_null_valid: std::os::raw::c_short,
+) {
+    let outcome = with_c_memory(FreeOutcome::Released, |m, step| {
+        m.free_resolved_address(mode, step, ptr as u64, line, is_null_valid)
+    });
+    if outcome == FreeOutcome::InvalidFree {
+        // SAFETY: caller contract.
+        let fname = unsafe { c_str(function_name) };
+        record_violation(ViolatedProperty::MemsafetyFree, line, fname, false);
+    }
+}
+
+/// `map2check_add_store_pointer` (`AnalysisModeMemtrack.c:258-307`).
+///
+/// # Safety
+/// `name` and `function_name` must be null or valid null-terminated C strings.
+unsafe fn rt_mem_add_store_pointer(
+    var: *const std::os::raw::c_void,
+    value: *const std::os::raw::c_void,
+    scope: std::os::raw::c_uint,
+    name: *const std::os::raw::c_char,
+    line: std::os::raw::c_int,
+    function_name: *const std::os::raw::c_char,
+) {
+    // SAFETY: caller contract.
+    let (name, fname) = unsafe { (c_bytes(name), c_bytes(function_name)) };
+    with_c_memory((), |m, step| {
+        m.add_store_pointer(step, var as u64, value as u64, scope, name, line, fname)
+    });
+}
+
+/// `map2check_malloc` (`AnalysisModeMemtrack.c:317-335`): a NULL block
+/// (low 32 bits zero) is `write_property_unknown` + `map2check_error`.
+fn rt_mem_malloc(ptr: *const std::os::raw::c_void, size: std::os::raw::c_int) {
+    if !with_c_memory(true, |m, _| m.malloc(ptr as u64, size)) {
+        record_violation(ViolatedProperty::Unknown, 0, "", false);
+    }
+}
+
+/// `map2check_calloc` (`AnalysisModeMemtrack.c:347-349`).
+fn rt_mem_calloc(
+    ptr: *const std::os::raw::c_void,
+    quantity: std::os::raw::c_int,
+    size: std::os::raw::c_int,
+) {
+    if !with_c_memory(true, |m, _| m.calloc(ptr as u64, quantity, size)) {
+        record_violation(ViolatedProperty::Unknown, 0, "", false);
+    }
+}
+
+/// `map2check_posix` (`AnalysisModeMemtrack.c:340-345`): reads the block
+/// from `*(void **)ptr`, `map2check_malloc` of it, then the store of it into
+/// `ptr` with scope 1, name "pointer", line 1 and function "cocoiso". A
+/// NULL `ptr` is ignored (develop dereferences it).
+///
+/// # Safety
+/// `ptr` must be null or point to a readable `void *`.
+unsafe fn rt_mem_posix(ptr: *const std::os::raw::c_void, size: std::os::raw::c_int) {
+    if ptr.is_null() {
+        return;
+    }
+    // SAFETY: caller guarantees a readable `void *`; unaligned-safe read.
+    let block = unsafe { ptr.cast::<*const std::os::raw::c_void>().read_unaligned() };
+    if !with_c_memory(true, |m, _| m.malloc(block as u64, size)) {
+        record_violation(ViolatedProperty::Unknown, 0, "", false);
+        return;
+    }
+    with_c_memory((), |m, step| {
+        m.add_store_pointer(step, ptr as u64, block as u64, 1, b"pointer", 1, b"cocoiso")
+    });
+}
+
+/// `map2check_free` (`AnalysisModeMemtrack.c:351-378`): `ptr` is the slot of
+/// the pointer variable; the block is read from `*(long *)ptr`. A NULL `ptr`
+/// is ignored (develop dereferences it).
+///
+/// # Safety
+/// `name` and `function_name` must be null or valid null-terminated C
+/// strings; `ptr` must be null or point to a readable `long`.
+unsafe fn rt_mem_free(
+    mode: MemMode,
+    name: *const std::os::raw::c_char,
+    ptr: *const std::os::raw::c_void,
+    scope: std::os::raw::c_uint,
+    line: std::os::raw::c_uint,
+    function_name: *const std::os::raw::c_char,
+) {
+    if ptr.is_null() {
+        return;
+    }
+    // SAFETY: caller guarantees a readable `long`; unaligned-safe read.
+    let points_to = unsafe { ptr.cast::<u64>().read_unaligned() };
+    // SAFETY: caller contract.
+    let (name, fname) = unsafe { (c_bytes(name), c_bytes(function_name)) };
+    let outcome = with_c_memory(FreeOutcome::Released, |m, step| {
+        m.free(mode, step, name, ptr as u64, points_to, scope, line, fname)
+    });
+    if outcome == FreeOutcome::InvalidFree {
+        // SAFETY: caller contract.
+        let fname = unsafe { c_str(function_name) };
+        record_violation(ViolatedProperty::MemsafetyFree, line, fname, false);
+    }
+}
+
+/// `analysis_init` of the memtrack mode (`AnalysisModeMemtrack.c:125-130`):
+/// selects `AnalysisMode_Memtrack` and starts new logs, `ERROR_DEREF` clear.
+#[no_mangle]
+pub extern "C" fn __m2c_rt_memtrack_analysis_init() {
+    ffi_guard(|| rt_mem_analysis_init(AnalysisMode::Memtrack), ());
+}
+
+/// `analysis_destroy` of the memtrack mode (`AnalysisModeMemtrack.c:132-136`):
+/// frees the three logs.
+#[no_mangle]
+pub extern "C" fn __m2c_rt_memtrack_analysis_destroy() {
+    ffi_guard(|| with_c_memory((), |m, _| m.clear()), ());
+}
+
+/// `analysis_is_program_correct` of the memtrack mode
+/// (`AnalysisModeMemtrack.c:138-146`): when `valid_allocation_log` finds a
+/// leaked block (it appends a freed row for each), writes FALSE-MEMTRACK to
+/// `map2check_property` and `map2check_property_memtrack` and returns 0;
+/// otherwise 1.
+#[no_mangle]
+pub extern "C" fn __m2c_rt_memtrack_analysis_is_program_correct() -> std::os::raw::c_char {
+    ffi_guard(|| rt_mem_is_program_correct(MemMode::Memtrack), 1)
+}
+
+/// `analysis_generate_aux_witness_files` of the memtrack mode
+/// (`AnalysisModeMemtrack.c:148-152`): `heap_log.csv`, `allocation_log.csv`
+/// and `list_log.csv` in the current directory, in the C formats.
+#[no_mangle]
+pub extern "C" fn __m2c_rt_memtrack_analysis_generate_aux_witness_files() {
+    ffi_guard(rt_mem_generate_aux_witness_files, ());
+}
+
+/// `map2check_check_cstring` (`AnalysisModeMemtrack.c:159-166`): every byte
+/// up to the terminator must lie in a tracked block (`map2check_load` of 1
+/// byte); stops before the first invalid byte with `ERROR_DEREF` set, which
+/// the caller's `map2check_check_deref` reports. NULL does nothing.
+///
+/// # Safety
+/// `string` must be null, or each byte of it that lies in a tracked block,
+/// up to its terminator, must be readable.
+#[no_mangle]
+pub unsafe extern "C" fn __m2c_rt_memtrack_map2check_check_cstring(
+    string: *const std::os::raw::c_char,
+) {
+    // SAFETY: forwarded caller contract.
+    ffi_guard(
+        || unsafe { rt_mem_check_cstring(MemMode::Memtrack, string) },
+        (),
+    );
+}
+
+/// `map2check_load` (`AnalysisModeMemtrack.c:168-174`): sets `ERROR_DEREF`
+/// when neither a heap-log row (stack slot, function) nor a live allocation
+/// covers the `size` bytes at `ptr`. Reports nothing by itself.
+#[no_mangle]
+pub extern "C" fn __m2c_rt_memtrack_map2check_load(
+    ptr: *const std::os::raw::c_void,
+    size: std::os::raw::c_int,
+) {
+    ffi_guard(
+        || with_c_memory((), |m, _| m.load(MemMode::Memtrack, ptr as u64, size)),
+        (),
+    );
+}
+
+/// `map2check_free_resolved_address` (`AnalysisModeMemtrack.c:176-195`):
+/// NULL with `is_null_valid` returns; `is_invalid_free` (`ListLog.c:95-118`)
+/// records FALSE-FREE at `line`; otherwise the block's row is freed and every
+/// pointer to it gets a FREE row (`update_reference_list_log`).
+///
+/// # Safety
+/// `function_name` must be null or a valid null-terminated C string; `ptr`
+/// is never dereferenced.
+#[no_mangle]
+pub unsafe extern "C" fn __m2c_rt_memtrack_map2check_free_resolved_address(
+    ptr: *const std::os::raw::c_void,
+    line: std::os::raw::c_uint,
+    function_name: *const std::os::raw::c_char,
+    is_null_valid: std::os::raw::c_short,
+) {
+    ffi_guard(
+        || {
+            // SAFETY: forwarded caller contract.
+            unsafe {
+                rt_mem_free_resolved_address(
+                    MemMode::Memtrack,
+                    ptr,
+                    line,
+                    function_name,
+                    is_null_valid,
+                )
+            }
+        },
+        (),
+    );
+}
+
+/// `map2check_add_store_pointer` (`AnalysisModeMemtrack.c:258-307`): appends
+/// a list row for `var = value` with the status of `value` in the allocation
+/// log, unless the variable's newest row is the same, then updates the
+/// other pointers to `value`.
+///
+/// # Safety
+/// `name` and `function_name` must be null or valid null-terminated C
+/// strings; `var` and `value` are never dereferenced.
+#[no_mangle]
+pub unsafe extern "C" fn __m2c_rt_memtrack_map2check_add_store_pointer(
+    var: *const std::os::raw::c_void,
+    value: *const std::os::raw::c_void,
+    scope: std::os::raw::c_uint,
+    name: *const std::os::raw::c_char,
+    line: std::os::raw::c_int,
+    function_name: *const std::os::raw::c_char,
+) {
+    ffi_guard(
+        || {
+            // SAFETY: forwarded caller contract.
+            unsafe { rt_mem_add_store_pointer(var, value, scope, name, line, function_name) }
+        },
+        (),
+    );
+}
+
+/// `map2check_check_deref` (`AnalysisModeMemtrack.c:309-315`): when
+/// `ERROR_DEREF` is set, records FALSE-DEREF at `line` in `function_name`.
+///
+/// # Safety
+/// `function_name` must be null or a valid null-terminated C string.
+#[no_mangle]
+pub unsafe extern "C" fn __m2c_rt_memtrack_map2check_check_deref(
+    line: std::os::raw::c_int,
+    function_name: *const std::os::raw::c_char,
+) {
+    ffi_guard(
+        || {
+            // SAFETY: forwarded caller contract.
+            unsafe { rt_mem_check_deref(MemMode::Memtrack, line, function_name) }
+        },
+        (),
+    );
+}
+
+/// `map2check_malloc` (`AnalysisModeMemtrack.c:317-335`): records the block,
+/// reviving the row of a known address with the new size. A NULL block (its
+/// low 32 bits zero, `int addr = (long)ptr`) records UNKNOWN
+/// (`map2check_property__unknown`) and ends the run.
+#[no_mangle]
+pub extern "C" fn __m2c_rt_memtrack_map2check_malloc(
+    ptr: *const std::os::raw::c_void,
+    size: std::os::raw::c_int,
+) {
+    ffi_guard(|| rt_mem_malloc(ptr, size), ());
+}
+
+/// `map2check_posix` (`AnalysisModeMemtrack.c:340-345`), for
+/// `posix_memalign(ptr, ...)`: `map2check_malloc(*ptr, size)` and the store
+/// of the block into `ptr` (scope 1, "pointer", line 1, "cocoiso").
+///
+/// # Safety
+/// `ptr` must be null or point to a readable `void *`.
+#[no_mangle]
+pub unsafe extern "C" fn __m2c_rt_memtrack_map2check_posix(
+    ptr: *const std::os::raw::c_void,
+    size: std::os::raw::c_int,
+) {
+    // SAFETY: forwarded caller contract.
+    ffi_guard(|| unsafe { rt_mem_posix(ptr, size) }, ());
+}
+
+/// `map2check_calloc` (`AnalysisModeMemtrack.c:347-349`):
+/// `map2check_malloc(ptr, quantity * size)`, an `int` product.
+#[no_mangle]
+pub extern "C" fn __m2c_rt_memtrack_map2check_calloc(
+    ptr: *const std::os::raw::c_void,
+    quantity: std::os::raw::c_int,
+    size: std::os::raw::c_int,
+) {
+    ffi_guard(|| rt_mem_calloc(ptr, quantity, size), ());
+}
+
+/// `map2check_free` (`AnalysisModeMemtrack.c:351-378`): `ptr` is the slot of
+/// the pointer variable `name`. A NULL block does nothing; otherwise a FREE
+/// row for the variable is appended, then `is_invalid_free` records
+/// FALSE-FREE at `line`, or the block is released and every pointer to it
+/// gets a FREE row.
+///
+/// # Safety
+/// `name` and `function_name` must be null or valid null-terminated C
+/// strings; `ptr` must be null or point to a readable `long`.
+#[no_mangle]
+pub unsafe extern "C" fn __m2c_rt_memtrack_map2check_free(
+    name: *const std::os::raw::c_char,
+    ptr: *const std::os::raw::c_void,
+    scope: std::os::raw::c_uint,
+    line: std::os::raw::c_uint,
+    function_name: *const std::os::raw::c_char,
+) {
+    ffi_guard(
+        || {
+            // SAFETY: forwarded caller contract.
+            unsafe { rt_mem_free(MemMode::Memtrack, name, ptr, scope, line, function_name) }
+        },
+        (),
+    );
+}
+
+/// `map2check_non_static_alloca` (`AnalysisModeMemtrack.c:380-384`):
+/// `map2check_alloca` of `size * size_of_primitive` bytes (an `int` product).
+///
+/// # Safety
+/// `name` must be null or a valid null-terminated C string; `ptr` is never
+/// dereferenced.
+#[no_mangle]
+pub unsafe extern "C" fn __m2c_rt_memtrack_map2check_non_static_alloca(
+    name: *const std::os::raw::c_char,
+    ptr: *const std::os::raw::c_void,
+    size: std::os::raw::c_int,
+    size_of_primitive: std::os::raw::c_int,
+    line: std::os::raw::c_int,
+    scope: std::os::raw::c_int,
+) {
+    ffi_guard(
+        || {
+            // SAFETY: caller contract.
+            let name = unsafe { c_bytes(name) };
+            with_c_memory((), |m, _| {
+                m.non_static_alloca(name, ptr as u64, size, size_of_primitive, line, scope)
+            });
+        },
+        (),
+    );
+}
+
+/// `map2check_alloca` (`AnalysisModeMemtrack.c:386-391`): a heap-log row
+/// (`HeapLog.c:22-32`) for the stack slot `name` of `size` bytes at `ptr`.
+///
+/// # Safety
+/// `name` must be null or a valid null-terminated C string; `ptr` is never
+/// dereferenced.
+#[no_mangle]
+pub unsafe extern "C" fn __m2c_rt_memtrack_map2check_alloca(
+    name: *const std::os::raw::c_char,
+    ptr: *const std::os::raw::c_void,
+    size: std::os::raw::c_int,
+    size_of_primitive: std::os::raw::c_int,
+    line: std::os::raw::c_int,
+    scope: std::os::raw::c_int,
+) {
+    ffi_guard(
+        || {
+            // SAFETY: caller contract.
+            let name = unsafe { c_bytes(name) };
+            with_c_memory((), |m, _| {
+                m.alloca(name, ptr as u64, size, size_of_primitive, line, scope)
+            });
+        },
+        (),
+    );
+}
+
+/// `map2check_function` (`AnalysisModeMemtrack.c:393-397`): a heap-log row
+/// of size 1 for the function `name` at `ptr`.
+///
+/// # Safety
+/// `name` must be null or a valid null-terminated C string; `ptr` is never
+/// dereferenced.
+#[no_mangle]
+pub unsafe extern "C" fn __m2c_rt_memtrack_map2check_function(
+    name: *const std::os::raw::c_char,
+    ptr: *const std::os::raw::c_void,
+) {
+    ffi_guard(
+        || {
+            // SAFETY: caller contract.
+            let name = unsafe { c_bytes(name) };
+            with_c_memory((), |m, _| m.function(name, ptr as u64));
+        },
+        (),
+    );
+}
+
+/// `map2check_wasm_malloc` (`AnalysisModeMemtrack.c:403-416`): the block of
+/// the lifted `malloc` at linear-memory `offset`, in the same allocation log
+/// as `map2check_malloc`; offsets 0 and `(uint64_t)-1` are ignored.
+#[no_mangle]
+pub extern "C" fn __m2c_rt_memtrack_map2check_wasm_malloc(offset: u64, size: u64) {
+    ffi_guard(|| with_c_memory((), |m, _| m.wasm_malloc(offset, size)), ());
+}
+
+/// `map2check_wasm_free` (`AnalysisModeMemtrack.c:418-428`): frees the row of
+/// `offset`; an offset with no row records FALSE-FREE at `line`, function "".
+#[no_mangle]
+pub extern "C" fn __m2c_rt_memtrack_map2check_wasm_free(offset: u64, line: std::os::raw::c_int) {
+    ffi_guard(
+        || {
+            if !with_c_memory(true, |m, _| m.wasm_free(offset)) {
+                record_violation(ViolatedProperty::MemsafetyFree, line as u32, "", false);
+            }
+        },
+        (),
+    );
+}
+
+/// `map2check_wasm_check_access` (`AnalysisModeMemtrack.c:430-436`): an
+/// access outside every live block records OVERFLOW at line 0, function ""
+/// (`FALSE_OVERFLOW`, SD-19).
+#[no_mangle]
+pub extern "C" fn __m2c_rt_memtrack_map2check_wasm_check_access(offset: u64, access_size: u64) {
+    ffi_guard(
+        || {
+            if !with_c_memory(true, |m, _| m.wasm_check_access(offset, access_size)) {
+                record_violation(ViolatedProperty::Overflow, 0, "", false);
+            }
+        },
+        (),
+    );
 }
 
 // ── C runtime ABI: NonDetLog ────────────────────────────────────────────────

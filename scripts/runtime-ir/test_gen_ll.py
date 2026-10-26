@@ -268,7 +268,7 @@ class Generated(unittest.TestCase):
 
     def test_other_modes_keep_their_analysis_stubs(self):
         out = run_gen()
-        for m in ("AnalysisModeMemtrack", "AnalysisModeMemcleanup"):
+        for m in ("AnalysisModeMemcleanup",):
             text = read(os.path.join(out, m + ".ll"))
             self.assertNotIn("__m2c_rt_overflow", text, m)
             self.assertNotIn("__m2c_rt_assert", text, m)
@@ -309,6 +309,58 @@ class Generated(unittest.TestCase):
             self.assertRegex(text, rf"tail call [^@]*@__m2c_rt_none_{sym}\(", sym)
         self.assertNotIn("m2c-stub", text)
 
+    def test_memtrack_module_forwards_every_c_function_to_the_core(self):
+        """AnalysisModeMemtrack.bc (Task 2.5): the 12 memory map2check_* the
+        pass calls, map2check_wasm_{malloc,free,check_access} and analysis_*,
+        each a forwarder to __m2c_rt_memtrack_<name> with the signature of
+        the C definition (inventory canonical_signature). The c-only names
+        (update_reference_list_log, the logs, ERROR_DEREF) are not defined."""
+        text = read(os.path.join(run_gen("--module", "AnalysisModeMemtrack"), "AnalysisModeMemtrack.ll"))
+        want = {r["symbol"] for r in inventory_rows()
+                if "AnalysisModeMemtrack.bc" in r["module"].split("+") and r["kind"] == "func"
+                and r["referenced_by"] != "-"}
+        memory = {"map2check_add_store_pointer", "map2check_alloca", "map2check_calloc",
+                  "map2check_check_cstring", "map2check_check_deref", "map2check_free",
+                  "map2check_free_resolved_address", "map2check_function", "map2check_load",
+                  "map2check_malloc", "map2check_non_static_alloca", "map2check_posix"}
+        wasm = {"map2check_wasm_malloc", "map2check_wasm_free", "map2check_wasm_check_access"}
+        analysis = {"analysis_init", "analysis_destroy", "analysis_is_program_correct",
+                    "analysis_generate_aux_witness_files"}
+        self.assertEqual(want, memory | wasm | analysis)
+        self.assertEqual(defined(text), want)
+        for sym in want:
+            self.assertEqual(gen_ll.IMPLEMENTED[("AnalysisModeMemtrack", sym)], f"__m2c_rt_memtrack_{sym}")
+            self.assertRegex(text, rf"tail call [^@]*@__m2c_rt_memtrack_{sym}\(", sym)
+        self.assertNotIn("m2c-stub", text)
+        for c_only in ("update_reference_list_log", "@heap_log", "@list_log", "@allocation_log", "ERROR_DEREF"):
+            self.assertNotIn(c_only, text)
+        # The C definitions, not the pass prototypes (MemoryTrackPass.cpp:885-955
+        # declares (ptr, i64), (ptr, i64, ptr, i1), (i64, ptr) and (i64, i64)).
+        for line in ("define void @map2check_load(ptr %a0, i32 %a1) {",
+                     "define void @map2check_free_resolved_address(ptr %a0, i32 %a1, ptr %a2, i16 signext %a3) {",
+                     "define void @map2check_check_deref(i32 %a0, ptr %a1) {",
+                     "define void @map2check_wasm_free(i64 %a0, i32 %a1) {",
+                     "define void @map2check_alloca(ptr %a0, ptr %a1, i32 %a2, i32 %a3, i32 %a4, i32 %a5) {",
+                     "define signext i8 @analysis_is_program_correct() {"):
+            self.assertIn(line, text)
+
+    def test_container_and_log_modules_are_empty_without_stub_marks(self):
+        """D3: one Rust container serves the Array (ContainerRealloc.bc) and
+        --btree (ContainerBTree.bc + BTree.bc) builds, and the log modules
+        (AllocationLog, ListLog, HeapLog) are C-only helpers (SD-22): every
+        one is an empty IR module, so both module sets link the same core."""
+        out = run_gen()
+        bodies = {}
+        for m in ("ContainerRealloc", "ContainerBTree", "BTree", "AllocationLog", "ListLog", "HeapLog"):
+            self.assertIn(m, gen_ll.EMPTY)
+            text = read(os.path.join(out, m + ".ll"))
+            self.assertEqual(defined(text), set(), m)
+            self.assertNotIn("m2c-stub", text, m)
+            self.assertNotRegex(text, r"(?m)^(declare|@)", m)
+            bodies[m] = text.replace(m, "<M>")
+        self.assertEqual(bodies["ContainerRealloc"], bodies["ContainerBTree"])
+        self.assertEqual(bodies["ContainerRealloc"], bodies["BTree"])
+
     def test_stubs_are_marked_and_forwarders_are_not(self):
         """runtime-abi-coverage.sh must not count a stub as delivered: every
         define that does not do the C function's work carries `; m2c-stub`."""
@@ -324,8 +376,8 @@ class Generated(unittest.TestCase):
                     self.assertEqual(line.endswith("; m2c-stub"), not real, f"{module}.{sym}")
                 else:
                     self.assertNotIn("m2c-stub", line, f"{module}.{sym}")
-        # Still a stub: AnalysisModeMemtrack's map2check_load.
-        text = read(os.path.join(out, "AnalysisModeMemtrack.ll"))
+        # Still a stub: AnalysisModeMemcleanup's map2check_load (Task 2.6).
+        text = read(os.path.join(out, "AnalysisModeMemcleanup.ll"))
         self.assertIn("{ ; m2c-stub", text)
         # The empty C bodies: WitnessGenerationNone.c, AnalysisModeAssert.c:25-27
         # (__VERIFIER_assert); all "DO NOTHING".

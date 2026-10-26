@@ -129,6 +129,12 @@ fn assert_quiet_stdout(stdout: &str, aborted: bool) {
 /// Runs the `<child>` scenario and compares its files and its end with
 /// `tests/legacy_golden/<tag>/`.
 fn assert_matches_golden(tag: &str, child: &str) {
+    assert_matches_golden_except(tag, child, &[]);
+}
+
+/// [`assert_matches_golden`], except that the content of the files named in
+/// `skip_content` is not compared (they must still exist).
+fn assert_matches_golden_except(tag: &str, child: &str, skip_content: &[&str]) {
     let golden = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("tests/legacy_golden")
         .join(tag);
@@ -160,6 +166,9 @@ fn assert_matches_golden(tag: &str, child: &str) {
         "{tag}: conjunto de arquivos"
     );
     for name in files_in(&golden) {
+        if skip_content.contains(&name.as_str()) {
+            continue;
+        }
         let expected = std::fs::read(golden.join(&name)).unwrap();
         let actual = std::fs::read(dir.path().join(&name)).unwrap();
         assert_eq!(
@@ -1423,4 +1432,311 @@ fn none_rt_boundary_child() {
         unsafe { map2check_target_function(c"reach_error".as_ptr(), 0, 41) };
         println!("map2check-golden-child-survived");
     }
+}
+
+// ── AnalysisModeMemtrack through the core entry points (Task 2.5, D7) ───────
+//
+// `AnalysisModeMemtrack.bc` forwards the C names to `__m2c_rt_memtrack_*`.
+// The children make the calls of `tests/legacy_golden/drivers/<TAG>.c` with
+// the C ABI (`map2check_track_bb`, `map2check_nondet_<t>`, the memory entry
+// points), so the C goldens apply: property files, `list_log.csv`,
+// `allocation_log.csv`, `heap_log.csv`, `track_bb_log.st` and the end of the
+// process. `klee_log.csv` is compared elsewhere: the witness writes it from
+// the generator's log, which Task 3.1 wires (the drop-in nondet rows are
+// `__m2c_rt_nondet_log_to_file`'s, Task 2.2); here only its presence is.
+
+const KLEE_LOG: &[&str] = &["klee_log.csv"];
+
+/// `golden_tracking()` through the C ABI: the same basic blocks and nondet
+/// values as the driver, so the list rows get the same C steps (5 on).
+fn c_tracking() {
+    // SAFETY: C-string literals are valid.
+    unsafe {
+        map2check_track_bb(3, c"main".as_ptr());
+        map2check_track_bb(4, c"main".as_ptr());
+        map2check_track_bb(3, c"main".as_ptr());
+        map2check_nondet_int(5, 0, 42, c"main".as_ptr());
+        map2check_nondet_uint(6, 0, 4_000_000_000u32 as i32, c"main".as_ptr());
+        map2check_nondet_char(7, 0, 253, c"main".as_ptr());
+        map2check_nondet_long(8, 0, -7, c"main".as_ptr());
+        map2check_nondet_double(9, 0, 2.5, c"main".as_ptr());
+    }
+}
+
+/// `golden_memory()` through `__m2c_rt_memtrack_*`, with the arena mapped
+/// and `p = BLOCK` written in its slot (`map2check_free` reads it).
+fn rt_memory() {
+    map_arena();
+    // SAFETY: SLOT_P lies in the mapped arena; the other addresses are only
+    // stored; names are C strings.
+    unsafe {
+        __m2c_rt_memtrack_map2check_alloca(c"p".as_ptr(), addr(SLOT_P), 8, 8, 10, 1);
+        __m2c_rt_memtrack_map2check_function(c"main".as_ptr(), addr(FN_MAIN));
+        __m2c_rt_memtrack_map2check_malloc(addr(BLOCK), 16);
+        (SLOT_P as *mut usize).write(BLOCK);
+        __m2c_rt_memtrack_map2check_add_store_pointer(
+            addr(SLOT_P),
+            addr(BLOCK),
+            1,
+            c"p".as_ptr(),
+            11,
+            c"main".as_ptr(),
+        );
+    }
+}
+
+/// `map2check_free("p", SLOT_P, 1, line, "main")`.
+fn rt_free_p(line: u32) {
+    // SAFETY: SLOT_P is mapped and holds BLOCK; C strings.
+    unsafe {
+        __m2c_rt_memtrack_map2check_free(c"p".as_ptr(), addr(SLOT_P), 1, line, c"main".as_ptr())
+    };
+}
+
+fn start_memtrack_rt() {
+    start_rt(__m2c_rt_memtrack_analysis_init, true);
+    c_tracking();
+    rt_memory();
+}
+
+#[test]
+fn memtrack_rt_false_deref_child() {
+    if is_child() {
+        start_memtrack_rt();
+        // SAFETY: WILD is only compared; C string.
+        unsafe {
+            __m2c_rt_memtrack_map2check_load(addr(WILD), 4);
+            __m2c_rt_memtrack_map2check_check_deref(14, c"main".as_ptr());
+        }
+        map2check_success();
+    }
+}
+
+#[test]
+fn memtrack_rt_false_deref_matches_c_runtime() {
+    assert_matches_golden_except("FALSE-DEREF", "memtrack_rt_false_deref_child", KLEE_LOG);
+}
+
+#[test]
+fn memtrack_rt_false_free_child() {
+    if is_child() {
+        start_memtrack_rt();
+        rt_free_p(12);
+        rt_free_p(13);
+        map2check_success();
+    }
+}
+
+#[test]
+fn memtrack_rt_double_free_matches_c_runtime() {
+    assert_matches_golden_except("FALSE-FREE", "memtrack_rt_false_free_child", KLEE_LOG);
+}
+
+#[test]
+fn memtrack_rt_false_free_resolved_child() {
+    if is_child() {
+        start_memtrack_rt();
+        rt_free_p(12);
+        // SAFETY: BLOCK is only compared; C string.
+        unsafe {
+            __m2c_rt_memtrack_map2check_free_resolved_address(addr(BLOCK), 13, c"main".as_ptr(), 0)
+        };
+        map2check_success();
+    }
+}
+
+#[test]
+fn memtrack_rt_false_free_resolved_matches_c_runtime() {
+    assert_matches_golden_except(
+        "FALSE-FREE-RESOLVED",
+        "memtrack_rt_false_free_resolved_child",
+        KLEE_LOG,
+    );
+}
+
+#[test]
+fn memtrack_rt_false_memtrack_child() {
+    if is_child() {
+        start_memtrack_rt();
+        map2check_success();
+    }
+}
+
+#[test]
+fn memtrack_rt_false_memtrack_matches_c_runtime() {
+    assert_matches_golden_except(
+        "FALSE-MEMTRACK",
+        "memtrack_rt_false_memtrack_child",
+        KLEE_LOG,
+    );
+}
+
+#[test]
+fn memtrack_rt_none_child() {
+    if is_child() {
+        start_memtrack_rt();
+        rt_free_p(12);
+        map2check_success();
+        println!("{RETURNED}");
+    }
+}
+
+#[test]
+fn memtrack_rt_valid_run_matches_c_runtime() {
+    assert_matches_golden("NONE", "memtrack_rt_none_child");
+}
+
+#[test]
+fn memtrack_rt_unknown_child() {
+    if is_child() {
+        start_memtrack_rt();
+        __m2c_rt_memtrack_map2check_malloc(std::ptr::null(), 4);
+        map2check_success();
+    }
+}
+
+#[test]
+fn memtrack_rt_unknown_matches_c_runtime() {
+    assert_matches_golden_except("UNKNOWN", "memtrack_rt_unknown_child", KLEE_LOG);
+}
+
+#[test]
+fn memtrack_rt_posix_child() {
+    if is_child() {
+        start_memtrack_rt();
+        // SAFETY: SLOT_Q lies in the mapped arena; names are C strings.
+        unsafe {
+            __m2c_rt_memtrack_map2check_alloca(c"q".as_ptr(), addr(SLOT_Q), 8, 8, 15, 1);
+            (SLOT_Q as *mut usize).write(BLOCK2);
+            __m2c_rt_memtrack_map2check_posix(addr(SLOT_Q), 32);
+        }
+        map2check_success();
+    }
+}
+
+#[test]
+fn memtrack_rt_posix_matches_c_runtime() {
+    assert_matches_golden_except("POSIX-MEMALIGN", "memtrack_rt_posix_child", KLEE_LOG);
+}
+
+/// One violation per child, without witness: `MEMTRACK_RT_CASE` selects it.
+#[test]
+fn memtrack_rt_boundary_child() {
+    if is_child() {
+        start_rt(__m2c_rt_memtrack_analysis_init, false);
+        map_arena();
+        let case = std::env::var("MEMTRACK_RT_CASE").unwrap();
+        let main = c"main".as_ptr();
+        // SAFETY: every address read lies in the mapped arena; the others
+        // are only compared; names are C strings.
+        unsafe {
+            match case.as_str() {
+                "non-heap free" => {
+                    // int x; int *p = &x; free(p);
+                    __m2c_rt_memtrack_map2check_alloca(c"x".as_ptr(), addr(BLOCK), 4, 4, 3, 1);
+                    (SLOT_P as *mut usize).write(BLOCK);
+                    __m2c_rt_memtrack_map2check_add_store_pointer(
+                        addr(SLOT_P),
+                        addr(BLOCK),
+                        1,
+                        c"p".as_ptr(),
+                        4,
+                        main,
+                    );
+                    __m2c_rt_memtrack_map2check_free(c"p".as_ptr(), addr(SLOT_P), 1, 50, main);
+                }
+                "cstring beyond the block" => {
+                    // char *s = malloc(4); memcpy(s, "abcd", 4); puts(s);
+                    let s = BLOCK as *mut u8;
+                    s.copy_from_nonoverlapping(b"abcd".as_ptr(), 4);
+                    __m2c_rt_memtrack_map2check_malloc(addr(BLOCK), 4);
+                    __m2c_rt_memtrack_map2check_check_cstring(s.cast_const().cast());
+                    __m2c_rt_memtrack_map2check_check_deref(51, c"puts_caller".as_ptr());
+                }
+                "cstring inside the block" => {
+                    let s = BLOCK as *mut u8;
+                    s.copy_from_nonoverlapping(b"abc\0".as_ptr(), 4);
+                    __m2c_rt_memtrack_map2check_malloc(addr(BLOCK), 4);
+                    __m2c_rt_memtrack_map2check_check_cstring(s.cast_const().cast());
+                    __m2c_rt_memtrack_map2check_check_deref(52, main);
+                    __m2c_rt_memtrack_map2check_free_resolved_address(addr(BLOCK), 53, main, 0);
+                }
+                other => panic!("caso desconhecido {other}"),
+            }
+        }
+        println!("map2check-golden-child-survived");
+        map2check_success();
+        println!("{RETURNED}");
+    }
+}
+
+/// The files `memtrack_rt_boundary_child` leaves for `case`.
+fn memtrack_rt_case(case: &str) -> (std::process::Output, BTreeMap<String, String>) {
+    let dir = tempfile::tempdir().unwrap();
+    let output = run_child_with(
+        "memtrack_rt_boundary_child",
+        dir.path(),
+        &[("MEMTRACK_RT_CASE", case)],
+    );
+    let files = files_in(dir.path())
+        .into_iter()
+        .map(|name| {
+            let text = std::fs::read_to_string(dir.path().join(&name)).unwrap();
+            (name, text)
+        })
+        .collect();
+    (output, files)
+}
+
+#[test]
+fn memtrack_rt_free_of_a_non_heap_address_writes_false_free_and_aborts() {
+    let (output, files) = memtrack_rt_case("non-heap free");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert_eq!(output.status.signal(), Some(6), "{stdout}");
+    assert!(!stdout.contains("survived"));
+    // AnalysisModeMemtrack.c:367-370: write_property(FALSE_FREE)
+    // (PropertyGenerator.c:61-66, which writes map2check_property_free first).
+    let text = c_property_text("FALSE-FREE", 50, "main");
+    assert_eq!(
+        files,
+        BTreeMap::from([
+            ("map2check_property".to_owned(), text.clone()),
+            ("map2check_property_free".to_owned(), text),
+        ])
+    );
+}
+
+#[test]
+fn memtrack_rt_check_cstring_beyond_the_block_writes_false_deref_and_aborts() {
+    let (output, files) = memtrack_rt_case("cstring beyond the block");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert_eq!(output.status.signal(), Some(6), "{stdout}");
+    assert!(!stdout.contains("survived"));
+    // :159-166 sets ERROR_DEREF at the fifth byte; :309-315 writes
+    // FALSE_DEREF (PropertyGenerator.c:67-72, :42-48).
+    let text = c_property_text("FALSE-DEREF", 51, "puts_caller");
+    assert_eq!(
+        files,
+        BTreeMap::from([
+            ("map2check_property".to_owned(), text.clone()),
+            ("map2check_property_deref".to_owned(), text),
+        ])
+    );
+}
+
+#[test]
+fn memtrack_rt_check_cstring_inside_the_block_is_not_reported() {
+    let (output, files) = memtrack_rt_case("cstring inside the block");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    // free(malloc(4)) with no tracked store: is_invalid_free (ListLog.c:117)
+    // is TRUE in develop, so the resolved free is FALSE-FREE.
+    assert_eq!(output.status.signal(), Some(6), "{stdout}");
+    let text = c_property_text("FALSE-FREE", 53, "main");
+    assert_eq!(
+        files,
+        BTreeMap::from([
+            ("map2check_property".to_owned(), text.clone()),
+            ("map2check_property_free".to_owned(), text),
+        ])
+    );
 }

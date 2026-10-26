@@ -6,9 +6,16 @@
 
 /// Nomes do runtime C que o núcleo também exporta, com assinatura própria, sem
 /// ser alvo de nenhuma linha do mapeamento: `map2check_check_deref` do núcleo é
-/// `(ptr, scope, line, fn)` e a linha do mapeamento (`core_symbol` = `-`) diz
-/// que o passe deixa de emitir a chamada do C, `(i64 line, ptr fn)`.
-const CORE_NAMES_SHARED_WITH_C: &[&str] = &["map2check_check_deref"];
+/// `(ptr, scope, line, fn)`, e os `map2check_wasm_*` da feature `wasm` usam a
+/// tabela própria do núcleo. Desde a Task 2.5 o mapeamento leva esses nomes C
+/// ao IR `AnalysisModeMemtrack.ll` (`__m2c_rt_memtrack_*`); os exports
+/// legados ficam até a Task 2.10.
+const CORE_NAMES_SHARED_WITH_C: &[&str] = &[
+    "map2check_check_deref",
+    "map2check_wasm_malloc",
+    "map2check_wasm_free",
+    "map2check_wasm_check_access",
+];
 
 fn target_dir(root: &str) -> String {
     std::env::var("CARGO_TARGET_DIR").unwrap_or_else(|_| format!("{root}/target"))

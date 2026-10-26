@@ -31,7 +31,7 @@ use std::path::Path;
 use crate::{
     bbtrack::BasicBlockEntry,
     caller::{AnalysisResult, ViolatedProperty},
-    memtrack::{MemOrigin, MemTrackEntry},
+    memtrack::{c_mode, MemOrigin, MemTrackEntry},
     nondet::{NonDetEntry, NonDetValue},
 };
 
@@ -679,47 +679,40 @@ impl LegacyLogs {
     /// `list_log_to_file` (`ListLog.c:138-157`). The id column is always 0
     /// (`new_list_row`, `ListLog.c:125`).
     pub fn write_list_log(&self, dir: &Path) -> io::Result<()> {
-        let mut out = String::new();
+        let mut out = Vec::new();
         for r in &self.list {
-            let _ = writeln!(
-                out,
-                "0;{};{};{};{};{};{};{};{};{}",
-                c_pointer(r.var),
-                c_pointer(r.points_to),
+            c_mode::list_log_row(
+                &mut out,
+                r.var as u64,
+                r.points_to as u64,
                 r.scope,
-                i32::from(r.is_free),
-                i32::from(r.is_dynamic),
-                r.name,
+                r.is_free,
+                r.is_dynamic,
+                r.name.as_bytes(),
                 r.line,
-                r.function,
-                r.step
+                r.function.as_bytes(),
+                r.step,
             );
         }
-        write_atomic(dir, LIST_LOG_FILE, &out)
+        write_atomic_bytes(dir, LIST_LOG_FILE, &out)
     }
 
     /// `allocation_log_to_file` (`AllocationLog.c:161-174`).
     pub fn write_allocation_log(&self, dir: &Path) -> io::Result<()> {
-        let mut out = String::new();
+        let mut out = Vec::new();
         for r in &self.allocation {
-            let _ = writeln!(
-                out,
-                "{};{};{}",
-                c_pointer(r.addr),
-                r.size,
-                i32::from(r.is_free)
-            );
+            c_mode::allocation_log_row(&mut out, r.addr as u64, r.size, r.is_free);
         }
-        write_atomic(dir, ALLOCATION_LOG_FILE, &out)
+        write_atomic_bytes(dir, ALLOCATION_LOG_FILE, &out)
     }
 
     /// `heap_log_to_file` (`HeapLog.c:54-66`).
     pub fn write_heap_log(&self, dir: &Path) -> io::Result<()> {
-        let mut out = String::new();
+        let mut out = Vec::new();
         for r in &self.heap {
-            let _ = writeln!(out, "{};{};{}", c_pointer(r.addr), r.name, r.size);
+            c_mode::heap_log_row(&mut out, r.addr as u64, r.name.as_bytes(), r.size);
         }
-        write_atomic(dir, HEAP_LOG_FILE, &out)
+        write_atomic_bytes(dir, HEAP_LOG_FILE, &out)
     }
 
     /// The rows of the nondet log in the shape of `NONDET_CALL`.
