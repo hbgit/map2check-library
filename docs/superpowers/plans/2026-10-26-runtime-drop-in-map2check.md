@@ -241,7 +241,7 @@ Em todas as tasks desta fase: a semântica de referência é o `.c` citado na c�
 
 **Files:** `rust/src/ffi.rs`, `tests/ffi_harness.c`, `test/code*_by_caller_test.c`, `docs/api-deltas.md`, `Cargo.toml` (`version = "2.0.0-rc.1"`).
 
-- O núcleo `Map2CheckFunctions.bc` não pode definir `__VERIFIER_assert` nem outro nome que só um módulo de modo define (D7: um programa que define `__VERIFIER_assert` liga nos modos sem assert). A exportação legada em `rust/src/nondet/{libfuzzer,klee}.rs` sai nesta task ou fica fora do build `.bc`; `check-link-matrix.sh --ref` sobre a saída da Task 3.1 é o teste.
+- O núcleo `Map2CheckFunctions.bc` não pode definir `__VERIFIER_assert` nem outro nome que só um módulo de modo define (D7: um programa que define `__VERIFIER_assert` liga nos modos sem assert). A exportação legada em `rust/src/nondet/{libfuzzer,klee}.rs` sai nesta task ou fica fora do build `.bc`; `check-link-matrix.sh --ref` sobre a saída da Task 3.1 é o teste. Com isso, `scripts/runtime-ir/test-assert-none-link.sh` perde o `-Wl,--allow-multiple-definition` e a nota do export legado passa a falhar se o símbolo reaparecer.
 
 - [ ] **Step 1:** Remover os exports da API núcleo que não estão no inventário; reescrever `ffi_harness.c` e os três programas de `test/` contra a ABI C (mesmos cenários de estresse).
 - [ ] **Step 2:** `pending.txt` vazio; rodar a suíte completa de qualidade (Global Constraints) e o harness com ASan/UBSan.
