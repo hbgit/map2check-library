@@ -1117,11 +1117,17 @@ fn clear_c_nondet_log() {
     }
 }
 
-/// Core entry point of `nondet_log_to_file` (`NonDetLog.c:50-125`), which the
-/// IR of the KLEE generator calls from `nondet_generate_aux_witness_files`
-/// (D7): writes the log of the run to `klee_log.csv` in the current
-/// directory. Returns `TRUE` (1) or, when the file cannot be written,
-/// `FALSE` (0).
+/// Core entry point of `nondet_log_to_file` (`NonDetLog.c:50-125`) for the
+/// IR of the KLEE generator (D7): writes the log of the run to `klee_log.csv`
+/// in the current directory. Returns `TRUE` (1) or, when the file cannot be
+/// written, `FALSE` (0).
+///
+/// It is only the last step of `nondet_generate_aux_witness_files`
+/// (`NonDetGeneratorKlee.c:57-62`). The IR must first skip the call when
+/// `__m2c_rt_nondet_log_len()` is above 1024 (`MAP2CHECK_KLEE_LOG_MAX_ROWS`)
+/// and pin every row with `__m2c_rt_nondet_log_get_i64` /
+/// `klee_get_value_i64` / `klee_assume` / `__m2c_rt_nondet_log_set_i64`
+/// (`:33-47`); the core has no KLEE intrinsics.
 #[no_mangle]
 pub extern "C" fn __m2c_rt_nondet_log_to_file() -> std::os::raw::c_char {
     ffi_guard(
@@ -1141,6 +1147,56 @@ pub extern "C" fn __m2c_rt_nondet_log_to_file() -> std::os::raw::c_char {
         },
         0,
     )
+}
+
+/// Number of rows of the nondet log (`map2check_nondet_get_log().size`,
+/// `NonDetGeneratorKlee.c:57-58`).
+#[no_mangle]
+pub extern "C" fn __m2c_rt_nondet_log_len() -> std::os::raw::c_uint {
+    ffi_guard(
+        || state::with_state(|s| Ok(s.c_nondet.len() as std::os::raw::c_uint)).unwrap_or(0),
+        0,
+    )
+}
+
+/// The 8 bytes of the value union of row `index` as a `long long`, as
+/// `memcpy(&symbolic, &call->value, sizeof(symbolic))` reads them
+/// (`NonDetGeneratorKlee.c:39`): the `int` types zero-extended, the 64-bit
+/// types and the doubles by bit pattern. 0 when `index` is out of range
+/// (C stops at a NULL row, `:37-38`).
+#[no_mangle]
+pub extern "C" fn __m2c_rt_nondet_log_get_i64(index: std::os::raw::c_uint) -> i64 {
+    ffi_guard(
+        || {
+            state::with_state(|s| {
+                Ok(s.c_nondet
+                    .get(index as usize)
+                    .map_or(0, |c| c.value_bits() as i64))
+            })
+            .unwrap_or(0)
+        },
+        0,
+    )
+}
+
+/// Writes `value` over the 8 bytes of the value union of row `index`, as
+/// `memcpy(&call->value, &concrete, sizeof(concrete))` does
+/// (`NonDetGeneratorKlee.c:42`). Does nothing when `index` is out of range.
+#[no_mangle]
+pub extern "C" fn __m2c_rt_nondet_log_set_i64(index: std::os::raw::c_uint, value: i64) {
+    ffi_guard(
+        || {
+            if let Err(e) = state::with_state(|s| {
+                if let Some(c) = s.c_nondet.get_mut(index as usize) {
+                    c.set_value_bits(value as u64);
+                }
+                Ok(())
+            }) {
+                log_error(&e);
+            }
+        },
+        (),
+    );
 }
 
 // ── NonDet tracking ───────────────────────────────────────────────────────────

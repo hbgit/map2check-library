@@ -57,8 +57,10 @@ pub struct CNondetCall {
     /// The 8 bytes of the C `value` union, as a little-endian integer:
     /// `as_int`/`as_unsigned` are the low 32 bits.
     value: u64,
-    /// `function_name[35]` up to its first NUL.
-    function_name: Vec<u8>,
+    /// `function_name[35]` as in C, with the length up to its first NUL: no
+    /// heap allocation per row.
+    function_name: [u8; FUNCTION_MAX_LENGTH_NAME],
+    name_len: u8,
 }
 
 impl CNondetCall {
@@ -74,12 +76,15 @@ impl CNondetCall {
         function_name: &[u8],
         value: u64,
     ) -> Self {
-        let name = function_name
-            .iter()
-            .take(FUNCTION_MAX_LENGTH_NAME)
-            .take_while(|&&b| b != 0)
-            .copied()
-            .collect();
+        let mut name = [0u8; FUNCTION_MAX_LENGTH_NAME];
+        let mut len = 0;
+        for (slot, &b) in name.iter_mut().zip(function_name) {
+            if b == 0 {
+                break;
+            }
+            *slot = b;
+            len += 1;
+        }
         Self {
             kind,
             line,
@@ -87,6 +92,7 @@ impl CNondetCall {
             step,
             value,
             function_name: name,
+            name_len: len,
         }
     }
 
@@ -98,7 +104,13 @@ impl CNondetCall {
     }
 
     pub fn function_name(&self) -> &[u8] {
-        &self.function_name
+        &self.function_name[..usize::from(self.name_len)]
+    }
+
+    /// Replaces the union bits (`concretize_nondet_log` writes the
+    /// concretized 8 bytes back, `NonDetGeneratorKlee.c:41-42`).
+    pub fn set_value_bits(&mut self, bits: u64) {
+        self.value = bits;
     }
 
     /// One row of `klee_log.csv` (`NonDetLog.c:68-112`):
@@ -112,7 +124,7 @@ impl CNondetCall {
         row.push(b';');
         row.extend_from_slice(self.scope.to_string().as_bytes());
         row.push(b';');
-        row.extend_from_slice(&self.function_name);
+        row.extend_from_slice(self.function_name());
         row.push(b';');
         row.extend_from_slice(self.step.to_string().as_bytes());
         row.push(b';');

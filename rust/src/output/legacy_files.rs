@@ -297,8 +297,9 @@ pub fn write_trackbb_log(dir: &Path, rows: &[BasicBlockEntry]) -> io::Result<()>
     trackbb_log_to_file(dir, &first)
 }
 
-/// The value column and the `enum NONDET_TYPE` number
-/// (`Map2CheckTypes.h:41-58`) of a nondet row, as develop writes them.
+/// The `enum NONDET_TYPE` number and the union bits of a nondet row, as
+/// develop stores it, so that [`crate::nondet::c_log`] is the only code that
+/// formats `klee_log.csv`.
 ///
 /// `NonDetPass.cpp` hands each value to its `map2check_nondet_<t>` wrapper as
 /// a C `int` (`NonDetLog.c:105-150`): `int`, `unsigned`, `uint` as they are
@@ -307,33 +308,32 @@ pub fn write_trackbb_log(dir: &Path, rows: &[BasicBlockEntry]) -> io::Result<()>
 /// which zero-extends the narrow ones (`char` -3 arrives as 253) and
 /// truncates the wide ones to their low 32 bits; `pointer` and `pchar`
 /// through `CreatePtrToInt(v, i32)` (`:224-238`, `:291-292`), the low 32
-/// bits of the address. `nondet_log_to_file` then prints `UNSIGNED` with
-/// `%u`, `DOUBLE` with `%lf` and every other type with `%d`
-/// (`NonDetLog.c:45-54`). `float` has no develop counterpart and is logged as
+/// bits of the address. `float` has no develop counterpart and is logged as
 /// a double.
-pub fn nondet_value_and_type(value: &NonDetValue) -> (String, i32) {
+pub fn nondet_kind_and_bits(value: &NonDetValue) -> (i32, u64) {
+    use crate::nondet::c_log::kind as k;
     /// `trunc` to `i32`, as `CreateIntegerCast` narrows a wide integer.
-    fn low32(v: u64) -> String {
-        (v as u32 as i32).to_string()
+    fn low32(v: u64) -> u64 {
+        u64::from(v as u32)
     }
     match *value {
-        NonDetValue::Int(v) => (v.to_string(), 0),
-        NonDetValue::Char(v) => ((v as u8).to_string(), 1),
-        NonDetValue::Pointer(v) => (low32(v as u64), 2),
-        NonDetValue::UShort(v) => (v.to_string(), 3),
-        NonDetValue::Long(v) => (low32(v as u64), 4),
-        NonDetValue::Unsigned(v) => (v.to_string(), 5),
-        NonDetValue::ULong(v) => (low32(v), 6),
-        NonDetValue::Bool(v) => (v.to_string(), 7),
-        NonDetValue::UChar(v) => (v.to_string(), 8),
-        NonDetValue::PChar(v) => (low32(v as u64), 9),
-        NonDetValue::SizeT(v) => (low32(v as u64), 10),
-        NonDetValue::LoffT(v) => (low32(v as u64), 11),
-        NonDetValue::SectorT(v) => (low32(v), 12),
-        NonDetValue::UInt(v) => ((v as i32).to_string(), 13),
-        NonDetValue::Short(v) => ((v as u16).to_string(), 14),
-        NonDetValue::Float(v) => (c_double(f64::from(v)), 15),
-        NonDetValue::Double(v) => (c_double(v), 15),
+        NonDetValue::Int(v) => (k::INTEGER, low32(v as u32 as u64)),
+        NonDetValue::Char(v) => (k::CHAR, u64::from(v as u8)),
+        NonDetValue::Pointer(v) => (k::POINTER, low32(v as u64)),
+        NonDetValue::UShort(v) => (k::USHORT, u64::from(v)),
+        NonDetValue::Long(v) => (k::LONG, low32(v as u64)),
+        NonDetValue::Unsigned(v) => (k::UNSIGNED, u64::from(v)),
+        NonDetValue::ULong(v) => (k::ULONG, low32(v)),
+        NonDetValue::Bool(v) => (k::BOOL, low32(v as u32 as u64)),
+        NonDetValue::UChar(v) => (k::UCHAR, u64::from(v)),
+        NonDetValue::PChar(v) => (k::PCHAR, low32(v as u64)),
+        NonDetValue::SizeT(v) => (k::SIZE_T, low32(v as u64)),
+        NonDetValue::LoffT(v) => (k::LOFF_T, low32(v as u64)),
+        NonDetValue::SectorT(v) => (k::SECTOR_T, low32(v)),
+        NonDetValue::UInt(v) => (k::UINT, u64::from(v)),
+        NonDetValue::Short(v) => (k::SHORT, u64::from(v as u16)),
+        NonDetValue::Float(v) => (k::DOUBLE, f64::from(v).to_bits()),
+        NonDetValue::Double(v) => (k::DOUBLE, v.to_bits()),
     }
 }
 
@@ -722,19 +722,35 @@ impl LegacyLogs {
         write_atomic(dir, HEAP_LOG_FILE, &out)
     }
 
-    /// `nondet_log_to_file` (`NonDetLog.c:17-60`):
-    /// `index;line;scope;function;step;value;type`.
+    /// The rows of the nondet log in the shape of `NONDET_CALL`.
+    pub fn nondet_calls(&self) -> Vec<crate::nondet::c_log::CNondetCall> {
+        self.nondet
+            .iter()
+            .map(|r| {
+                let (kind, bits) = nondet_kind_and_bits(&r.value);
+                crate::nondet::c_log::CNondetCall::from_parts(
+                    kind,
+                    r.line,
+                    r.scope,
+                    r.step,
+                    r.function.as_bytes(),
+                    bits,
+                )
+            })
+            .collect()
+    }
+
+    /// `nondet_log_to_file` (`NonDetLog.c:50-125`) through the one writer,
+    /// [`crate::nondet::c_log::nondet_log_to_file`].
     pub fn write_nondet_log(&self, dir: &Path) -> io::Result<()> {
-        let mut out = String::new();
-        for (i, r) in self.nondet.iter().enumerate() {
-            let (value, kind) = nondet_value_and_type(&r.value);
-            let _ = writeln!(
-                out,
-                "{i};{};{};{};{};{value};{kind}",
-                r.line, r.scope, r.function, r.step
-            );
+        if crate::nondet::c_log::nondet_log_to_file(&self.nondet_calls(), dir) {
+            Ok(())
+        } else {
+            Err(io::Error::new(
+                io::ErrorKind::Other,
+                "cannot write klee_log.csv",
+            ))
         }
-        write_atomic(dir, NONDET_LOG_FILE, &out)
     }
 }
 
@@ -996,28 +1012,21 @@ mod tests {
 
     #[test]
     fn nondet_rows_use_develop_types_and_value_formats() {
+        use crate::nondet::c_log::CNondetCall as C;
         use crate::nondet::NonDetValue as V;
-        assert_eq!(nondet_value_and_type(&V::Int(-1)), ("-1".into(), 0));
-        assert_eq!(nondet_value_and_type(&V::UInt(u32::MAX)), ("-1".into(), 13));
-        assert_eq!(nondet_value_and_type(&V::Long(1 << 32)), ("0".into(), 4));
-        assert_eq!(nondet_value_and_type(&V::Char(-3)), ("253".into(), 1));
-        assert_eq!(nondet_value_and_type(&V::Short(-2)), ("65534".into(), 14));
-        assert_eq!(
-            nondet_value_and_type(&V::Unsigned(u32::MAX)),
-            ("4294967295".into(), 5)
-        );
-        assert_eq!(
-            nondet_value_and_type(&V::Pointer(0x1_2345_6789)),
-            ("591751049".into(), 2)
-        );
-        assert_eq!(
-            nondet_value_and_type(&V::Float(0.5)),
-            ("0.500000".into(), 15)
-        );
-        assert_eq!(
-            nondet_value_and_type(&V::Double(2.5)),
-            ("2.500000".into(), 15)
-        );
+        let row = |v: &V| {
+            let (kind, bits) = nondet_kind_and_bits(v);
+            String::from_utf8(C::from_parts(kind, 0, 0, 0, b"", bits).csv_row(0)).unwrap()
+        };
+        assert_eq!(row(&V::Int(-1)), "0;0;0;;0;-1;0\n");
+        assert_eq!(row(&V::UInt(u32::MAX)), "0;0;0;;0;-1;13\n");
+        assert_eq!(row(&V::Long(1 << 32)), "0;0;0;;0;0;4\n");
+        assert_eq!(row(&V::Char(-3)), "0;0;0;;0;253;1\n");
+        assert_eq!(row(&V::Short(-2)), "0;0;0;;0;65534;14\n");
+        assert_eq!(row(&V::Unsigned(u32::MAX)), "0;0;0;;0;4294967295;5\n");
+        assert_eq!(row(&V::Pointer(0x1_2345_6789)), "0;0;0;;0;591751049;2\n");
+        assert_eq!(row(&V::Float(0.5)), "0;0;0;;0;0.500000;15\n");
+        assert_eq!(row(&V::Double(2.5)), "0;0;0;;0;2.500000;15\n");
     }
 
     /// The `write_property_<x>` helpers of `PropertyGenerator.c`, which the

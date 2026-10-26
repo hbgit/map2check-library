@@ -3693,3 +3693,71 @@ fn float_g9_matches_printf() {
     assert_eq!(c_log::c_float_g9(1e8_f32), "100000000");
     assert_eq!(c_log::c_float_g9(123_456.79_f32), "123456.789");
 }
+
+#[test]
+fn nondet_log_hooks_mirror_the_klee_concretization() {
+    let _guard = fresh();
+    map2check_init(0);
+    assert_eq!(__m2c_rt_nondet_log_len(), 0);
+    // SAFETY: C-string literals are valid and null-terminated.
+    unsafe {
+        map2check_nondet_int(1, 0, -2, c"main".as_ptr());
+        map2check_nondet_double(2, 0, 1.5, c"main".as_ptr());
+        map2check_nondet_longlong(3, 0, i64::MIN, c"main".as_ptr());
+    }
+    assert_eq!(__m2c_rt_nondet_log_len(), 3);
+    // `memcpy(&symbolic, &call->value, 8)` (NonDetGeneratorKlee.c:39): the int
+    // is zero-extended by new_nondet_call's memset, the others are bit patterns.
+    assert_eq!(__m2c_rt_nondet_log_get_i64(0), 0xffff_fffe);
+    assert_eq!(__m2c_rt_nondet_log_get_i64(1), 1.5_f64.to_bits() as i64);
+    assert_eq!(__m2c_rt_nondet_log_get_i64(2), i64::MIN);
+    assert_eq!(__m2c_rt_nondet_log_get_i64(3), 0, "out of range reads 0");
+    // The write-back replaces all 8 bytes (`:42`), and the file shows it.
+    __m2c_rt_nondet_log_set_i64(0, 5);
+    __m2c_rt_nondet_log_set_i64(1, 2.5_f64.to_bits() as i64);
+    __m2c_rt_nondet_log_set_i64(2, -1);
+    __m2c_rt_nondet_log_set_i64(9, 7);
+    assert_eq!(__m2c_rt_nondet_log_len(), 3);
+    let dir = tempfile::tempdir().unwrap();
+    assert!(c_log::nondet_log_to_file(&c_nondet_rows(), dir.path()));
+    assert_eq!(
+        std::fs::read_to_string(dir.path().join("klee_log.csv")).unwrap(),
+        "0;1;0;main;0;5;0\n1;2;0;main;1;2.500000;15\n2;3;0;main;2;-1;17\n"
+    );
+}
+
+#[test]
+fn legacy_nondet_log_reaches_klee_log_csv_through_the_one_c_log_writer() {
+    use crate::output::legacy_files::LegacyLogs;
+    let _guard = fresh();
+    map2check_init(0);
+    let mut u: std::os::raw::c_uint = u32::MAX;
+    let mut d: f64 = 2.5;
+    let long_name = std::ffi::CString::new("n".repeat(40)).unwrap();
+    // SAFETY: the pointers are valid for the calls.
+    unsafe {
+        map2check_save_nondet_log_unsigned(3, 1, 5, &mut u, c"main".as_ptr());
+        map2check_save_nondet_log_double(4, 1, 15, &mut d, long_name.as_ptr());
+    }
+    let logs = snapshot(|s| LegacyLogs::replay(&s.memtrack, &s.nondets, None, false));
+    // The file the witness path writes is exactly what `c_log` formats for
+    // the rows of the legacy log: there is no second formatter.
+    let dir = tempfile::tempdir().unwrap();
+    logs.write_nondet_log(dir.path()).unwrap();
+    let mut expected = Vec::new();
+    for (i, call) in logs.nondet_calls().iter().enumerate() {
+        expected.extend_from_slice(&call.csv_row(i));
+    }
+    assert_eq!(
+        std::fs::read(dir.path().join("klee_log.csv")).unwrap(),
+        expected
+    );
+    // `strncpy(..., 35)`: the C name cut now applies to the legacy API too.
+    assert_eq!(
+        String::from_utf8(expected).unwrap(),
+        format!(
+            "0;3;1;main;0;4294967295;5\n1;4;1;{};1;2.500000;15\n",
+            "n".repeat(35)
+        )
+    );
+}

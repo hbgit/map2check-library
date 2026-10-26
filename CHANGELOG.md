@@ -31,7 +31,7 @@ the C ABI or the JSON report must update them.
   `nondet_log_destroy` and `__m2c_rt_nondet_log_to_file`, which writes
   `klee_log.csv` byte for byte as `NonDetLog.c` does. The log is separate from
   the one behind `map2check_save_nondet_log_<t>` and the JSON report, which
-  are unchanged. The `none` generator needs no Rust entry point: it is pure IR.
+  are unchanged, but `klee_log.csv` of the witness path is now formatted by the same code (`nondet::c_log`), so a function name longer than 35 bytes is cut there as `NonDetLog.c` does. `__m2c_rt_nondet_log_len`, `_get_i64` and `_set_i64` let the KLEE IR do the row-pinning of `NonDetGeneratorKlee.c`. The `none` generator needs no Rust entry point: it is pure IR.
 - The core of the Map2Check C runtime ABI (Task 2.1 of the drop-in plan):
   `map2check_track_bb`, `map2check_target_function`, `map2check_error`,
   `map2check_exit`, `map2check_destroy`, `map2check_get_current_step`,
