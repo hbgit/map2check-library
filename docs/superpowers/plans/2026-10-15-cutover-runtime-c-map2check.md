@@ -10,6 +10,8 @@
 
 **Spec:** a mensagem do usuário que pediu este plano (cutover para Rust apenas), mais as respostas da sessão de 2026-10-15: **escopo = runtime C do Map2Check**; **programas C de teste da ABI deste repositório ficam como testes**; **D5: sem camada de compatibilidade** e **migração direta dos passes, sem tabela de ABI dupla** (decisões do usuário). Requisitos de paridade de referência: [TODO.md](../../../TODO.md), issues #6–#24 e #36–#38, [docs/api-deltas.md](../../api-deltas.md) e [docs/semantic-deltas.md](../../semantic-deltas.md).
 
+> **Substituído em 2026-10-26** por [2026-10-26-runtime-drop-in-map2check.md](2026-10-26-runtime-drop-in-map2check.md). O merge `a0f8b9cd` (PR #76) saiu do `develop` do Map2Check por force push em 2026-10-22, e o cutover recomeçou do zero com integração por drop-in da ABI C (D6, que revoga a D5). Este documento fica só como registro histórico; não execute tarefas dele.
+
 > **Revisão de escopo (2026-10-26):** a partir desta data, o agente que executa este plano só modifica **este repositório** (`map2check-library`), conforme a seção "Regras obrigatórias" do [CLAUDE.md](../../../CLAUDE.md). Tudo o que altera o repositório do Map2Check (commits, branches, tags, PRs, issues e releases) passa a ser **responsabilidade do mantenedor** e aparece neste plano marcado como **[Mantenedor]**, apenas como referência e pré-condição. O agente usa o Map2Check só como cópia local, sem versionamento e somente leitura, em `vendor/map2check/` (Task 5.3). As Fases 0–4 e a Task 5.2 foram concluídas antes desta revisão, e o seu texto fica como registro histórico.
 
 ## Global Constraints
