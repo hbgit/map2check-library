@@ -23,7 +23,9 @@ VERSION="$(sed -n 's/^version = "\(.*\)"$/\1/p' "$ROOT/Cargo.toml" | head -n1)"
 TARGET="$(rustc -vV | sed -n 's/^host: //p')"
 NAME="map2check-library-$VERSION-$TARGET"
 
-MODULES="Map2CheckFunctions TrackBBLog NonDetLog PropertyGenerator ContainerRealloc ContainerBTree BTree AnalysisModeMemtrack AnalysisModeMemcleanup AnalysisModeOverflow AnalysisModeAssert AnalysisModeNone AllocationLog ListLog HeapLog NonDetGeneratorNone NonDetGeneratorKlee NonDetGeneratorAFL WasmRuntimeStubs WitnessGeneration WitnessGenerationNone"
+# The 21 module names: one list for the package, its test and the overlay.
+MODULES="$(tr '
+' ' ' < "$ROOT/scripts/runtime-modules.txt")"
 M2C_VERSION_FILE="${MAP2CHECK_VERSION_FILE:-$ROOT/vendor/MAP2CHECK_VERSION}"
 
 die() { echo "package-release: $*" >&2; exit 1; }

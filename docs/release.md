@@ -27,9 +27,37 @@ from `Cargo.toml` and `<target>` is the `rustc` host triple (for example
 Since 2.0.0 (D6) both libraries export the C runtime ABI of Map2Check
 `develop` only (`scripts/check-export-set.sh`); the `libfuzzer` library and
 the KLEE runtime bitcode (`scripts/build-klee-runtime.sh`) are gone. The
-bitcode modules of the drop-in runtime join the archive in plan Task 3.2.
+bitcode modules of the drop-in runtime are in the archive (`lib/*.bc`).
 
 `dist/SHA256SUMS` sits next to the archive.
+
+## Validated against
+
+Map2Check `develop` commit `3e914528ec5742d8ae4bc191589ca4669827c7ad`, the
+`commit=` line of `vendor/MAP2CHECK_VERSION`, shipped in the archive as
+`MAP2CHECK_VERSION`. `scripts/test-package-release.sh` fails when this line
+and `vendor/MAP2CHECK_VERSION` differ, so change them together.
+
+## Install over a Map2Check develop install
+
+The `.bc` files replace the 21 modules of a Map2Check install built from the
+commit above. `scripts/it/overlay-install.sh` looks only at the `*.bc` files
+of the directory it is given (the `.a` files in the archive's `lib/` are
+ignored) and still demands exactly the 21 module names among them, so the
+extracted `lib/` can be passed as it is:
+
+```sh
+tar -xzf map2check-library-<version>-<target>.tar.gz
+cd map2check-library-<version>-<target>
+sha256sum -c SHA256SUMS                  # every file must say OK
+cd ..
+scripts/it/overlay-install.sh <c-install> map2check-library-<version>-<target>/lib <out-install>
+```
+
+`<c-install>` is left untouched; `<out-install>` is a copy of it with only
+`lib/*.bc` replaced, plus a `.map2check-overlay` marker listing the sha256 of
+the 21 modules. To patch in place instead, copy `lib/*.bc` of the
+archive over `<install>/lib/`.
 
 ## Steps
 

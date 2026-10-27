@@ -10,7 +10,8 @@
 #
 # Usage: overlay-install.sh <c-install> <bc-dir> <out-install>
 #   <c-install>    a Map2Check install whose lib/ holds the 21 C modules;
-#   <bc-dir>       exactly the 21 drop-in modules (other .bc are refused);
+#   <bc-dir>       exactly the 21 drop-in modules (other .bc are refused; other
+#                  files such as the .a of a release package lib/ are ignored);
 #   <out-install>  created; an earlier overlay there (it has the marker
 #                  file .map2check-overlay this script writes) is replaced,
 #                  anything else (a C install included) is refused and left
@@ -21,7 +22,9 @@
 set -euo pipefail
 die() { echo "overlay-install: error: $*" >&2; exit 1; }
 [ $# -eq 3 ] || { echo "usage: $0 <c-install> <bc-dir> <out-install>" >&2; exit 2; }
-MODULES="Map2CheckFunctions TrackBBLog NonDetLog PropertyGenerator ContainerRealloc ContainerBTree BTree AnalysisModeMemtrack AnalysisModeMemcleanup AnalysisModeOverflow AnalysisModeAssert AnalysisModeNone AllocationLog ListLog HeapLog NonDetGeneratorNone NonDetGeneratorKlee NonDetGeneratorAFL WasmRuntimeStubs WitnessGeneration WitnessGenerationNone"
+# The 21 module names: one list for the package, its test and the overlay.
+MODULES="$(tr '
+' ' ' < "$(dirname "$0")/../runtime-modules.txt")"
 want="$(for m in $MODULES; do echo "$m.bc"; done | sort)"
 
 [ -d "$1/lib" ] || die "$1 is not a Map2Check install (no lib/)"

@@ -12,7 +12,9 @@ PKG="$ROOT/scripts/package-release.sh"
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 fail=0
-MODULES="Map2CheckFunctions TrackBBLog NonDetLog PropertyGenerator ContainerRealloc ContainerBTree BTree AnalysisModeMemtrack AnalysisModeMemcleanup AnalysisModeOverflow AnalysisModeAssert AnalysisModeNone AllocationLog ListLog HeapLog NonDetGeneratorNone NonDetGeneratorKlee NonDetGeneratorAFL WasmRuntimeStubs WitnessGeneration WitnessGenerationNone"
+# The 21 module names: one list for the package, its test and the overlay.
+MODULES="$(tr '
+' ' ' < "$ROOT/scripts/runtime-modules.txt")"
 ok() { echo "ok - $1"; }
 bad() { echo "FAIL - $1"; fail=1; }
 
@@ -82,6 +84,21 @@ if [ "$real_bc" = 1 ] && command -v llvm-dis-16 >/dev/null 2>&1; then
   rdok=1; for m in $MODULES; do llvm-dis-16 "$P/lib/$m.bc" -o /dev/null 2>/dev/null || { rdok=0; bad "llvm-dis-16 não lê $m.bc"; }; done
   [ "$rdok" = 1 ] && ok "llvm-dis-16 lê os 21 .bc"
 fi
+
+# O commit validado em docs/release.md é o de vendor/MAP2CHECK_VERSION
+vc="$(sed -n 's/^commit=//p' "$ROOT/vendor/MAP2CHECK_VERSION")"
+if grep -q "Map2Check .develop. commit .$vc." "$ROOT/docs/release.md" \
+   && [ "$(grep -oE '[0-9a-f]{40}' "$ROOT/docs/release.md" | sort -u)" = "$vc" ]; then ok "docs/release.md cita o commit de vendor/MAP2CHECK_VERSION"; else bad "docs/release.md: commit validado difere de vendor/MAP2CHECK_VERSION ($vc)"; fi
+
+# Instalação documentada: o overlay recebe o lib/ extraído do pacote (21 .bc
+# mais os .a): os .a são ignorados, os 21 nomes continuam exigidos
+mkdir -p "$TMP/ci/lib" "$TMP/ci/bin"
+for m in $MODULES; do echo "C $m" > "$TMP/ci/lib/$m.bc"; done
+if "$ROOT/scripts/it/overlay-install.sh" "$TMP/ci" "$P/lib" "$TMP/ov" >/dev/null 2>&1 \
+   && (cd "$P" && for m in $MODULES; do cmp -s "lib/$m.bc" "$TMP/ov/lib/$m.bc"; done) \
+   && [ "$(ls "$TMP/ov/lib" | wc -l)" = 21 ]; then ok "overlay aceita o lib/ do pacote e instala os 21 .bc"; else bad "overlay com o lib/ do pacote"; fi
+mkdir "$TMP/lib19" && cp "$P"/lib/*.bc "$P"/lib/*.a "$TMP/lib19/" && rm "$TMP/lib19/HeapLog.bc"
+if "$ROOT/scripts/it/overlay-install.sh" "$TMP/ci" "$TMP/lib19" "$TMP/ov19" >/dev/null 2>&1; then bad "overlay aceitou lib/ sem um módulo"; else ok "overlay continua recusando lib/ sem um dos 21"; fi
 
 # Reprodutível: segunda execução sobre as mesmas entradas, mesmo tarball byte a byte
 "$PKG" "$TMP/dist2" >/dev/null
