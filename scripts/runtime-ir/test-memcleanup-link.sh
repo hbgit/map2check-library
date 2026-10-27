@@ -13,7 +13,7 @@
 # Both module sets must give the same results (D3: one Rust container).
 # Also checks that libmap2check.a defines none of the C names of the module.
 #
-# Usage: test-memtrack-link.sh [<libmap2check.a>]
+# Usage: test-memcleanup-link.sh [<libmap2check.a>]
 #   default lib: target/release/libmap2check.a (cargo build --release --all-features)
 # Output: target/runtime-ir/*.ll (not committed).
 set -euo pipefail
@@ -45,7 +45,8 @@ done
 # The staticlib must not define the C names of the module (ruling: IR only).
 # The legacy export map2check_check_deref stays until Task 2.10; it is the
 # only name allowed to clash, and the linker keeps the IR's (listed before
-# the library): the invalid-deref scenario shows the IR's empty body won.
+# the library). The nm check below is what keeps the staticlib free of the
+# others.
 # Every name the module defines, plus its C-only globals and helpers from
 # the inventory (the logs, ERROR_DEREF, update_reference_list_log).
 NAMES="$( { sed -nE 's/^define[^@]*@([A-Za-z0-9_.]+)\(.*/\1/p' "$OUT/AnalysisModeMemcleanup.ll"
@@ -125,6 +126,11 @@ for bin in array btree; do
   done
   # Task 2.6 Step 1: exit(0) with a reachable unfreed block. PropertyGenerator.c
   # :36-40 and :77-80 write FALSE-MEMCLEANUP to both property files.
+  # The pass instruments exit with map2check_exit (Map2CheckLibrary.cpp:91-95):
+  # Map2CheckFunctions.c:89-102 runs analysis_is_program_correct, then aborts.
+  check "$bin" leak-at-map2check-exit 134 'map2check_property=FALSE-MEMCLEANUP\n' \
+    'map2check_property_memcleanup=FALSE-MEMCLEANUP\n'
+  # The same leak ended by map2check_success (the end of main).
   check "$bin" leak-at-exit 134 'map2check_property=FALSE-MEMCLEANUP\n' \
     'map2check_property_memcleanup=FALSE-MEMCLEANUP\n'
   # :141: no pointer variable refers to the leak, so the run is correct.
@@ -132,7 +138,7 @@ for bin in array btree; do
   # :342 error = FALSE: the second free is no FALSE-FREE (memtrack: it is).
   check "$bin" double-free 0 'map2check_property=NONE\n'
   # :158 and :294 are empty: no FALSE-DEREF (memtrack: FALSE-DEREF at 14). The
-  # IR map2check_check_deref, not the legacy export, won the link.
+  # (The legacy export also gives NONE here; this does not tell which won.)
   check "$bin" invalid-deref 0 'map2check_property=NONE\n'
   # :160 is empty: no FALSE-DEREF for a string with no terminator in the block.
   check "$bin" cstring-beyond 0 'map2check_property=NONE\n'

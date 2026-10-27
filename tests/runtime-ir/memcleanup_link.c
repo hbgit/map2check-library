@@ -43,6 +43,7 @@ void map2check_free(const char *name, void *ptr, unsigned scope, unsigned line,
 /* Map2CheckFunctions.h and NonDetLog.h (Rust core). */
 void map2check_init(int);
 void map2check_success(void);
+void map2check_exit(void);
 void map2check_enable_witness(void);
 void map2check_track_bb(unsigned line, const char *function_name);
 void map2check_nondet_int(unsigned line, unsigned scope, int value, const char *function_name);
@@ -106,9 +107,16 @@ int main(int argc, char **argv) {
   }
   if (is(c, "FALSE-MEMCLEANUP")) {
     /* golden_memory() left p pointing to the unfreed block. */
+  } else if (is(c, "leak-at-map2check-exit")) {
+    /* int *p = malloc(16); exit(0): the pass replaces exit by map2check_exit
+     * (Map2CheckLibrary.cpp:91-95), whose verdict finds the leak. */
+    map2check_malloc(BLOCK, 16);
+    map2check_add_store_pointer(SLOT_P, BLOCK, 1, "p", 11, "main");
+    map2check_exit();
+    return 0;
   } else if (is(c, "leak-at-exit")) {
     /* int *p = malloc(16); exit(0): p still points to the block, so the
-     * map2check_success at the exit finds the memcleanup error. */
+     * map2check_success at the end of main finds the memcleanup error. */
     map2check_malloc(BLOCK, 16);
     map2check_add_store_pointer(SLOT_P, BLOCK, 1, "p", 11, "main");
   } else if (is(c, "NONE")) {

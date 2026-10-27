@@ -144,7 +144,6 @@ O mapa descreve o layout proposto. No protótipo, os encaminhadores de memtrack,
 | `AllocationLog.bc`, `ListLog.bc`, `HeapLog.bc` | IR vazio: a lógica fica no memtrack do núcleo. |
 | `AnalysisModeMemtrack.bc` | IR: `analysis_{init,destroy,is_program_correct,generate_aux_witness_files}`, os 12 `map2check_*` de memória dos passes e `map2check_wasm_{malloc,free,check_access}` → `__m2c_rt_memtrack_*`. |
 | `AnalysisModeMemcleanup.bc` | IR: `analysis_{init,destroy,is_program_correct,generate_aux_witness_files}` e os 12 `map2check_*` de memória dos passes → `__m2c_rt_memcleanup_*` (sem `map2check_wasm_*`; regras de memtrack com `MemMode::Memcleanup`). |
-| `AnalysisModeMemcleanup.bc` | IR: `analysis_*` e os 12 `map2check_*` de memória → `__m2c_rt_memcleanup_*`. |
 | `AnalysisModeOverflow.bc` | IR: `analysis_*`, `map2check_binop_{add,sub,mul}[_uint]`, `map2check_binop_{sdiv,srem}`, `overflowError` → `__m2c_rt_overflow_*`. |
 | `AnalysisModeAssert.bc` | IR: `analysis_*`, `map2check_assert` → `__m2c_rt_assert_*`, `__VERIFIER_assert` vazio (como no C). |
 | `AnalysisModeNone.bc` | IR: `analysis_*` (constantes, `is_program_correct` = 1). |

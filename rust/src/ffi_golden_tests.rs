@@ -1757,6 +1757,43 @@ fn start_memcleanup_rt() {
 /// ends the program with `map2check_success`, whose `map2check_exit` runs
 /// `analysis_is_program_correct` (`AnalysisModeMemcleanup.c:138-148`;
 /// `Map2CheckFunctions.c:89-102`). `p` still points to the block.
+/// The brief's case: the child calls `exit(0)` with a reachable unfreed
+/// block. The pass instruments `exit` with `map2check_exit`
+/// (`Map2CheckLibrary.cpp:91-95`), whose verdict (`Map2CheckFunctions.c:
+/// 89-102`) is `analysis_is_program_correct` (`AnalysisModeMemcleanup.c:
+/// 138-148`): FALSE-MEMCLEANUP in both property files and SIGABRT.
+#[test]
+fn memcleanup_reports_leak_at_map2check_exit_child() {
+    if is_child() {
+        start_memcleanup_rt();
+        map2check_exit();
+        println!("{RETURNED}");
+    }
+}
+
+#[test]
+fn memcleanup_reports_leak_at_map2check_exit() {
+    assert_matches_golden_except(
+        "FALSE-MEMCLEANUP",
+        "memcleanup_reports_leak_at_map2check_exit_child",
+        KLEE_LOG,
+    );
+    let dir = tempfile::tempdir().unwrap();
+    let output = run_child(
+        "memcleanup_reports_leak_at_map2check_exit_child",
+        dir.path(),
+    );
+    assert_eq!(output.status.signal(), Some(6));
+    assert!(!String::from_utf8_lossy(&output.stdout).contains(RETURNED));
+    for f in ["map2check_property", "map2check_property_memcleanup"] {
+        assert_eq!(
+            std::fs::read_to_string(dir.path().join(f)).unwrap(),
+            "FALSE-MEMCLEANUP\n",
+            "{f}"
+        );
+    }
+}
+
 #[test]
 fn memcleanup_reports_leak_at_exit_child() {
     if is_child() {
