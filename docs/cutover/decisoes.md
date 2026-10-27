@@ -283,3 +283,17 @@ Medições e mapa completo em [d7-layout.md](d7-layout.md). O usuário aprovou:
 4. **`__dso_handle`** é aceito na matriz só como referência weak.
 5. **O AFL++ mantém `setjmp`/`longjmp` em IR**, como no C.
 6. **Uma só triple** (`x86_64-pc-linux-gnu`) para todos os `.bc`, sem avisos do `llvm-link`.
+
+## Critério de tempo do gate para afl e híbrido (aprovado em 2026-10-27)
+
+A checagem prévia da Task 4.1 (relatório da Task 4.1a) mostrou que a mediana de `wall_rust / wall_c` não chega a 1,10 nos geradores `afl` e `hybrid`. A Task 3.3 reduziu o núcleo em 74%: de 43 340 para 12 741 linhas de IR. No subconjunto, a mediana caiu de 2,78 para 1,35 (afl 3,92, symex 0,95, híbrido 3,21).
+
+O que sobra é custo fixo. O frontend compila o programa ligado ao núcleo três vezes com `afl-clang-fast`: fuzzed, witness e cmplog. Cada compilação leva ~0,60 s, contra 0,10 s no C. Em tarefas de menos de 1 s, só um núcleo do tamanho do C chegaria a 1,10. Uma mudança no frontend, como pré-compilar o núcleo, é vedada pelas regras 2 e 3.
+
+O usuário decidiu:
+
+- Nos geradores `afl` e `hybrid`, cada `wall_rust` desconta até 2,0 s de custo fixo de compilação antes de se calcular a razão. O critério da mediana continua ≤ 1,10.
+- No `symex`, o critério de 1,10 vale sem desconto.
+- RSS, TIMEOUT e vereditos continuam como estavam.
+
+`scripts/it/compare_baselines.py` aplica o desconto.
