@@ -286,8 +286,11 @@ jobs:
           done
           [ "$ok" = 1 ]
 
-      - name: Testar empacotamento de release (header, bibliotecas e docs)
-        run: scripts/test-package-release.sh
+      # Modo fixture: 21 arquivos de mentira no lugar dos .bc, sem Docker. O
+      # conteúdo do pacote, o SHA256SUMS interno e a reprodutibilidade são
+      # checados aqui; os .bc de verdade, em BC_DIR, no job runtime_matrix.
+      - name: Testar empacotamento de release (header, bibliotecas, 21 .bc de fixture e docs)
+        run: FIXTURE_BC=1 scripts/test-package-release.sh
 
       - name: Checar segurança de dependências (cargo-deny)
         uses: EmbarkStudios/cargo-deny-action@v2
@@ -423,3 +426,6 @@ jobs:
 
       - name: Sobreposição sobre a instalação do C
         run: BC_DIR=target/runtime-bc-test/a/out scripts/it/test-overlay-install.sh
+
+      - name: Pacote de release com os 21 .bc de verdade
+        run: BC_DIR=target/runtime-bc-test/a/out scripts/test-package-release.sh
