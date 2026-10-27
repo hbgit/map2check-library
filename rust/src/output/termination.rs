@@ -50,16 +50,27 @@ fn channel(config: Config) -> Option<PathBuf> {
     config.mode.and(output_dir())
 }
 
-fn report(what: &str, result: std::io::Result<()>) {
+fn report(what: &str, result: crate::sys::FileResult<()>) {
     if let Err(e) = result {
-        eprintln!("[map2check] cannot write {what}: {e}");
+        let mut text = b"cannot write ".to_vec();
+        text.extend_from_slice(what.as_bytes());
+        text.extend_from_slice(b": ");
+        e.describe(&mut text);
+        crate::sys::diagnostic(&text);
     }
+}
+
+/// `[map2check] error: <e>` on stderr.
+pub(crate) fn log_error(e: &crate::error::Map2CheckError) {
+    let mut text = b"error: ".to_vec();
+    e.describe(&mut text);
+    crate::sys::diagnostic(&text);
 }
 
 /// Set by the seed exchange of the Map2Check frontend when it replays a
 /// non-violating fuzzer input to learn its nondet values
-/// (`WitnessGeneration.c:23-28`).
-const SEED_REPLAY_ENV: &str = "MAP2CHECK_SEED_REPLAY";
+/// (`WitnessGeneration.c:23-28`); NUL-terminated for `getenv`.
+const SEED_REPLAY_ENV: &[u8] = b"MAP2CHECK_SEED_REPLAY\0";
 
 /// `generate_aux_files` (`WitnessGeneration.c:15-29`): the basic-block log,
 /// the logs of the memory modes (`analysis_generate_aux_witness_files`,
@@ -100,7 +111,7 @@ pub(crate) fn generate_aux_files(
             report(legacy_files::LIST_LOG_FILE, logs.write_list_log(dir));
         }
     }
-    if violation || std::env::var_os(SEED_REPLAY_ENV).is_some() {
+    if violation || crate::sys::env_is_set(SEED_REPLAY_ENV) {
         report(legacy_files::NONDET_LOG_FILE, logs.write_nondet_log(dir));
     }
 }
@@ -144,7 +155,7 @@ pub(crate) fn rt_generate_aux_files(violation: bool) {
         generate_aux_files(&dir, config, s, violation);
         Ok(())
     }) {
-        eprintln!("[map2check] error: {e}");
+        log_error(&e);
     }
 }
 
@@ -168,10 +179,10 @@ pub(crate) fn rt_generate_aux_files(violation: bool) {
         );
         Ok(())
     }) {
-        eprintln!("[map2check] error: {e}");
+        log_error(&e);
     }
     crate::ffi::dropin::mode_generate_aux_witness_files();
-    if violation || std::env::var_os(SEED_REPLAY_ENV).is_some() {
+    if violation || crate::sys::env_is_set(SEED_REPLAY_ENV) {
         crate::ffi::dropin::generator_generate_aux_witness_files();
     }
 }
@@ -232,7 +243,7 @@ fn finish(dir: Option<&Path>, config: Config) {
         Err(e) => match dir {
             Some(dir) => unknown_and_abort(dir, config, &e),
             None => {
-                eprintln!("[map2check] error: {e}");
+                log_error(&e);
                 return;
             }
         },
@@ -260,7 +271,7 @@ fn finish(dir: Option<&Path>, config: Config) {
             destroy(config, s);
             Ok(())
         }) {
-            eprintln!("[map2check] error: {e}");
+            log_error(&e);
         }
         return;
     };
@@ -311,7 +322,7 @@ pub(crate) fn map2check_exit() {
         Ok(None) => {}
         Err(e) => match &dir {
             Some(dir) => unknown_and_abort(dir, config, &e),
-            None => eprintln!("[map2check] error: {e}"),
+            None => log_error(&e),
         },
     }
     finish(dir.as_deref(), config);
@@ -325,7 +336,7 @@ pub(crate) fn map2check_error() {
         s.got_error = true;
         Ok(())
     }) {
-        eprintln!("[map2check] error: {e}");
+        log_error(&e);
     }
     map2check_exit();
 }
@@ -339,7 +350,10 @@ pub(crate) fn map2check_error() {
 /// process aborts. The frontend reads UNKNOWN because `map2check_property`
 /// is missing (`tools.cpp:98-103`). No log files: their data is unreadable.
 fn unknown_and_abort(dir: &Path, config: Config, error: &crate::error::Map2CheckError) -> ! {
-    eprintln!("[map2check] error: {error}; the verdict is UNKNOWN");
+    let mut text = b"error: ".to_vec();
+    error.describe(&mut text);
+    text.extend_from_slice(b"; the verdict is UNKNOWN");
+    crate::sys::diagnostic(&text);
     legacy_files::remove_stale_property_files(dir);
     let unknown = AnalysisResult {
         ok: false,

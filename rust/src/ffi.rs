@@ -71,7 +71,7 @@ unsafe fn c_str<'a>(ptr: *const std::os::raw::c_char) -> &'a str {
 
 // A assinatura foi encurtada porque importamos o Map2CheckError ali em cima
 fn log_error(e: &Map2CheckError) {
-    eprintln!("[map2check] error: {e}");
+    termination::log_error(e);
 }
 
 /// Records a violation (the first one is final, SD-03). When it is the
@@ -150,10 +150,18 @@ fn violated_property_from_raw(raw: i32) -> Option<ViolatedProperty> {
 /// Deliberate process termination (`__VERIFIER_error`, `__VERIFIER_assume(0)`)
 /// is not a failure and bypasses recovery by design.
 pub(crate) fn ffi_guard<T>(f: impl FnOnce() -> T, default: T) -> T {
+    // The drop-in core is built with `panic = "abort"` (klee/Cargo.toml):
+    // there is nothing to catch, and the panic goes straight to the abort.
+    #[cfg(feature = "dropin")]
+    {
+        let _ = default;
+        f()
+    }
+    #[cfg(not(feature = "dropin"))]
     match std::panic::catch_unwind(std::panic::AssertUnwindSafe(f)) {
         Ok(value) => value,
         Err(_) => {
-            eprintln!("[map2check] panic in FFI boundary; recovering safely");
+            crate::sys::diagnostic(b"panic in FFI boundary; recovering safely");
             default
         }
     }

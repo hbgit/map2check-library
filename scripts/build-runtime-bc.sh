@@ -36,17 +36,21 @@
 # references no longjmp path (longjmp/setjmp, nondet_assume/cancel,
 # map2check_assume*) and not the program (main, __map2check_main__), so the
 # AFL++ generator's longjmp never crosses a Rust frame (D7 item 5);
-# the final Map2CheckFunctions.bc has fewer than 80 000 instruction lines
-# (the IR KLEE loads and re-optimises: Task 4.3 criterion 9 of the cutover
-# plan; 125 829 with std's backtrace symbolizer, about 38 000 without) and no
-# `llvm.bitreverse` (only miniz_oxide, part of the symbolizer, used it);
-# both checks were in tests/klee_paths.sh until Task 2.10;
+# the final Map2CheckFunctions.bc has fewer than 9 500 instruction lines and
+# fewer than 13 600 IR lines (the .ll that afl-clang-fast instruments and
+# compiles three times per AFL++ run, and that KLEE loads and re-optimises:
+# 125 829 instruction lines with std's backtrace symbolizer, 34 582 without
+# it, 8 865 and 12 741 IR lines once Task 3.3 took core::fmt, std::io,
+# std::fs and serde out of the drop-in build; the ceilings are those values
+# plus about 7%) and no `llvm.bitreverse` (only miniz_oxide, part of the
+# symbolizer, used it); the checks were in tests/klee_paths.sh until Task 2.10;
 # llvm-dis-16 reads all 21 modules.
 #
 # Usage: build-runtime-bc.sh <out-dir>
 #        build-runtime-bc.sh --check-core <final.ll>   (the two checks
 #          above on a disassembled core; scripts/runtime-ir/test-core-checks.sh)
-# Environment: M2C_CORE_MAX_LINES (default 80000), the line ceiling.
+# Environment: M2C_CORE_MAX_LINES (default 9500), the instruction-line
+# ceiling; M2C_CORE_MAX_IR_LINES (default 13600), the IR-line ceiling.
 # The Rust step runs on the host (rustup toolchain KLEE_RUSTC_TOOLCHAIN,
 # default 1.72.1). The LLVM 16 steps run on the host when opt-16, llvm-as-16,
 # llvm-dis-16, llvm-link-16 and llvm-nm-16 are on PATH, otherwise in the
@@ -60,19 +64,25 @@ die() { echo "build-runtime-bc: error: $*" >&2; exit 1; }
 MODULES="Map2CheckFunctions TrackBBLog NonDetLog PropertyGenerator ContainerRealloc ContainerBTree BTree AnalysisModeMemtrack AnalysisModeMemcleanup AnalysisModeOverflow AnalysisModeAssert AnalysisModeNone AllocationLog ListLog HeapLog NonDetGeneratorNone NonDetGeneratorKlee NonDetGeneratorAFL WasmRuntimeStubs WitnessGeneration WitnessGenerationNone"
 
 # ---------------------------------------------------------------------------
-# Instruction-line ceiling and no llvm.bitreverse, on the final core's .ll.
+# Instruction-line and IR-line ceilings and no llvm.bitreverse, on the final
+# core's .ll.
 check_core() {
-  local ll="$1" max="${M2C_CORE_MAX_LINES:-80000}" lines
+  local ll="$1" max="${M2C_CORE_MAX_LINES:-9500}" max_ir="${M2C_CORE_MAX_IR_LINES:-13600}" lines ir
   lines="$(awk '/^define/{f=1; next} f&&/^}/{f=0; next} f{n++} END{print n+0}' "$ll")"
   if [ "$lines" -ge "$max" ]; then
-    echo "the core has $lines instruction lines, expected < $max: is the backtrace symbolizer back?" >&2
+    echo "the core has $lines instruction lines, expected < $max: is the backtrace symbolizer, core::fmt or std::io back (Task 3.3)?" >&2
+    return 1
+  fi
+  ir="$(wc -l < "$ll")"
+  if [ "$ir" -ge "$max_ir" ]; then
+    echo "the core has $ir IR lines, expected < $max_ir: afl-clang-fast compiles it three times per AFL++ run (Task 3.3)" >&2
     return 1
   fi
   if grep -q 'llvm\.bitreverse' "$ll"; then
     echo "the core still has llvm.bitreverse (miniz_oxide, part of the backtrace symbolizer)" >&2
     return 1
   fi
-  echo "core checks: $lines instruction lines (< $max), no llvm.bitreverse"
+  echo "core checks: $lines instruction lines (< $max), $ir IR lines (< $max_ir), no llvm.bitreverse"
 }
 
 # ---------------------------------------------------------------------------

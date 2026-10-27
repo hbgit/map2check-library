@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #![deny(unsafe_code)]
 
-use std::sync::{Mutex, OnceLock};
+use std::sync::Mutex;
 
 use crate::{
     analysismode::mode::AnalysisMode,
@@ -12,9 +12,10 @@ use crate::{
     nondet::NonDetEntry,
 };
 
-// `OnceLock` and not `LazyLock`: the KLEE runtime compiles this file with
-// rustc 1.72 (D1 condition 5, klee/Cargo.toml), where `LazyLock` is unstable.
-static ANALYSIS_STATE: OnceLock<Mutex<AnalysisState>> = OnceLock::new();
+// Built at compile time (`AnalysisState::new` is const): no `OnceLock` and
+// no `LazyLock` (unstable in rustc 1.72, which builds the drop-in core, D1
+// condition 5), so the core carries no once-initialisation code (Task 3.3).
+static ANALYSIS_STATE: Mutex<AnalysisState> = Mutex::new(AnalysisState::new());
 
 static CONFIG: Mutex<Config> = Mutex::new(Config::new());
 
@@ -77,7 +78,7 @@ pub(crate) fn reset_config() {
     update_config(|c| *c = Config::new());
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct AnalysisState {
     pub result: AnalysisResult,
     pub nondets: Vec<NonDetEntry>,
@@ -121,9 +122,35 @@ pub struct AnalysisState {
     pub destroyed: bool,
 }
 
+impl Default for AnalysisState {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl AnalysisState {
+    /// The state before any record.
+    pub const fn new() -> Self {
+        Self {
+            result: AnalysisResult::new(),
+            nondets: Vec::new(),
+            c_nondet: Vec::new(),
+            memtrack: Vec::new(),
+            wasm_allocs: Vec::new(),
+            c_memory: crate::memtrack::c_mode::CMemory::new(),
+            bbtrack: Vec::new(),
+            legacy_nondet_logs: Vec::new(),
+            legacy_bbtrack_logs: Vec::new(),
+            failed_free: None,
+            c_step: 0,
+            got_error: false,
+            end_of_program: false,
+            destroyed: false,
+        }
+    }
+
     pub fn reset(&mut self) {
-        *self = Self::default();
+        *self = Self::new();
     }
 
     /// Records a violation unless one is already recorded (#36, SD-03).
@@ -153,7 +180,7 @@ impl AnalysisState {
 }
 
 fn ensure_state() -> &'static Mutex<AnalysisState> {
-    ANALYSIS_STATE.get_or_init(|| Mutex::new(AnalysisState::default()))
+    &ANALYSIS_STATE
 }
 
 /// Starts a fresh analysis: forces the singleton into existence and runs the
@@ -205,6 +232,14 @@ where
     F: FnOnce(&mut AnalysisState) -> Result<R, Map2CheckError>,
 {
     let state = get()?;
+    // The drop-in core is built with `panic = "abort"`: no panic can poison
+    // its lock, so there is no error to report (and no `PoisonError` text
+    // to format).
+    #[cfg(feature = "dropin")]
+    let mut guard = state
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    #[cfg(not(feature = "dropin"))]
     let mut guard = state.lock()?;
     f(&mut guard)
 }

@@ -15,7 +15,8 @@
 # Rules for this manifest (D1 condition 5, costs (a)-(c)):
 # - no build script (`build = false`): the C header comes from the main build;
 # - no dev-dependencies;
-# - dependency caps that compile on 1.72 (thiserror 2.0.21 needs 1.77);
+# - no dependencies since Task 3.3; any added later must compile on 1.72
+#   (thiserror 2.0.21, for one, needs 1.77);
 # - Cargo.lock regenerated only with the MSRV-aware resolver:
 #     rustup toolchain install 1.86.0 --profile minimal
 #     CARGO_RESOLVER_INCOMPATIBLE_RUST_VERSIONS=fallback RUSTUP_TOOLCHAIN=1.86.0 \
@@ -37,10 +38,10 @@ name = "map2check"
 crate-type = ["staticlib"]
 path = "../rust/src/lib.rs"
 
+# No dependencies: the drop-in core (feature `dropin`) has no JSON channel
+# (serde, serde_json) and formats its messages itself (rust/src/cfmt.rs),
+# Task 3.3.
 [dependencies]
-serde = { version = ">=1.0, <=1.0.229", features = ["derive"] }
-serde_json = ">=1.0, <=1.0.154"
-thiserror = ">=2.0, <=2.0.20"
 
 [features]
 wasm = []
@@ -52,13 +53,20 @@ wasm = []
 # the golden tests and the host link tests link the staticlib without those
 # modules and keep calling analysis_init by hand.
 dropin = []
+# The manifest exists only for the drop-in core: without `dropin` it would
+# need the JSON channel and serde (Task 3.3).
+default = ["dropin"]
 
 # panic = "abort": nothing catches a panic under KLEE, and the unwind
 # machinery is code KLEE would have to execute. Fat LTO and one codegen unit
 # put std into the one module KLEE loads (without LTO KLEE cannot resolve
 # `__rust_no_alloc_shim_is_unstable`); D1 condition 6.
+# opt-level "z": the frontend runs afl-clang-fast three times on the program
+# linked with this core, and that time grows with the core's IR (Task 3.3).
+# Measured on the final sources: 14 674 instruction lines at opt-level 3,
+# 9 667 at "s", 8 865 at "z".
 [profile.release]
-opt-level = 3
+opt-level = "z"
 lto = "fat"
 codegen-units = 1
 panic = "abort"

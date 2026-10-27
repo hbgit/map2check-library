@@ -154,7 +154,7 @@ Map2Check Tool (LLVM Pass / Instrumentação)
 | Aritmética `INT_MAX/INT_MIN` manual | `i32::checked_add()`, `checked_sub()` etc. |
 | `lib/json-maker.c` + `ftoa.c` | `serde_json` + `#[derive(Serialize)]` |
 
-**Política de `unsafe`**: somente `ffi.rs` contém blocos `unsafe`. Todos os outros módulos têm `#![deny(unsafe_code)]`. Cada bloco unsafe em `ffi.rs` possui um comentário `// SAFETY:`.
+**Política de `unsafe`**: somente `ffi.rs` (com `wasm.rs` e `sys.rs`, as chamadas da libc dos arquivos de resultado, do ambiente e do stderr) contém blocos `unsafe`. Todos os outros módulos têm `#![deny(unsafe_code)]`. Cada bloco unsafe possui um comentário `// SAFETY:`.
 
 ## Output JSON
 

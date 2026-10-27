@@ -345,8 +345,9 @@ jobs:
       # com llvm-as-16. Usa o LLVM 16 instalado acima, sem a imagem; o build
       # confere que o llvm-dis-16 lê os 21, que o núcleo não define nome de
       # módulo IR, que não sobra nenhum `freeze` (o KLEE 3.1 não o executa),
-      # que o núcleo tem menos de 80 000 linhas de instrução e nenhum
-      # llvm.bitreverse (test-core-checks.sh é o teste dessas duas guardas).
+      # que o núcleo tem menos de 9 500 linhas de instrução e 13 600 linhas
+      # de IR (Task 3.3) e nenhum llvm.bitreverse (test-core-checks.sh é o
+      # teste dessas guardas).
       # test-build-runtime-bc.sh constrói duas vezes, do zero, e exige a lista
       # exata dos 21 arquivos e os mesmos sha256 (determinismo); a matriz de
       # link precisa da imagem e roda no job runtime_matrix.

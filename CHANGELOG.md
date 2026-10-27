@@ -26,6 +26,20 @@ the C ABI or the JSON report must update them.
 
 ### Changed
 
+- **A drop-in core four times smaller (Task 3.3).** The frontend compiles
+  the program linked with `Map2CheckFunctions.bc` three times with
+  `afl-clang-fast`, and that time grows with the core's IR. The result files
+  are now written by `rust/src/cfmt.rs` (the `%u`, `%d`, `%p`, `%lf` and
+  `%.9g` of glibc, exact, without `core::fmt`) and `rust/src/sys.rs` (the
+  same libc calls `std::fs`, `std::env` and `std::process` made). The
+  drop-in build has no serde, serde_json or thiserror (`klee/Cargo.toml` has
+  no dependencies), no JSON channel, no old-API leak checks, and is built
+  at `opt-level = "z"`. The core went from 34 582 to 8 865 instruction lines
+  (762 580 to 327 164 bytes), one `afl-clang-fast -g -O2` of the smoke
+  program from 1.74 s to 0.60 s; `scripts/build-runtime-bc.sh` now fails
+  above 9 500 instruction lines or 13 600 IR lines. The file contents, the
+  stderr diagnostics and the C ABI do not change. `thiserror` left the main
+  build too.
 - **The drop-in core ends a run through the linked witness module (Task
   3.1).** In `Map2CheckFunctions.bc`, `map2check_exit` calls the
   `generate_aux_files`/`generate_confirmation_file` of `WitnessGeneration.bc`

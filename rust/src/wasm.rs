@@ -35,7 +35,7 @@ fn record(property: ViolatedProperty, line: u32) {
     }) {
         Ok(true) => crate::output::termination::on_violation(),
         Ok(false) => {}
-        Err(e) => eprintln!("[map2check] error: {e}"),
+        Err(e) => crate::output::termination::log_error(&e),
     }
 }
 
@@ -53,7 +53,7 @@ pub extern "C" fn map2check_wasm_malloc(offset: u64, size: u64) {
                 memtrack::wasm_register_malloc(&mut s.wasm_allocs, offset, size);
                 Ok(())
             }) {
-                eprintln!("[map2check] error: {e}");
+                crate::output::termination::log_error(&e);
             }
         },
         (),
@@ -73,7 +73,7 @@ pub extern "C" fn map2check_wasm_free(offset: u64, line: i64) {
             }) {
                 Ok(found) => found,
                 Err(e) => {
-                    eprintln!("[map2check] error: {e}");
+                    crate::output::termination::log_error(&e);
                     return;
                 }
             };
@@ -107,7 +107,7 @@ pub extern "C" fn map2check_wasm_check_access(offset: u64, access_size: u64) {
             }) {
                 Ok(valid) => valid,
                 Err(e) => {
-                    eprintln!("[map2check] error: {e}");
+                    crate::output::termination::log_error(&e);
                     return;
                 }
             };

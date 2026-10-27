@@ -7,17 +7,23 @@
 pub mod legacy_files;
 pub(crate) mod termination;
 
+// The JSON channel is host-only: the drop-in core has none (see
+// `print_report_unless_mode_set` below) and is built without serde.
+#[cfg(not(feature = "dropin"))]
 use serde::Serialize;
 
+#[cfg(not(feature = "dropin"))]
 use crate::{caller::ViolatedProperty, error::Map2CheckError, state::AnalysisState};
 
 /// Top-level JSON output structure.
 /// Schema matches what Map2Check tool expects from the library.
+#[cfg(not(feature = "dropin"))]
 #[derive(Serialize)]
 struct Map2CheckLog<'a> {
     map2check_log: LogBody<'a>,
 }
 
+#[cfg(not(feature = "dropin"))]
 #[derive(Serialize)]
 struct LogBody<'a> {
     result: &'static str,
@@ -41,6 +47,7 @@ struct LogBody<'a> {
 
 /// Serialize the complete analysis state to a JSON string.
 /// Replaces `print_all_containers_as_json()` in caller_lib_result.c.
+#[cfg(not(feature = "dropin"))]
 pub fn to_json(state: &AnalysisState) -> Result<String, Map2CheckError> {
     let result = &state.result;
     let is_mem_violation = matches!(
@@ -81,11 +88,13 @@ pub fn to_json(state: &AnalysisState) -> Result<String, Map2CheckError> {
 
 /// Print the JSON report to stdout, as the C library did. A failed write
 /// (closed stdout, EPIPE) is reported on stderr instead of panicking.
+#[cfg(not(feature = "dropin"))]
 pub fn print_json(state: &AnalysisState) -> Result<(), Map2CheckError> {
     write_report(&to_json(state)?);
     Ok(())
 }
 
+#[cfg(not(feature = "dropin"))]
 fn write_report(json: &str) {
     use std::io::Write as _;
     if let Err(e) = writeln!(std::io::stdout().lock(), "{json}") {

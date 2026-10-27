@@ -1,10 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #![deny(unsafe_code)]
 
-use serde::Serialize;
-
 /// Single basic-block execution record — analogous to `bbtrack_log_t` in C.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone)]
+#[cfg_attr(not(feature = "dropin"), derive(serde::Serialize))]
 pub struct BasicBlockEntry {
     pub step: u64,
     pub line: u32,

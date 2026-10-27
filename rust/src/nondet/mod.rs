@@ -1,8 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #![deny(unsafe_code)]
 
-use serde::Serialize;
-
 /// Typed nondeterministic value — replaces `union Data` + `enum var_type_t`.
 /// Each variant carries the actual value, eliminating unsafe type-punning.
 ///
@@ -11,42 +9,43 @@ use serde::Serialize;
 /// (`bool` is `typedef int bool`, `sector_t` is `unsigned long`, `loff_t` is
 /// glibc's `long long`, `pointer` and `pchar` are addresses), plus `Float`,
 /// which develop does not instrument.
-#[derive(Debug, Clone, Serialize, PartialEq)]
-#[serde(tag = "type", content = "value")]
+#[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(not(feature = "dropin"), derive(serde::Serialize))]
+#[cfg_attr(not(feature = "dropin"), serde(tag = "type", content = "value"))]
 pub enum NonDetValue {
-    #[serde(rename = "INT")]
+    #[cfg_attr(not(feature = "dropin"), serde(rename = "INT"))]
     Int(i32),
-    #[serde(rename = "UINT")]
+    #[cfg_attr(not(feature = "dropin"), serde(rename = "UINT"))]
     UInt(u32),
-    #[serde(rename = "LONG")]
+    #[cfg_attr(not(feature = "dropin"), serde(rename = "LONG"))]
     Long(i64),
-    #[serde(rename = "CHAR")]
+    #[cfg_attr(not(feature = "dropin"), serde(rename = "CHAR"))]
     Char(i8),
-    #[serde(rename = "FLOAT")]
+    #[cfg_attr(not(feature = "dropin"), serde(rename = "FLOAT"))]
     Float(f32),
-    #[serde(rename = "DOUBLE")]
+    #[cfg_attr(not(feature = "dropin"), serde(rename = "DOUBLE"))]
     Double(f64),
-    #[serde(rename = "UNSIGNED")]
+    #[cfg_attr(not(feature = "dropin"), serde(rename = "UNSIGNED"))]
     Unsigned(u32),
-    #[serde(rename = "POINTER")]
+    #[cfg_attr(not(feature = "dropin"), serde(rename = "POINTER"))]
     Pointer(usize),
-    #[serde(rename = "USHORT")]
+    #[cfg_attr(not(feature = "dropin"), serde(rename = "USHORT"))]
     UShort(u16),
-    #[serde(rename = "SHORT")]
+    #[cfg_attr(not(feature = "dropin"), serde(rename = "SHORT"))]
     Short(i16),
-    #[serde(rename = "ULONG")]
+    #[cfg_attr(not(feature = "dropin"), serde(rename = "ULONG"))]
     ULong(u64),
-    #[serde(rename = "BOOL")]
+    #[cfg_attr(not(feature = "dropin"), serde(rename = "BOOL"))]
     Bool(i32),
-    #[serde(rename = "UCHAR")]
+    #[cfg_attr(not(feature = "dropin"), serde(rename = "UCHAR"))]
     UChar(u8),
-    #[serde(rename = "PCHAR")]
+    #[cfg_attr(not(feature = "dropin"), serde(rename = "PCHAR"))]
     PChar(usize),
-    #[serde(rename = "SIZE_T")]
+    #[cfg_attr(not(feature = "dropin"), serde(rename = "SIZE_T"))]
     SizeT(usize),
-    #[serde(rename = "LOFF_T")]
+    #[cfg_attr(not(feature = "dropin"), serde(rename = "LOFF_T"))]
     LoffT(i64),
-    #[serde(rename = "SECTOR_T")]
+    #[cfg_attr(not(feature = "dropin"), serde(rename = "SECTOR_T"))]
     SectorT(u64),
 }
 
@@ -75,7 +74,8 @@ impl NonDetValue {
 }
 
 /// Analogous to `non_det_log_t` in C.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone)]
+#[cfg_attr(not(feature = "dropin"), derive(serde::Serialize))]
 pub struct NonDetEntry {
     pub step: u64,
     pub line: u32,

@@ -1,8 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #![deny(unsafe_code)]
 
-use serde::Serialize;
-
 /// Properties that can be violated during program analysis.
 /// `#[repr(C)]` allows FFI callers to pass this enum across the ABI boundary.
 ///
@@ -12,7 +10,8 @@ use serde::Serialize;
 /// numbers; `tests/abi/enum-map.tsv` pairs the enumerators and
 /// `tests/abi/check-signatures.sh` checks the values. `Concurrency` has no C
 /// counterpart and comes after them.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[cfg_attr(not(feature = "dropin"), derive(serde::Serialize))]
 #[repr(C)]
 pub enum ViolatedProperty {
     /// `NONE`: no violation.
@@ -60,7 +59,8 @@ impl ViolatedProperty {
 }
 
 /// Central analysis result, analogous to `caller_result_t` in C.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone)]
+#[cfg_attr(not(feature = "dropin"), derive(serde::Serialize))]
 pub struct AnalysisResult {
     pub step: u64,
     pub line: u32,
@@ -69,8 +69,9 @@ pub struct AnalysisResult {
     pub property: ViolatedProperty,
 }
 
-impl Default for AnalysisResult {
-    fn default() -> Self {
+impl AnalysisResult {
+    /// The result before any record: no violation, step 0.
+    pub const fn new() -> Self {
         Self {
             step: 0,
             line: 0,
@@ -78,6 +79,12 @@ impl Default for AnalysisResult {
             ok: true,
             property: ViolatedProperty::None,
         }
+    }
+}
+
+impl Default for AnalysisResult {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

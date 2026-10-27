@@ -142,7 +142,7 @@ pub fn analysis_is_program_correct(
     config: Config,
     state: &mut AnalysisState,
 ) -> Option<ViolatedProperty> {
-    let leak = |property| memtrack::has_memcleanup_error(&state.memtrack).then_some(property);
+    let leak = |property| old_api_leak(&state.memtrack).then_some(property);
     let memtrack_tag = if config.memcleanup {
         ViolatedProperty::MemsafetyMemcleanup
     } else {
@@ -167,7 +167,7 @@ pub fn analysis_is_program_correct(
             .c_memory
             .is_program_correct(MemMode::Memcleanup)
             .or_else(|| {
-                memtrack::has_develop_memcleanup_error(&state.memtrack)
+                old_api_develop_memcleanup_error(&state.memtrack)
                     .then_some(ViolatedProperty::MemsafetyMemcleanup)
             }),
         // AnalysisModeNone.c:19 — TRUE.
@@ -178,6 +178,36 @@ pub fn analysis_is_program_correct(
         Some(AnalysisMode::Assert) => None,
         // REACHABILITY_MODE links AnalysisModeNone.c: TRUE.
         Some(AnalysisMode::Target) => None,
+    }
+}
+
+/// The leak test of the records of the old API (`map2check_map_*`,
+/// `AnalysisState::memtrack`). The drop-in core has no such records (only
+/// the `__m2c_rt_*` entry points record, into `c_memory`), so there it is
+/// always false and the code is not compiled (Task 3.3).
+fn old_api_leak(records: &[memtrack::MemTrackEntry]) -> bool {
+    #[cfg(not(feature = "dropin"))]
+    {
+        memtrack::has_memcleanup_error(records)
+    }
+    #[cfg(feature = "dropin")]
+    {
+        debug_assert!(records.is_empty());
+        false
+    }
+}
+
+/// develop's memcleanup verdict on the records of the old API
+/// ([`old_api_leak`]).
+fn old_api_develop_memcleanup_error(records: &[memtrack::MemTrackEntry]) -> bool {
+    #[cfg(not(feature = "dropin"))]
+    {
+        memtrack::has_develop_memcleanup_error(records)
+    }
+    #[cfg(feature = "dropin")]
+    {
+        debug_assert!(records.is_empty());
+        false
     }
 }
 

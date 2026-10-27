@@ -13,6 +13,8 @@
 
 use std::path::Path;
 
+use crate::cfmt;
+
 /// `FUNCTION_MAX_LENGTH_NAME` (`Map2CheckTypes.h:20`).
 pub const FUNCTION_MAX_LENGTH_NAME: usize = 35;
 
@@ -117,70 +119,44 @@ impl CNondetCall {
     /// `index;line;scope;function;step;value;type\n`.
     pub fn csv_row(&self, index: usize) -> Vec<u8> {
         let mut row = Vec::with_capacity(64);
-        // `put_longlong(end, (int)i)`.
-        row.extend_from_slice((index as i32).to_string().as_bytes());
-        row.push(b';');
-        row.extend_from_slice(self.line.to_string().as_bytes());
-        row.push(b';');
-        row.extend_from_slice(self.scope.to_string().as_bytes());
-        row.push(b';');
-        row.extend_from_slice(self.function_name());
-        row.push(b';');
-        row.extend_from_slice(self.step.to_string().as_bytes());
-        row.push(b';');
-        let value = match self.kind {
-            // `as_unsigned`, printed once (`:91-92`).
-            kind::UNSIGNED | kind::U32 => (self.value as u32).to_string(),
-            kind::DOUBLE => crate::output::legacy_files::c_double(f64::from_bits(self.value)),
-            kind::FLOAT => c_float_g9(f64::from_bits(self.value) as f32),
-            kind::LONGLONG => (self.value as i64).to_string(),
-            kind::ULONGLONG => self.value.to_string(),
-            // `as_int`.
-            _ => (self.value as u32 as i32).to_string(),
-        };
-        row.extend_from_slice(value.as_bytes());
-        row.push(b';');
-        row.extend_from_slice(self.kind.to_string().as_bytes());
-        row.push(b'\n');
+        self.put_csv_row(&mut row, index);
         row
+    }
+
+    /// [`Self::csv_row`] appended to `row`.
+    pub fn put_csv_row(&self, row: &mut Vec<u8>, index: usize) {
+        // `put_longlong(end, (int)i)`.
+        cfmt::put_i64(row, i64::from(index as i32));
+        cfmt::put_byte(row, b';');
+        cfmt::put_u64(row, u64::from(self.line));
+        cfmt::put_byte(row, b';');
+        cfmt::put_u64(row, u64::from(self.scope));
+        cfmt::put_byte(row, b';');
+        cfmt::put(row, self.function_name());
+        cfmt::put_byte(row, b';');
+        cfmt::put_u64(row, u64::from(self.step));
+        cfmt::put_byte(row, b';');
+        match self.kind {
+            // `as_unsigned`, printed once (`:91-92`).
+            kind::UNSIGNED | kind::U32 => cfmt::put_u64(row, u64::from(self.value as u32)),
+            kind::DOUBLE => cfmt::put_lf(row, f64::from_bits(self.value)),
+            kind::FLOAT => cfmt::put_g9(row, f64::from_bits(self.value) as f32),
+            kind::LONGLONG => cfmt::put_i64(row, self.value as i64),
+            kind::ULONGLONG => cfmt::put_u64(row, self.value),
+            // `as_int`.
+            _ => cfmt::put_i64(row, i64::from(self.value as u32 as i32)),
+        }
+        cfmt::put_byte(row, b';');
+        cfmt::put_i64(row, i64::from(self.kind));
+        cfmt::put_byte(row, b'\n');
     }
 }
 
-/// `printf("%.9g", value)` of glibc (`NonDetLog.c:99`).
+/// `printf("%.9g", value)` of glibc (`NonDetLog.c:99`, [`cfmt::put_g9`]).
 pub fn c_float_g9(value: f32) -> String {
-    if value.is_nan() {
-        return if value.is_sign_negative() {
-            "-nan"
-        } else {
-            "nan"
-        }
-        .to_owned();
-    }
-    if value.is_infinite() {
-        return if value < 0.0 { "-inf" } else { "inf" }.to_owned();
-    }
-    if value == 0.0 {
-        return if value.is_sign_negative() { "-0" } else { "0" }.to_owned();
-    }
-    let wide = f64::from(value);
-    // Nine significant digits: the exponent X is the one after rounding.
-    let scientific = format!("{wide:.8e}");
-    let (mantissa, exponent) = scientific.split_once('e').unwrap_or((&scientific, "0"));
-    let exponent: i32 = exponent.parse().unwrap_or(0);
-    let strip = |text: &str| -> String {
-        if text.contains('.') {
-            text.trim_end_matches('0').trim_end_matches('.').to_owned()
-        } else {
-            text.to_owned()
-        }
-    };
-    if !(-4..9).contains(&exponent) {
-        let sign = if exponent < 0 { '-' } else { '+' };
-        format!("{}e{sign}{:02}", strip(mantissa), exponent.abs())
-    } else {
-        let decimals = usize::try_from(8 - exponent).unwrap_or(0);
-        strip(&format!("{wide:.decimals$}"))
-    }
+    let mut out = Vec::new();
+    cfmt::put_g9(&mut out, value);
+    String::from_utf8_lossy(&out).into_owned()
 }
 
 /// `nondet_log_to_file` (`NonDetLog.c:50-125`): writes every row to
@@ -189,7 +165,7 @@ pub fn c_float_g9(value: f32) -> String {
 pub fn nondet_log_to_file(rows: &[CNondetCall], dir: &Path) -> bool {
     let mut out = Vec::new();
     for (i, row) in rows.iter().enumerate() {
-        out.extend_from_slice(&row.csv_row(i));
+        row.put_csv_row(&mut out, i);
     }
     crate::output::legacy_files::write_atomic_bytes(dir, KLEE_LOG_FILE, &out).is_ok()
 }

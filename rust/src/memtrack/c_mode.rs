@@ -18,11 +18,9 @@
 // verdict, so Task 2.6 adds thin wrappers and no logic.
 #![deny(unsafe_code)]
 
-use std::fmt::Write as _;
-
 use crate::caller::ViolatedProperty;
+use crate::cfmt;
 use crate::nondet::c_log::FUNCTION_MAX_LENGTH_NAME;
-use crate::output::legacy_files::c_pointer;
 
 /// Which memory module is linked: the checks and the verdict depend on it,
 /// the tracking does not.
@@ -155,6 +153,16 @@ pub struct CMemory {
 }
 
 impl CMemory {
+    /// Empty logs, `ERROR_DEREF` clear.
+    pub const fn new() -> Self {
+        Self {
+            heap: Vec::new(),
+            allocation: Vec::new(),
+            list: Vec::new(),
+            error_deref: false,
+        }
+    }
+
     /// `analysis_init` (`AnalysisModeMemtrack.c:125-130`): new containers and
     /// `ERROR_DEREF = FALSE`. `analysis_destroy` (`:132-136`) frees the
     /// containers; both leave this state.
@@ -714,41 +722,47 @@ pub fn list_log_row(
     function_name: &[u8],
     step: u32,
 ) {
-    let mut head = String::new();
-    let _ = write!(
-        head,
-        "0;{};{};{scope};{};{};",
-        c_pointer(memory_address as usize),
-        c_pointer(points_to as usize),
-        i32::from(is_free),
-        i32::from(is_dynamic)
-    );
-    out.extend_from_slice(head.as_bytes());
-    out.extend_from_slice(var_name);
-    out.extend_from_slice(format!(";{line};").as_bytes());
-    out.extend_from_slice(function_name);
-    out.extend_from_slice(format!(";{step}\n").as_bytes());
+    cfmt::put(out, b"0;");
+    cfmt::put_ptr(out, memory_address);
+    cfmt::put_byte(out, b';');
+    cfmt::put_ptr(out, points_to);
+    cfmt::put_byte(out, b';');
+    cfmt::put_u64(out, u64::from(scope));
+    cfmt::put_byte(out, b';');
+    cfmt::put_byte(out, if is_free { b'1' } else { b'0' });
+    cfmt::put_byte(out, b';');
+    cfmt::put_byte(out, if is_dynamic { b'1' } else { b'0' });
+    cfmt::put_byte(out, b';');
+    cfmt::put(out, var_name);
+    cfmt::put_byte(out, b';');
+    cfmt::put_u64(out, u64::from(line));
+    cfmt::put_byte(out, b';');
+    cfmt::put(out, function_name);
+    cfmt::put_byte(out, b';');
+    cfmt::put_u64(out, u64::from(step));
+    cfmt::put_byte(out, b'\n');
 }
 
 /// One row of `allocation_log.csv`, `AllocationLog.c:169-171`:
 /// `"%p;"` address, `"%u;"` size, `"%d\n"` is_free.
 pub fn allocation_log_row(out: &mut Vec<u8>, addr: u64, size: u32, is_free: bool) {
-    out.extend_from_slice(
-        format!(
-            "{};{size};{}\n",
-            c_pointer(addr as usize),
-            i32::from(is_free)
-        )
-        .as_bytes(),
-    );
+    cfmt::put_ptr(out, addr);
+    cfmt::put_byte(out, b';');
+    cfmt::put_u64(out, u64::from(size));
+    cfmt::put_byte(out, b';');
+    cfmt::put_byte(out, if is_free { b'1' } else { b'0' });
+    cfmt::put_byte(out, b'\n');
 }
 
 /// One row of `heap_log.csv`, `HeapLog.c:61-63`: `"%p;"` address, `"%s;"`
 /// name, `"%d\n"` size.
 pub fn heap_log_row(out: &mut Vec<u8>, addr: u64, name: &[u8], size: i32) {
-    out.extend_from_slice(format!("{};", c_pointer(addr as usize)).as_bytes());
-    out.extend_from_slice(name);
-    out.extend_from_slice(format!(";{size}\n").as_bytes());
+    cfmt::put_ptr(out, addr);
+    cfmt::put_byte(out, b';');
+    cfmt::put(out, name);
+    cfmt::put_byte(out, b';');
+    cfmt::put_i64(out, i64::from(size));
+    cfmt::put_byte(out, b'\n');
 }
 
 #[cfg(test)]
