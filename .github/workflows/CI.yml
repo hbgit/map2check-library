@@ -134,6 +134,15 @@ jobs:
           cargo build --release --all-features
           scripts/runtime-ir/test-wasm-link.sh
 
+      # Nenhuma relocação da staticlib pode ter como alvo um nome que um
+      # módulo IR define (uma chamada interna a um export #[no_mangle] seria
+      # ligada à definição do IR, que encaminha de volta: recursão infinita).
+      - name: Guarda de chamadas a nomes definidos pelos módulos IR
+        run: |
+          cargo build --release --all-features
+          scripts/runtime-ir/test-check-no-ir-name-calls.sh
+          scripts/runtime-ir/check-no-ir-name-calls.sh
+
       # Os símbolos C dos modos e dos geradores KLEE e AFL++ são definidos só pelos
       # módulos IR: o .ll entra como artefato extra da cobertura.
       # Usa os .ll dos passos anteriores. A staticlib medida é a do núcleo do

@@ -679,7 +679,11 @@ Differences:
 - **Trap.** `wasm_rt_trap` records an `UNKNOWN` verdict and aborts (develop
   calls `map2check_error()`, which writes no property, so the frontend reads
   UNKNOWN). The function never returns, with or without a mode, as wasm-rt.h
-  declares.
+  declares. develop's `map2check_exit` runs `analysis_is_program_correct`
+  before it aborts, so a leak pending at the trap would be `FALSE_MEMTRACK`
+  there; the library reports `UNKNOWN`, because the trap's verdict is final
+  (first violation wins). This is a consequence of the trap recording
+  `UNKNOWN`, not a new delta.
 - **Funcref table element size.** develop's `wasm_rt_allocate_funcref_table`
   allocates `elements * sizeof(void*)` bytes for elements of
   `sizeof(wasm_rt_funcref_t)` (32 bytes), a heap overflow once the module's
