@@ -394,6 +394,13 @@ impl CMemory {
     /// `map2check_load` (`AnalysisModeMemtrack.c:168-174`): sets
     /// `ERROR_DEREF` when no heap-log row and no live allocation covers the
     /// `size` bytes at `ptr`. Empty in memcleanup (`AnalysisModeMemcleanup.c:158`).
+    ///
+    /// Not inlined: inlined into the per-byte loop of [`Self::check_cstring`],
+    /// LLVM unswitched that loop on the (loop-invariant) log lengths and put a
+    /// `freeze` on them, which KLEE 3.1 cannot execute
+    /// (scripts/runtime-ir/check_no_freeze.py). As a call, the logs are read
+    /// inside it, as `map2check_load` reads them in C.
+    #[inline(never)]
     pub fn load(&mut self, mode: MemMode, ptr: u64, size: i32) {
         if mode == MemMode::Memcleanup {
             return;

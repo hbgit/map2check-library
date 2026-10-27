@@ -17,18 +17,19 @@
 #   1. opt-16 --strip-debug (D1 condition 6);
 #   2. scripts/klee-stub-symbolizer.py + opt-16 -passes=globaldce;
 #   3. scripts/runtime-ir/stub_personality.py (rust_eh_personality -> abort);
-#   4. scripts/klee-lower-intrinsics.py (KLEE 3.1 runs no vector intrinsic),
-#      then scripts/runtime-ir/lower_freeze.py (KLEE 3.1 has no `freeze`;
-#      new in Task 2.7, not in the D7 list);
+#   4. scripts/klee-lower-intrinsics.py (KLEE 3.1 runs no vector intrinsic);
 #   5. opt-16 -passes=internalize,globaldce, public = the names of
 #      docs/runtime-abi/inventory.tsv that no IR module defines, plus __m2c_*
 #      (the core never defines a name only a mode or generator module
 #      defines: D7, Task 2.10 note);
 #   6. one triple, x86_64-pc-linux-gnu, and no "Dwarf Version" module flag
 #      (scripts/runtime-ir/drop_dwarf_flag.py).
-# Guards: no `freeze` is left; the core defines no name an IR module defines; every __m2c_rt_*
-# an IR module references is defined by the core; the core references no
-# klee_*/__afl_* intrinsic; llvm-dis-16 reads all 21 modules.
+# Guards: no `freeze` in the core after globaldce (KLEE 3.1 cannot execute
+# it; scripts/runtime-ir/check_no_freeze.py names the functions, and the fix
+# is in the Rust source, never a rewrite here); the core defines no name an
+# IR module defines; every __m2c_rt_* an IR module references is defined by
+# the core; the core references no klee_*/__afl_* intrinsic; llvm-dis-16
+# reads all 21 modules.
 #
 # Usage: build-test-runtime-bc.sh <out-dir>
 # The Rust step runs on the host (rustup toolchain KLEE_RUSTC_TOOLCHAIN,
@@ -61,9 +62,6 @@ postprocess() {
   llvm-dis-16 "$w/c3.bc" -o "$w/c3.ll"
   # 4. Vector intrinsics KLEE 3.1 cannot execute, lowered to scalar code.
   python3 -I "$repo/scripts/klee-lower-intrinsics.py" "$w/c3.ll" "$w/c4.ll" >/dev/null
-  # 4b. KLEE 3.1 cannot execute `freeze` ("illegal instruction"), which
-  # rustc's optimiser writes; it becomes the identity bitcast.
-  python3 -I "$repo/scripts/runtime-ir/lower_freeze.py" "$w/c4.ll" "$w/c4.ll" >/dev/null
   python3 -I "$repo/scripts/klee-stub-symbolizer.py" --check "$w/c4.ll" >/dev/null \
     || { echo "the backtrace symbolizer is still in the core" >&2; return 1; }
   # 6. One target triple for every module (clang-16's), and no DWARF flag:
@@ -106,8 +104,9 @@ postprocess() {
 
   llvm-link-16 "$w/core-s.bc" "$w/irbc/Map2CheckFunctions-glue.bc" -o "$out/Map2CheckFunctions.bc"
   llvm-dis-16 "$out/Map2CheckFunctions.bc" -o "$w/final.ll"
-  python3 -I "$repo/scripts/runtime-ir/lower_freeze.py" --check "$w/final.ll" \
-    || { echo "the core still has a freeze KLEE 3.1 cannot execute" >&2; return 1; }
+  # Every function left is reachable from the exported API: no freeze.
+  python3 -I "$repo/scripts/runtime-ir/check_no_freeze.py" "$w/final.ll" >/dev/null \
+    || { echo "the core has a freeze KLEE 3.1 cannot execute (fix the Rust source)" >&2; return 1; }
   for f in "$w"/irbc/*.bc; do
     m="$(basename "$f" .bc)"
     [ "$m" = Map2CheckFunctions-glue ] && continue

@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: GPL-3.0-only
 """Tests of the D7 post-processing helpers of the drop-in core
-(build-test-runtime-bc.sh): stub_personality.py, drop_dwarf_flag.py and
-lower_freeze.py. Run: python3 -I -m unittest discover -s scripts/runtime-ir
+(build-test-runtime-bc.sh): stub_personality.py, drop_dwarf_flag.py and the
+check_no_freeze.py guard. Run: python3 -I -m unittest discover -s scripts/runtime-ir
 """
 import os
 import shutil
@@ -13,7 +13,7 @@ import unittest
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 import drop_dwarf_flag  # noqa: E402
-import lower_freeze  # noqa: E402
+import check_no_freeze  # noqa: E402
 import stub_personality  # noqa: E402
 
 TRIPLE = 'target triple = "x86_64-pc-linux-gnu"\n'
@@ -69,37 +69,33 @@ class DropDwarfFlag(unittest.TestCase):
         self.assertEqual(drop_dwarf_flag.drop(src), src)
 
 
-class LowerFreeze(unittest.TestCase):
-    def test_scalar_and_pointer_freeze_become_identity_bitcasts(self):
-        src = ("  %a = freeze i64 %x\n  %b.c = freeze i1 %y, !noundef !3\n"
-               "  %p = freeze ptr %q\n  %v = freeze <2 x i64> %w\n")
-        out, n = lower_freeze.lower(src)
-        self.assertEqual(n, 4)
-        self.assertEqual(out, ("  %a = bitcast i64 %x to i64\n  %b.c = bitcast i1 %y to i1, !noundef !3\n"
-                               "  %p = bitcast ptr %q to ptr\n  %v = bitcast <2 x i64> %w to <2 x i64>\n"))
-        self.assertEqual(lower_freeze.remaining(out), [])
+class CheckNoFreeze(unittest.TestCase):
+    SRC = (TRIPLE + "define i64 @f(i64 %x) {\n  %a = freeze i64 %x\n  %b = freeze i64 %a\n  ret i64 %b\n}\n\n"
+           "define void @\"quoted name\"(i1 %c) {\n  %d = freeze i1 %c\n  ret void\n}\n\n"
+           "define i64 @g(i64 %x) {\n  ; freeze i64 %x\n  ret i64 %x\n}\n")
 
-    def test_other_lines_are_untouched(self):
-        src = "  %a = add i64 %x, 1\n  ; freeze i64 %x\n"
-        self.assertEqual(lower_freeze.lower(src), (src, 0))
+    def test_names_each_function_that_keeps_a_freeze(self):
+        self.assertEqual(check_no_freeze.functions_with_freeze(self.SRC), {"f": 2, "quoted name": 1})
 
-    def test_aggregate_or_constant_expression_is_an_error(self):
-        for line in ("  %a = freeze { i64, i64 } %s", "  %a = freeze i64 ptrtoint (ptr @g to i64)"):
-            with self.assertRaises(ValueError, msg=line):
-                lower_freeze.lower(line)
+    def test_module_without_freeze_passes(self):
+        self.assertEqual(check_no_freeze.functions_with_freeze(
+            TRIPLE + "define i64 @g(i64 %x) {\n  ret i64 %x\n}\n"), {})
 
-    def test_check_finds_what_is_left(self):
-        self.assertEqual(lower_freeze.remaining("  %a = freeze i32 %b\n"), ["%a = freeze i32 %b"])
-
-    @unittest.skipUnless(shutil.which("clang"), "clang not installed")
-    def test_lowered_module_is_valid_ir(self):
-        src = (TRIPLE + "define i64 @f(i64 %x, i1 %c, ptr %p) {\n"
-               "  %a = freeze i64 %x\n  %b = freeze i1 %c\n  %q = freeze ptr %p\n"
-               "  %s = select i1 %b, i64 %a, i64 0\n  ret i64 %s\n}\n")
-        out, n = lower_freeze.lower(src)
-        self.assertEqual(n, 3)
-        ok, err = clang_accepts(out)
-        self.assertTrue(ok, err)
+    def test_command_line_fails_and_names_the_function(self):
+        tmp = tempfile.mkdtemp()
+        path = os.path.join(tmp, "m.ll")
+        with open(path, "w") as f:
+            f.write(self.SRC)
+        r = subprocess.run([sys.executable, "-I", os.path.join(HERE, "check_no_freeze.py"), path],
+                           capture_output=True, text=True)
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("2  f", r.stderr)
+        self.assertIn("1  quoted name", r.stderr)
+        with open(path, "w") as f:
+            f.write(TRIPLE + "define void @h() {\n  ret void\n}\n")
+        r = subprocess.run([sys.executable, "-I", os.path.join(HERE, "check_no_freeze.py"), path],
+                           capture_output=True, text=True)
+        self.assertEqual(r.returncode, 0, r.stderr)
 
 
 if __name__ == "__main__":

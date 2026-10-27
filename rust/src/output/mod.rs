@@ -110,6 +110,7 @@ fn write_report(json: &str) {
 /// and keeps the analysed program's stdout clean, as develop does. The
 /// report is serialised under the state lock and written after the lock is
 /// released, so stdout can never affect the state or the verdict.
+#[cfg(not(feature = "dropin"))]
 pub fn print_report_unless_mode_set() {
     if crate::state::config().mode.is_some() {
         return;
@@ -122,6 +123,15 @@ pub fn print_report_unless_mode_set() {
         Err(e) => eprintln!("[map2check] error: {e}"),
     }
 }
+
+/// The drop-in core (feature `dropin`) has no JSON channel, as the C runtime
+/// has none: there `map2check_init` runs the `analysis_init` of the linked
+/// mode module, which always selects a mode, so the channel above could
+/// never print. Compiled out, the JSON serialiser is not in
+/// `Map2CheckFunctions.bc`; its float formatting carried a `freeze`, which
+/// KLEE 3.1 cannot execute (scripts/runtime-ir/check_no_freeze.py).
+#[cfg(feature = "dropin")]
+pub fn print_report_unless_mode_set() {}
 
 #[cfg(test)]
 mod tests {
