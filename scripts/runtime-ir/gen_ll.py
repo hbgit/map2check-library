@@ -464,22 +464,34 @@ def gen_klee():
 
 
 # main + setjmp/longjmp + the __AFL_FUZZ_INIT/__AFL_LOOP expansions of
-# afl-cc 4.40c, as NonDetGeneratorAFL.c has them. `data`, `size` and `index`
-# are the reader's globals, defined in AFL_READER.
-AFL_MAIN = """@__afl_sharedmem_fuzzing = global i32 1
-@__afl_fuzz_len = external global ptr
-@__afl_fuzz_ptr = external global ptr
-@__afl_connected = external global i32
-@__afl_fuzz_alt = global [1048576 x i8] zeroinitializer
-@__afl_fuzz_alt_ptr = global ptr @__afl_fuzz_alt
+# afl-cc 4.40c, as NonDetGeneratorAFL.c has them (globals with the linkage and
+# alignment clang-16 gives them there). `data`, `size` and `index` are the
+# reader's globals, defined in AFL_READER.
+#
+# Why the longjmp never crosses a Rust frame (D7 item 5): the only caller of
+# longjmp is nondet_cancel below; its callers are nondet_assume (as in C,
+# :31-37), the instrumented program and the glue's map2check_assume*, which
+# the program calls. The Rust core references none of them (guard in
+# build-test-runtime-bc.sh), and none of the IR functions the core calls
+# (analysis_*, nondet_init/destroy, generate_*) reaches them
+# (test_only_the_assume_entry_points_reach_longjmp). So between _setjmp in
+# main and the longjmp there are only IR and program frames; every core entry
+# point takes and releases the state lock within its own call, so no lock is
+# held either.
+AFL_MAIN = """@__afl_sharedmem_fuzzing = global i32 1, align 4
+@__afl_fuzz_len = external global ptr, align 8
+@__afl_fuzz_ptr = external global ptr, align 8
+@__afl_connected = external global i32, align 4
+@__afl_fuzz_alt = global [1048576 x i8] zeroinitializer, align 16
+@__afl_fuzz_alt_ptr = global ptr @__afl_fuzz_alt, align 8
 @.sig = private constant [23 x i8] c"##SIG_AFL_PERSISTENT##\\00"
 @m2c_afl_sig_ref = internal global ptr null
 @llvm.used = appending global [1 x ptr] [ptr @m2c_afl_sig_ref], section "llvm.metadata"
 @map2check_reject_env = internal global [25 x i64] zeroinitializer, align 16
 
 declare i32 @__afl_persistent_loop(i32)
-declare i32 @_setjmp(ptr) returns_twice
-declare void @longjmp(ptr, i32) noreturn
+declare i32 @_setjmp(ptr) #1
+declare void @longjmp(ptr, i32) #0
 declare i64 @read(i32, ptr, i64)
 declare i32 @__map2check_main__(i32, ptr)
 
@@ -495,7 +507,7 @@ loop:
   %go = icmp ne i32 %r, 0
   br i1 %go, label %body, label %exit
 body:
-  %sj = call i32 @_setjmp(ptr @map2check_reject_env) returns_twice
+  %sj = call i32 @_setjmp(ptr @map2check_reject_env) #1
   %first = icmp eq i32 %sj, 0
   br i1 %first, label %run, label %loop
 run:
@@ -530,9 +542,9 @@ exit:
 
 """
 
-AFL_READER = """@map2check_afl_data = global ptr null
-@map2check_afl_size = global i64 0
-@map2check_afl_index = internal global i64 0
+AFL_READER = """@map2check_afl_data = global ptr null, align 8
+@map2check_afl_size = global i64 0, align 8
+@map2check_afl_index = internal global i64 0, align 8
 
 define zeroext i8 @get_next_input_from_afl() {
 entry:
@@ -598,12 +610,15 @@ def gen_afl():
                       "  call void @m2c_log_bytes(ptr %a0, i64 %a1)\n  ret void\n"))
     out.append(define("nondet_assume", "void", ["i32"],
                       "  %z = icmp eq i32 %a0, 0\n  br i1 %z, label %rej, label %ok\n"
-                      "rej:\n  call void @longjmp(ptr @map2check_reject_env, i32 1)\n  unreachable\n"
+                      "rej:\n  call void @nondet_cancel()\n  unreachable\n"
                       "ok:\n  ret void\n"))
     out.append(define("nondet_init", "void", [], "  call void @nondet_log_init()\n  ret void\n"))
     out.append(define("nondet_destroy", "void", [], "  call void @nondet_log_destroy()\n  ret void\n"))
     out.append(define("nondet_generate_aux_witness_files", "void", [],
                       "  %w = call signext i8 @__m2c_rt_nondet_log_to_file()\n  ret void\n"))
+    # longjmp is noreturn nounwind and _setjmp returns_twice nounwind, as
+    # glibc's <setjmp.h> declares them (clang-16 attribute groups #2 / #4).
+    out.append("attributes #0 = { noreturn nounwind }\nattributes #1 = { nounwind returns_twice }\n")
     return "".join(out)
 
 

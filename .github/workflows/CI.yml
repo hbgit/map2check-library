@@ -113,7 +113,19 @@ jobs:
           cargo build --release --all-features
           scripts/runtime-ir/test-klee-ir.sh
 
-      # Os símbolos C dos modos e do gerador KLEE são definidos só pelos
+      # Gerador AFL++ (Task 2.8): gera NonDetGeneratorAFL.ll, confere a
+      # sintaxe com clang -c -x ir, que não há stub nem nome do AFL++ além das
+      # expansões de __AFL_FUZZ_INIT/__AFL_LOOP do NonDetGeneratorAFL.c, e que
+      # a staticlib não define nenhum dos seus nomes C. O módulo precisa do
+      # afl-compiler-rt e não liga aqui: roda sob o AFL++ 4.40c em
+      # scripts/runtime-ir/test-afl-generator.sh, que precisa da imagem do
+      # Map2Check e não roda aqui.
+      - name: Gerar e conferir o módulo IR NonDetGeneratorAFL
+        run: |
+          cargo build --release --all-features
+          scripts/runtime-ir/test-afl-ir.sh
+
+      # Os símbolos C dos modos e dos geradores KLEE e AFL++ são definidos só pelos
       # módulos IR: o .ll entra como artefato extra da cobertura.
       # Usa os .ll dos passos anteriores. A staticlib medida é a do núcleo do
       # drop-in, sem as features legadas libfuzzer/klee (Task 2.7): os
@@ -125,7 +137,7 @@ jobs:
             target/runtime-ir/AnalysisModeOverflow.ll \
             target/runtime-ir/AnalysisModeAssert.ll target/runtime-ir/AnalysisModeNone.ll \
             target/runtime-ir/AnalysisModeMemtrack.ll target/runtime-ir/AnalysisModeMemcleanup.ll \
-            target/runtime-ir/NonDetGeneratorKlee.ll
+            target/runtime-ir/NonDetGeneratorKlee.ll target/runtime-ir/NonDetGeneratorAFL.ll
 
       # Os testes da lib sem as features legadas: o build do núcleo do
       # drop-in. Cobre o que só existe sem elas (o __VERIFIER_error do C).

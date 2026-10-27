@@ -510,6 +510,99 @@ class Generated(unittest.TestCase):
                        "call void @free(ptr %b)"):
             self.assertIn(needle, body)
 
+    def test_afl_generator_is_complete_without_stubs(self):
+        """NonDetGeneratorAFL.c (Task 2.8): the __AFL_FUZZ_INIT / __AFL_LOOP
+        globals, main, the reader and its globals, the 21 typed generators
+        reading sizeof(type) bytes, pchar, memory, nondet_cancel /
+        nondet_assume (longjmp), nondet_init/destroy and the witness log;
+        nothing else and no stub."""
+        text = read(os.path.join(run_gen("--module", "NonDetGeneratorAFL"), "NonDetGeneratorAFL.ll"))
+        self.assertNotIn("m2c-stub", text)
+        sizes = {"char": 1, "uchar": 1, "u8": 1, "short": 2, "ushort": 2, "u16": 2, "int": 4,
+                 "unsigned": 4, "uint": 4, "u32": 4, "bool": 4, "float": 4, "long": 8, "ulong": 8,
+                 "size_t": 8, "loff_t": 8, "sector_t": 8, "longlong": 8, "ulonglong": 8,
+                 "double": 8, "pointer": 8}
+        self.assertEqual(len(sizes), 21)
+        want = {"main", "get_next_input_from_afl", "nondet_init", "nondet_destroy", "nondet_assume",
+                "nondet_cancel", "nondet_generate_aux_witness_files", "map2check_non_det_pchar",
+                "map2check_non_det_memory", *(f"map2check_non_det_{t}" for t in sizes)}
+        self.assertEqual(defined(text) - {"m2c_log_bytes", "m2c_afl_get_bytes"}, want)
+        for t, n in sizes.items():
+            body = text.split(f"@map2check_non_det_{t}() {{", 1)[1].split("\n}\n", 1)[0]
+            self.assertIn(f"call void @m2c_afl_get_bytes(ptr %p, i64 {n})", body, t)
+        # The globals of the expansions and of the reader, with the C's
+        # linkage and alignment (clang-16 -O0 of NonDetGeneratorAFL.c).
+        for g in ("@__afl_sharedmem_fuzzing = global i32 1, align 4",
+                  "@__afl_fuzz_alt = global [1048576 x i8] zeroinitializer, align 16",
+                  "@__afl_fuzz_alt_ptr = global ptr @__afl_fuzz_alt, align 8",
+                  "@__afl_fuzz_len = external global ptr, align 8",
+                  "@__afl_fuzz_ptr = external global ptr, align 8",
+                  "@__afl_connected = external global i32, align 4",
+                  "@map2check_afl_data = global ptr null, align 8",
+                  "@map2check_afl_size = global i64 0, align 8",
+                  "@map2check_afl_index = internal global i64 0, align 8",
+                  "@map2check_reject_env = internal global [25 x i64] zeroinitializer, align 16",
+                  '@.sig = private constant [23 x i8] c"##SIG_AFL_PERSISTENT##\\00"'):
+            self.assertIn(g + "\n", text)
+        # main: __AFL_LOOP(10000) (1 when not connected), _setjmp, the shared
+        # memory test case or stdin, the reader rewound, __map2check_main__(0, NULL).
+        body = text.split("define i32 @main(i32 %argc, ptr %argv) {", 1)[1].split("\n}\n", 1)[0]
+        for needle in ("store volatile ptr @.sig, ptr @m2c_afl_sig_ref",
+                       "%cnt = select i1 %nz, i32 10000, i32 1",
+                       "call i32 @__afl_persistent_loop(i32 %cnt)",
+                       "call i32 @_setjmp(ptr @map2check_reject_env) #1",
+                       "call i64 @read(i32 0, ptr %alt, i64 1048576)",
+                       "%len2 = select i1 %bad, i32 0, i32 %rd32",
+                       "store i64 0, ptr @map2check_afl_index",
+                       "call i32 @__map2check_main__(i32 0, ptr null)"):
+            self.assertIn(needle, body)
+        self.assertIn("declare i32 @_setjmp(ptr) #1\n", text)
+        self.assertIn("declare void @longjmp(ptr, i32) #0\n", text)
+        self.assertIn("attributes #0 = { noreturn nounwind }\nattributes #1 = { nounwind returns_twice }\n", text)
+        # Past the end of the test case the reader returns 0 (C :61-66).
+        body = text.split("define zeroext i8 @get_next_input_from_afl() {", 1)[1].split("\n}\n", 1)[0]
+        self.assertIn("zero:\n  ret i8 0", body)
+        for f, callee in (("nondet_init", "nondet_log_init"), ("nondet_destroy", "nondet_log_destroy")):
+            self.assertIn(f"define void @{f}() {{\n  call void @{callee}()\n  ret void\n}}", text)
+        # nondet_cancel longjmps back to main; a failed nondet_assume cancels.
+        self.assertIn("define void @nondet_cancel() {\n  call void @longjmp(ptr @map2check_reject_env, i32 1)\n"
+                      "  unreachable\n}", text)
+        self.assertIn("define void @nondet_assume(i32 %a0) {\n  %z = icmp eq i32 %a0, 0\n"
+                      "  br i1 %z, label %rej, label %ok\nrej:\n  call void @nondet_cancel()\n  unreachable\n"
+                      "ok:\n  ret void\n}", text)
+        self.assertEqual(text.count("call void @longjmp("), 1)
+
+    def test_only_the_assume_entry_points_reach_longjmp(self):
+        """The longjmp-safety argument of D7 item 5 (Task 2.8): within the IR
+        modules, the only functions from which a longjmp is reachable are the
+        AFL++ generator's nondet_cancel / nondet_assume and the glue's
+        map2check_assume* that call them. None of the functions the Rust core
+        calls into the IR (analysis_*, nondet_init/destroy, generate_*) is
+        among them, so no Rust frame is ever below a longjmp;
+        build-test-runtime-bc.sh checks the core side (it references none of
+        these names)."""
+        out = run_gen()
+        reach = set()
+        for name in ALL_MODULES:
+            text = read(os.path.join(out, name + ".ll"))
+            bodies = {}
+            for chunk in text.split("\ndefine ")[1:]:
+                head, body = chunk.split("{", 1)
+                bodies[head.split("@", 1)[1].split("(", 1)[0]] = body.split("\n}\n", 1)[0]
+            jumps = {"longjmp", "nondet_assume", "nondet_cancel"}
+            hit = {f for f, b in bodies.items() if any(f"@{j}(" in b for j in jumps)}
+            grew = True
+            while grew:
+                more = {f for f, b in bodies.items() if any(f"@{h}(" in b for h in hit)} - hit
+                grew = bool(more)
+                hit |= more
+            reach |= {f"{name}:{f}" for f in hit}
+        self.assertEqual(reach, {
+            "NonDetGeneratorAFL:nondet_cancel", "NonDetGeneratorAFL:nondet_assume",
+            "Map2CheckFunctions-glue:map2check_assume",
+            "Map2CheckFunctions-glue:map2check_crab_assume",
+            "Map2CheckFunctions-glue:map2check_assume_loop"})
+
     def test_klee_pchar_has_no_length_cap_and_afl_keeps_its_own(self):
         """NonDetGeneratorKlee.c:94-109 mallocs the symbolic length as is; only
         NonDetGeneratorAFL.c:128-129 caps it at MAP2CHECK_MAX_FUZZED_STRING."""

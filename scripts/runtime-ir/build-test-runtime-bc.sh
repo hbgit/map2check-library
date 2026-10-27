@@ -30,8 +30,11 @@
 # it; scripts/runtime-ir/check_no_freeze.py names the functions, and the fix
 # is in the Rust source, never a rewrite here); the core defines no name an
 # IR module defines; every __m2c_rt_* an IR module references is defined by
-# the core; the core references no klee_*/__afl_* intrinsic; llvm-dis-16
-# reads all 21 modules.
+# the core; the core references no klee_*/__afl_* intrinsic; the Rust part
+# references no longjmp path (longjmp/setjmp, nondet_assume/cancel,
+# map2check_assume*) and not the program (main, __map2check_main__), so the
+# AFL++ generator's longjmp never crosses a Rust frame (D7 item 5);
+# llvm-dis-16 reads all 21 modules.
 #
 # Usage: build-test-runtime-bc.sh <out-dir>
 # The Rust step runs on the host (rustup toolchain KLEE_RUSTC_TOOLCHAIN,
@@ -103,6 +106,14 @@ postprocess() {
   [ -z "$clash" ] || { echo "the core defines names of an IR module: $clash" >&2; return 1; }
   clash="$(llvm-nm-16 --undefined-only "$w/core-s.bc" | awk '{print $NF}' | grep -E '^(klee_|__afl_)' | tr '\n' ' ' || true)"
   [ -z "$clash" ] || { echo "the core references generator intrinsics: $clash" >&2; return 1; }
+  # The AFL++ generator's longjmp (nondet_cancel) must never cross a Rust
+  # frame (D7 item 5): the Rust part references neither the jump nor any IR
+  # function that reaches it, nor the program (test_gen_ll.py
+  # test_only_the_assume_entry_points_reach_longjmp checks the IR side).
+  clash="$(llvm-nm-16 --undefined-only "$w/core-s.bc" | awk '{print $NF}' \
+    | grep -xE '(_|__|sig)?longjmp|__longjmp_chk|_?setjmp|sigsetjmp|__sigsetjmp|nondet_assume|nondet_cancel|map2check_(crab_)?assume(_loop)?|__map2check_main__|main' \
+    | tr '\n' ' ' || true)"
+  [ -z "$clash" ] || { echo "the Rust core references a longjmp path or the program: $clash" >&2; return 1; }
 
   llvm-link-16 "$w/core-s.bc" "$w/irbc/Map2CheckFunctions-glue.bc" -o "$out/Map2CheckFunctions.bc"
   llvm-dis-16 "$out/Map2CheckFunctions.bc" -o "$w/final.ll"
