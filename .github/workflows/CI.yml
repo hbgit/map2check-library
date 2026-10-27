@@ -300,8 +300,6 @@ jobs:
       # o núcleo não define nome de módulo IR e que não sobra nenhum `freeze`
       # (o KLEE 3.1 não o executa). Rodar o KLEE sobre eles precisa da imagem
       # e não é feito aqui.
-      # Falha hoje: o `freeze` de std::panicking::rust_panic_with_hook (std
-      # pré-compilado) espera a decisão do usuário (Task 2.7, fix round 1).
       - name: Build de teste dos módulos .bc do runtime drop-in
         run: scripts/runtime-ir/build-test-runtime-bc.sh target/runtime-ir/dropin-lib
 

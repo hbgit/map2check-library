@@ -16,7 +16,9 @@
 # D7 post-processing of the core ("Pós-processamento do núcleo"):
 #   1. opt-16 --strip-debug (D1 condition 6);
 #   2. scripts/klee-stub-symbolizer.py + opt-16 -passes=globaldce;
-#   3. scripts/runtime-ir/stub_personality.py (rust_eh_personality -> abort);
+#   3. scripts/runtime-ir/stub_personality.py (rust_eh_personality and
+#      std::panicking::rust_panic_with_hook -> abort; the hook approved by the
+#      user on 2026-10-27);
 #   4. scripts/klee-lower-intrinsics.py (KLEE 3.1 runs no vector intrinsic);
 #   5. opt-16 -passes=internalize,globaldce, public = the names of
 #      docs/runtime-abi/inventory.tsv that no IR module defines, plus __m2c_*

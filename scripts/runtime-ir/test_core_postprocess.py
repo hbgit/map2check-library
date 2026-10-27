@@ -31,21 +31,52 @@ def clang_accepts(ir):
 
 
 class StubPersonality(unittest.TestCase):
-    SRC = TRIPLE + ("declare i32 @_Unwind_RaiseException(ptr)\n\n"
+    HOOK = "_ZN3std9panicking20rust_panic_with_hook17h75cd912a39a34e8aE"
+    SRC = TRIPLE + ("declare i32 @_Unwind_RaiseException(ptr)\n"
+                    "declare i32 @bcmp(ptr, ptr, i64)\n\n"
                     "define i32 @rust_eh_personality(i32 %a, ptr %b) unnamed_addr {\nstart:\n"
-                    "  %r = call i32 @_Unwind_RaiseException(ptr %b)\n  ret i32 %r\n}\n")
+                    "  %r = call i32 @_Unwind_RaiseException(ptr %b)\n  ret i32 %r\n}\n\n"
+                    f"define internal fastcc void @{HOOK}(ptr %p, ptr %q) unnamed_addr "
+                    "personality ptr @rust_eh_personality {\nstart:\n"
+                    "  %c = call i32 @bcmp(ptr %p, ptr %q, i64 4)\n  %f = freeze i32 %c\n"
+                    "  ret void\n}\n\n"
+                    "define void @caller(ptr %p) {\n"
+                    f"  call fastcc void @{HOOK}(ptr %p, ptr %p)\n  ret void\n}}\n")
 
-    def test_body_becomes_abort(self):
+    def body(self, out, name):
+        return out.split(f"@{name}(", 1)[1].split("\n}\n", 1)[0]
+
+    def test_personality_body_becomes_abort(self):
         out = stub_personality.stub(self.SRC)
-        body = out.split("@rust_eh_personality(", 1)[1].split("\n}\n", 1)[0]
+        body = self.body(out, "rust_eh_personality")
         self.assertIn("call void @abort()", body)
         self.assertIn("unreachable", body)
         self.assertNotIn("_Unwind_RaiseException(ptr %b)", body)
         self.assertIn("declare void @abort()", out)
 
-    def test_missing_personality_is_an_error(self):
+    def test_panic_hook_body_becomes_abort_and_loses_its_freeze(self):
+        """User decision 2026-10-27 (D7 item 3): std::panicking::
+        rust_panic_with_hook, whose inlined get_backtrace_style keeps a
+        freeze KLEE 3.1 cannot execute, aborts as panic = abort would."""
+        out = stub_personality.stub(self.SRC)
+        body = self.body(out, self.HOOK)
+        self.assertIn("call void @abort()", body)
+        self.assertIn("unreachable", body)
+        self.assertNotIn("personality", out.split(f"@{self.HOOK}(", 1)[1].split("{", 1)[0])
+        self.assertEqual(check_no_freeze.functions_with_freeze(out), {})
+        self.assertIn(f"call fastcc void @{self.HOOK}(ptr %p, ptr %p)", out)
+
+    def test_any_hash_of_the_panic_hook_is_stubbed(self):
+        src = self.SRC.replace("17h75cd912a39a34e8aE", "17h0123456789abcdefE")
+        out = stub_personality.stub(src)
+        self.assertIn("call void @abort()", self.body(out, "_ZN3std9panicking20rust_panic_with_hook17h0123456789abcdefE"))
+
+    def test_missing_personality_or_panic_hook_is_an_error(self):
         with self.assertRaises(ValueError):
             stub_personality.stub(TRIPLE + "define void @f() {\n  ret void\n}\n")
+        no_hook = self.SRC.split("define internal fastcc")[0]
+        with self.assertRaises(ValueError):
+            stub_personality.stub(no_hook)
 
     @unittest.skipUnless(shutil.which("clang"), "clang not installed")
     def test_output_is_valid_ir(self):
