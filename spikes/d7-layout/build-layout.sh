@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: GPL-3.0-only
 # D7 spike (Task 1.1): builds the 21 runtime modules for one layout strategy.
 #
-# Usage: spikes/d7-layout/build.sh <strategy> <out-dir>
+# Usage: spikes/d7-layout/build-layout.sh <strategy> <out-dir>
 #   fwd     A refined: Rust core = Map2CheckFunctions.bc; the other 20 are IR
 #           forwarders/stubs; generator IR holds the KLEE/AFL++ intrinsics,
 #           main and setjmp/longjmp.

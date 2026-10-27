@@ -18,16 +18,16 @@ O frontend (`Caller::linkLLVM`) liga, com `llvm-link`, o `<hash>-output.bc` do p
 
 | Id | Descrição | Protótipo |
 |---|---|---|
-| **A-lit** | A do plano ao pé da letra: `Map2CheckFunctions.bc` = runtime Rust inteiro, inclusive a lógica dos geradores; os módulos de gerador são `.ll` que definem `main` e um global forte `__m2c_sel_generator` sobre o padrão fraco do núcleo; `klee_make_symbolic` e o gancho de rejeição do AFL++ viram `extern_weak` no pós-processamento. `main` + `setjmp` do AFL++ em `.ll` (obrigatório: o Rust não tem `setjmp`). | `build.sh alit`, feature `a_literal` de `core/` |
-| **A-fwd** | A refinada: `Map2CheckFunctions.bc` = núcleo Rust (estado e lógica) + um trecho `.ll` com `map2check_assume`/`crab_assume`/`assume_loop`. Cada um dos outros 20 módulos é `.ll` que define **exatamente as funções externas que o módulo C homônimo define**, como encaminhadores para pontos de entrada `__m2c_rt_*` do núcleo. Os intrínsecos ficam só nos `.ll` de gerador (`klee_*` no Klee, `__afl_*` e `setjmp`/`longjmp` no AFL). Sem globais de seleção, sem `extern_weak`. | `build.sh fwd` |
-| **B** | Geradores como crates Rust `no_std` próprias (`staticlib`, fat LTO, `--emit=llvm-bc`), ligadas ao núcleo. O AFL++ ainda precisa de `main` + `setjmp`/`longjmp` + `nondet_assume` em `.ll`, ligado dentro do `NonDetGeneratorAFL.bc`. Demais módulos como em A-fwd. | `build.sh b`, `gen-b/{none,klee,afl}` |
-| **B-loop** | B com o laço persistente do AFL++ em Rust e **sem `longjmp`**: um `assume` falso encerra o processo (`_exit(0)`), e o afl-fuzz recomeça pelo fork server. | `build.sh b-loop`, `gen-b/afl-loop` |
+| **A-lit** | A do plano ao pé da letra: `Map2CheckFunctions.bc` = runtime Rust inteiro, inclusive a lógica dos geradores; os módulos de gerador são `.ll` que definem `main` e um global forte `__m2c_sel_generator` sobre o padrão fraco do núcleo; `klee_make_symbolic` e o gancho de rejeição do AFL++ viram `extern_weak` no pós-processamento. `main` + `setjmp` do AFL++ em `.ll` (obrigatório: o Rust não tem `setjmp`). | `build-layout.sh alit`, feature `a_literal` de `core/` |
+| **A-fwd** | A refinada: `Map2CheckFunctions.bc` = núcleo Rust (estado e lógica) + um trecho `.ll` com `map2check_assume`/`crab_assume`/`assume_loop`. Cada um dos outros 20 módulos é `.ll` que define **exatamente as funções externas que o módulo C homônimo define**, como encaminhadores para pontos de entrada `__m2c_rt_*` do núcleo. Os intrínsecos ficam só nos `.ll` de gerador (`klee_*` no Klee, `__afl_*` e `setjmp`/`longjmp` no AFL). Sem globais de seleção, sem `extern_weak`. | `build-layout.sh fwd` |
+| **B** | Geradores como crates Rust `no_std` próprias (`staticlib`, fat LTO, `--emit=llvm-bc`), ligadas ao núcleo. O AFL++ ainda precisa de `main` + `setjmp`/`longjmp` + `nondet_assume` em `.ll`, ligado dentro do `NonDetGeneratorAFL.bc`. Demais módulos como em A-fwd. | `build-layout.sh b`, `gen-b/{none,klee,afl}` |
+| **B-loop** | B com o laço persistente do AFL++ em Rust e **sem `longjmp`**: um `assume` falso encerra o processo (`_exit(0)`), e o afl-fuzz recomeça pelo fork server. | `build-layout.sh b-loop`, `gen-b/afl-loop` |
 
 Escopo do protótipo (ruling da Task 1.1): cobre o que o programa de fumaça alcança (núcleo, rastreio de blocos, log de nondet, arquivo de propriedade, assert, overflow, arquivos do witness, os três geradores completos). As entradas de memtrack/memcleanup/wasm são stubs gerados de `inventory.tsv`.
 
 ### Pós-processamento do núcleo (todas as estratégias)
 
-`spikes/d7-layout/build.sh`, dentro da imagem:
+`spikes/d7-layout/build-layout.sh`, dentro da imagem:
 
 1. `opt-16 --strip-debug` (condição 6 da D1);
 2. `scripts/klee-stub-symbolizer.py` e `opt-16 -passes=globaldce` (o mesmo de `scripts/build-klee-runtime.sh`);
@@ -208,7 +208,7 @@ Fica para a Fase 2 o que o protótipo deixou como stub: memtrack, memcleanup e w
 scripts/it/test-check-link-matrix.sh                      # teste do script da matriz
 scripts/it/check-link-matrix.sh target/map2check-it/c/lib # C: matrix: PASS
 for s in fwd alit b b-loop; do
-  spikes/d7-layout/build.sh $s target/map2check-it/d7/$s
+  spikes/d7-layout/build-layout.sh $s target/map2check-it/d7/$s
   scripts/it/check-link-matrix.sh target/map2check-it/d7/$s
   scripts/it/check-link-matrix.sh --ref target/map2check-it/c/lib target/map2check-it/d7/$s
   rm -rf target/map2check-it/d7/inst-$s
