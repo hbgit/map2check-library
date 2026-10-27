@@ -4939,3 +4939,15 @@ fn core_verifier_error_does_nothing_as_in_c() {
         assert_ok();
     }
 }
+
+#[test]
+fn output_set_atomic_selects_the_result_file_write_mode() {
+    use crate::output::legacy_files::{atomic_writes, write_mode_test_lock};
+    let _mode = write_mode_test_lock();
+    __m2c_rt_output_set_atomic(0);
+    assert!(!atomic_writes());
+    __m2c_rt_output_set_atomic(7);
+    assert!(atomic_writes());
+    __m2c_rt_output_set_atomic(1);
+    assert!(atomic_writes(), "the default of every non-dropin build");
+}

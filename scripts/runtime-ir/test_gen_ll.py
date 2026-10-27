@@ -500,8 +500,11 @@ class Generated(unittest.TestCase):
         self.assertIn("call void @klee_make_symbolic(ptr %p, i64 1, ptr @.pruned)", body)
         self.assertIn("call void @_exit(i32 0)", body)
         self.assertIn('c"map2check_pruned\\00"', text)
-        for f, callee in (("nondet_init", "nondet_log_init"), ("nondet_destroy", "nondet_log_destroy")):
-            self.assertIn(f"define void @{f}() {{\n  call void @{callee}()\n  ret void\n}}", text)
+        # nondet_init turns on SD-20's atomic result files, then starts the
+        # log (user decision of 2026-10-27: atomic under KLEE only).
+        self.assertIn("define void @nondet_init() {\n  call void @__m2c_rt_output_set_atomic(i32 1)\n"
+                      "  call void @nondet_log_init()\n  ret void\n}", text)
+        self.assertIn("define void @nondet_destroy() {\n  call void @nondet_log_destroy()\n  ret void\n}", text)
         # memory: one fresh "non_det_memory" object of `size` bytes, copied
         # in, logged byte by byte, freed (NonDetGeneratorKlee.c:140-153).
         body = text.split("define void @map2check_non_det_memory(ptr %a0, i64 %a1) {", 1)[1].split("\n}\n", 1)[0]
@@ -564,6 +567,8 @@ class Generated(unittest.TestCase):
         self.assertIn("zero:\n  ret i8 0", body)
         for f, callee in (("nondet_init", "nondet_log_init"), ("nondet_destroy", "nondet_log_destroy")):
             self.assertIn(f"define void @{f}() {{\n  call void @{callee}()\n  ret void\n}}", text)
+        # Plain result files, as the C (SD-20 applies to KLEE only).
+        self.assertNotIn("__m2c_rt_output_set_atomic", text)
         # nondet_cancel longjmps back to main; a failed nondet_assume cancels.
         self.assertIn("define void @nondet_cancel() {\n  call void @longjmp(ptr @map2check_reject_env, i32 1)\n"
                       "  unreachable\n}", text)

@@ -26,7 +26,12 @@
 #       same dropped-path verdict, .ktest count, completed paths, object
 #       names (map2check_pruned, non_det_memory, non_det_unsigned...),
 #       property files and klee_log.csv (written, or not above 1024 rows,
-#       by nondet_generate_aux_witness_files) as the C.
+#       by nondet_generate_aux_witness_files) as the C;
+#   klee_symex_writes_result_files_atomically  tests/runtime-ir/write-mode.c
+#       (driver): under symex the drop-in writes map2check_property through a
+#       temporary file and a rename (SD-20; NonDetGeneratorKlee's nondet_init
+#       turns it on, user decision of 2026-10-27), seen through a descriptor
+#       held on the old file; the C writes in place ("plain"), recorded.
 #
 # Instrumented cases (ruling R2 of Task 1.1): the installed C Map2Check
 # (target/map2check-it/c) instruments the program in the mode and its
@@ -72,12 +77,12 @@ fi
 
 W="$ROOT/target/runtime-ir/klee-gen"
 rm -rf "$W"; mkdir -p "$W/src"
-cp "$ROOT"/tests/runtime-ir/klee/*.c "$W/src/"
+cp "$ROOT"/tests/runtime-ir/klee/*.c "$ROOT/tests/runtime-ir/write-mode.c" "$W/src/"
 
 # <program>:<mode>; mode "driver" = no instrumentation, linked in mode none.
 CASES="safe.c:memtrack safe.c:memcleanup safe.c:overflow safe.c:assert safe.c:none
 unsafe-reach.c:none unsafe-reach.c:assert unsafe-overflow.c:overflow unsafe-deref.c:memtrack unsafe-leak.c:memcleanup
-gen-aux.c:driver gen-aux-big.c:driver gen-prune.c:driver
+gen-aux.c:driver gen-aux-big.c:driver gen-prune.c:driver write-mode.c:driver
 safe.c:cover unsafe-reach.c:cover"
 
 docker run --rm --network none --user "$(id -u):$(id -g)" -e HOME=/work \
@@ -137,7 +142,7 @@ objects() { # the distinct .ktest object names
     | sed -n "s/^object *[0-9]*: name: .\(.*\).$/\1/p" | sort -u | tr "\n" "," | sed "s/,$//")"
   echo "${n:--}"
 }
-printf "case\tside\tdropped\tktests\tcompleted\tpartial\tinstructions\tobjects\tklee_log\tproperties\n" > results.tsv
+printf "case\tside\tdropped\tktests\tcompleted\tpartial\tinstructions\tobjects\tklee_log\tproperties\twrite_mode\n" > results.tsv
 for c in $cases; do
   prog="${c%%:*}"; mode="${c##*:}"
   name="${prog%.c}-$mode"; [ "$mode" = driver ] && name="${prog%.c}"
@@ -167,12 +172,13 @@ for c in $cases; do
         $(klee_flags "$mode") ./witness-result.bc > ExecutionOutput.log 2> klee.stderr )
     k="$d/klee-last"
     log=-; [ -f "$d/klee_log.csv" ] && log="$(tr "\n" "|" < "$d/klee_log.csv")"
-    printf "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n" "$name" "$side" "$(dropped "$k")" \
+    wm=-; [ -f "$d/write-mode" ] && wm="$(cat "$d/write-mode")"
+    printf "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n" "$name" "$side" "$(dropped "$k")" \
       "$(ls "$k" 2>/dev/null | grep -c "\.ktest$")" \
       "$(sed -n "s/.*completed paths = //p" "$k/info" 2>/dev/null | head -1)" \
       "$(sed -n "s/.*partially completed paths = //p" "$k/info" 2>/dev/null | head -1)" \
       "$(sed -n "s/^KLEE: done: total instructions = //p" "$k/info" 2>/dev/null | head -1)" \
-      "$(objects "$k")" "$log" "$(props "$d")" >> results.tsv
+      "$(objects "$k")" "$log" "$(props "$d")" "$wm" >> results.tsv
   done
 done
 ' inner "$CASES" "$KLEE_MAX_TIME" || { echo "FAIL: the KLEE runs did not complete" >&2; exit 1; }
@@ -213,6 +219,13 @@ for c in $CASES; do
       t=klee_unsafe_program_reports_same_line
       case "$(row "$name" c 10)" in -|"[map2check_property]NONE|") why+=" the C reports no violation;" ;; esac
       same "$name" 10 properties; same "$name" 4 "ktest total"
+      ;;
+    write-mode.c)
+      t=klee_symex_writes_result_files_atomically
+      [ "$(row "$name" rs 11)" = atomic ] || why+=" the drop-in wrote '$(row "$name" rs 11)', not atomic;"
+      [ "$(row "$name" c 11)" = plain ] || why+=" the C wrote '$(row "$name" c 11)', not plain (develop's fopen(\"w\"));"
+      [ "$(row "$name" rs 3)" = - ] || why+=" rust dropped paths: $(row "$name" rs 3);"
+      same "$name" 10 properties
       ;;
     gen-*)
       t=klee_generator_driver_matches_c

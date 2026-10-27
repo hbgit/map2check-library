@@ -77,18 +77,58 @@ pub fn c_double(value: f64) -> String {
     }
 }
 
-/// Writes `contents` to `dir/name` atomically: the full text goes to a
-/// temporary file of the same directory, which is then renamed over the
-/// target. `std::fs::write` truncates the target and writes in separate
-/// calls; under KLEE (`--external-calls=all`) the forked states share the
-/// real file system and one state can truncate the file after another wrote
-/// its violation, leaving it empty when KLEE halts on the abort. A reader of
-/// the target sees the old file or the new one, never an empty or partial
-/// one.
+/// Whether the result files are written atomically (SD-20). Under KLEE the
+/// forked states share the host file system, and a write that truncates and
+/// then writes lets one state erase the violation another one wrote; under
+/// AFL++ and the `none` generator nothing races, and develop's
+/// `fopen("w")` / `fprintf` / `fclose` costs a third of the temp-file +
+/// `rename` path on every execution (Task 2.8 measurement).
+///
+/// The default depends on the build. Outside `dropin` (the staticlib, cargo
+/// tests, the goldens, the legacy KLEE runtime) it is atomic, as before. In
+/// the drop-in core (feature `dropin`, one `Map2CheckFunctions.bc` for every
+/// generator, D7) it starts plain, and the KLEE generator module turns it on
+/// from its `nondet_init` through [`crate::ffi::__m2c_rt_output_set_atomic`],
+/// before any file is written. The user approved this scope on 2026-10-27.
+static ATOMIC_WRITES: std::sync::atomic::AtomicBool =
+    std::sync::atomic::AtomicBool::new(!cfg!(feature = "dropin"));
+
+/// Serializes the unit tests that depend on the write mode (the SD-20 tests)
+/// with the ones that change it.
+#[cfg(test)]
+pub(crate) fn write_mode_test_lock() -> std::sync::MutexGuard<'static, ()> {
+    static LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    LOCK.lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+}
+
+/// Selects atomic (`true`) or plain (`false`) result-file writes.
+pub fn set_atomic_writes(on: bool) {
+    ATOMIC_WRITES.store(on, std::sync::atomic::Ordering::Relaxed);
+}
+
+/// Whether result files are written atomically (see [`set_atomic_writes`]).
+pub fn atomic_writes() -> bool {
+    ATOMIC_WRITES.load(std::sync::atomic::Ordering::Relaxed)
+}
+
+/// Writes `contents` to `dir/name`, atomically or not as
+/// [`atomic_writes`] says (SD-20).
+///
+/// Atomic: the full text goes to a temporary file of the same directory,
+/// which is then renamed over the target. A truncating write truncates the
+/// target and writes in separate calls; under KLEE (`--external-calls=all`)
+/// the forked states share the real file system and one state can truncate
+/// the file after another wrote its violation, leaving it empty when KLEE
+/// halts on the abort. A reader of the target sees the old file or the new
+/// one, never an empty or partial one.
 ///
 /// The temporary name has the pid and a counter. KLEE states
 /// share the pid and each has a copy of the counter, so the file is created
 /// with `create_new` and a name that already exists is skipped.
+///
+/// Plain: the target is truncated and written in place, as develop's
+/// `fopen(name, "w")` + `fprintf` + `fclose`.
 pub fn write_atomic(dir: &Path, name: &str, contents: &str) -> io::Result<()> {
     write_atomic_bytes(dir, name, contents.as_bytes())
 }
@@ -96,10 +136,20 @@ pub fn write_atomic(dir: &Path, name: &str, contents: &str) -> io::Result<()> {
 /// [`write_atomic`] for contents that need not be UTF-8 (a function name is
 /// a C byte string).
 pub fn write_atomic_bytes(dir: &Path, name: &str, contents: &[u8]) -> io::Result<()> {
+    write_result_file(dir, name, contents, atomic_writes())
+}
+
+/// [`write_atomic_bytes`] with the mode given: `atomic` false truncates and
+/// writes in place (develop's `fopen("w")`), true goes through a temporary
+/// file and a rename.
+fn write_result_file(dir: &Path, name: &str, contents: &[u8], atomic: bool) -> io::Result<()> {
     use std::io::Write as _;
     use std::sync::atomic::{AtomicU64, Ordering};
     static COUNTER: AtomicU64 = AtomicU64::new(0);
 
+    if !atomic {
+        return std::fs::File::create(dir.join(name)).and_then(|mut f| f.write_all(contents));
+    }
     let pid = std::process::id();
     let mut attempts = 0u32;
     let (tmp, mut file) = loop {
@@ -851,6 +901,7 @@ mod tests {
     /// wide; with the old code this fails on every run seen.
     #[test]
     fn concurrent_reader_never_sees_empty_or_partial_file() {
+        let _mode = write_mode_test_lock();
         use std::sync::atomic::{AtomicBool, Ordering};
         let dir = tempfile::tempdir().unwrap();
         let old = bb_rows(400_000, "old");
@@ -891,6 +942,7 @@ mod tests {
     /// (its inode changes), and no temporary file is left behind.
     #[test]
     fn write_goes_through_a_temp_file_and_rename() {
+        let _mode = write_mode_test_lock();
         use std::os::unix::fs::MetadataExt as _;
         let dir = tempfile::tempdir().unwrap();
         let target = dir.path().join(PROPERTY_FILE);
@@ -911,12 +963,74 @@ mod tests {
 
     #[test]
     fn temp_name_collisions_are_skipped() {
+        let _mode = write_mode_test_lock();
         let dir = tempfile::tempdir().unwrap();
         for _ in 0..50 {
             write_atomic(dir.path(), "f", "x\n").unwrap();
         }
         assert_eq!(std::fs::read(dir.path().join("f")).unwrap(), b"x\n");
         assert_eq!(std::fs::read_dir(dir.path()).unwrap().count(), 1);
+    }
+
+    /// The default outside the drop-in core: atomic, as SD-20 had it before
+    /// Task 2.8 (the cargo tests never build with `dropin`).
+    #[test]
+    fn result_files_are_atomic_by_default_outside_dropin() {
+        let _mode = write_mode_test_lock();
+        assert!(atomic_writes());
+    }
+
+    /// Plain mode (the drop-in core under AFL++ and `none`): develop's
+    /// `fopen("w")`, the target truncated and rewritten in place (same
+    /// inode), no temporary file.
+    #[test]
+    fn plain_mode_truncates_the_target_in_place_like_fopen_w() {
+        use std::os::unix::fs::MetadataExt as _;
+        let dir = tempfile::tempdir().unwrap();
+        write_result_file(dir.path(), "f", b"a longer first text\n", false).unwrap();
+        let target = dir.path().join("f");
+        let first = std::fs::metadata(&target).unwrap().ino();
+        let _held = std::fs::File::open(&target).unwrap();
+        write_result_file(dir.path(), "f", b"x\n", false).unwrap();
+        assert_eq!(std::fs::read(&target).unwrap(), b"x\n");
+        assert_eq!(first, std::fs::metadata(&target).unwrap().ino());
+        assert_eq!(std::fs::read_dir(dir.path()).unwrap().count(), 1);
+    }
+
+    /// Atomic mode (the KLEE generator, and every build outside `dropin`):
+    /// a new file renamed over the target (new inode), no temporary left.
+    #[test]
+    fn atomic_mode_replaces_the_target_by_a_rename() {
+        use std::os::unix::fs::MetadataExt as _;
+        let dir = tempfile::tempdir().unwrap();
+        write_result_file(dir.path(), "f", b"first\n", true).unwrap();
+        let target = dir.path().join("f");
+        let first = std::fs::metadata(&target).unwrap().ino();
+        let _held = std::fs::File::open(&target).unwrap();
+        write_result_file(dir.path(), "f", b"x\n", true).unwrap();
+        assert_eq!(std::fs::read(&target).unwrap(), b"x\n");
+        assert_ne!(first, std::fs::metadata(&target).unwrap().ino());
+        assert_eq!(std::fs::read_dir(dir.path()).unwrap().count(), 1);
+    }
+
+    /// The mode switch reaches every writer: in plain mode the property file
+    /// keeps its inode.
+    #[test]
+    fn set_atomic_writes_switches_the_property_writer() {
+        use std::os::unix::fs::MetadataExt as _;
+        let _mode = write_mode_test_lock();
+        let dir = tempfile::tempdir().unwrap();
+        let target = dir.path().join(PROPERTY_FILE);
+        set_atomic_writes(false);
+        write_property_files(dir.path(), &violated(ViolatedProperty::Assert, 5, "main")).unwrap();
+        let first = std::fs::metadata(&target).unwrap().ino();
+        let _held = std::fs::File::open(&target).unwrap();
+        write_property_files(dir.path(), &violated(ViolatedProperty::Assert, 6, "main")).unwrap();
+        let plain_ino = std::fs::metadata(&target).unwrap().ino();
+        set_atomic_writes(true);
+        write_property_files(dir.path(), &violated(ViolatedProperty::Assert, 7, "main")).unwrap();
+        assert_eq!(first, plain_ino);
+        assert_ne!(first, std::fs::metadata(&target).unwrap().ino());
     }
 
     #[test]

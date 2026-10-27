@@ -87,6 +87,12 @@ the C ABI or the JSON report must update them.
   and the witness entry points `__m2c_rt_witness_generate_aux_files` and
   `__m2c_rt_witness_generate_confirmation_file`.
 
+- `__m2c_rt_output_set_atomic(int)` (Task 2.8) selects how the result files
+  are written: through a temporary file and a rename (SD-20) or in place, as
+  develop's `fopen("w")`. The drop-in core starts in place and the KLEE
+  generator turns atomic writes on, so the AFL++ and `none` generators write
+  as the C runtime (user decision of 2026-10-27). Other builds stay atomic.
+
 ## [1.1.0-rc1] - 2026-10-17
 
 Release candidate of the cutover work: the library becomes the runtime of

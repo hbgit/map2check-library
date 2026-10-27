@@ -457,7 +457,14 @@ def gen_klee():
                       "prune:\n  %p = alloca i8\n"
                       "  call void @klee_make_symbolic(ptr %p, i64 1, ptr @.pruned)\n"
                       "  call void @_exit(i32 0)\n  unreachable\nok:\n  ret void\n"))
-    out.append(define("nondet_init", "void", [], "  call void @nondet_log_init()\n  ret void\n"))
+    # nondet_init of NonDetGeneratorKlee.c starts the log; first, the
+    # drop-in turns on the atomic result files of SD-20 (temp file + rename):
+    # KLEE's forked states share the host files. The user approved this
+    # scope on 2026-10-27; the other generators keep develop's plain write.
+    out.append("declare void @__m2c_rt_output_set_atomic(i32)\n")
+    out.append(define("nondet_init", "void", [],
+                      "  call void @__m2c_rt_output_set_atomic(i32 1)\n"
+                      "  call void @nondet_log_init()\n  ret void\n"))
     out.append(define("nondet_destroy", "void", [], "  call void @nondet_log_destroy()\n  ret void\n"))
     out.append(KLEE_AUX)
     return "".join(out)

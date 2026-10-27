@@ -28,6 +28,11 @@
 #   afl_iterations_do_not_accumulate_records          SD-21: assume-reject.c
 #       for 1 and for 50000 inputs in one process; the drop-in's peak RSS
 #       grows by less than 2 MiB (the C's is reported, not asserted);
+#   afl_writes_result_files_in_place_like_c           tests/runtime-ir/
+#       write-mode.c (driver): under the AFL++ generator map2check_property is
+#       truncated and written in place, as develop's fopen("w"), on both sides
+#       (SD-20's temporary file + rename is KLEE-only in the drop-in: user
+#       decision of 2026-10-27), seen through a descriptor held on the file;
 #   afl_crash_replay_matches_c                        magic.c under the real
 #       afl-fuzz with the frontend's environment and flags (CmpLog included)
 #       until the first crash, on each side; each side's crashing input
@@ -107,11 +112,11 @@ fi
 
 W="$ROOT/target/runtime-ir/afl-gen"
 rm -rf "$W"; mkdir -p "$W/src"
-cp "$ROOT"/tests/runtime-ir/afl/*.c "$W/src/"
+cp "$ROOT"/tests/runtime-ir/afl/*.c "$ROOT/tests/runtime-ir/write-mode.c" "$W/src/"
 
 # <program>:<mode>; mode "driver" = no instrumentation, linked in mode none.
 PROGS="persist-leak.c:memcleanup persist-leak.c:memtrack assume-reject.c:none short-input.c:none
-gen-read.c:driver magic.c:none"
+gen-read.c:driver write-mode.c:driver magic.c:none"
 
 cname="m2c-t28-afl-$$"
 cleanup() { docker rm -f "$cname" >/dev/null 2>&1 || true; }
@@ -236,6 +241,14 @@ echo "$SEQS" | while read -r bd seq inputs; do
   done
 done
 
+# SD-20 scope: how map2check_property is written under the AFL++ generator.
+printf "side\twrite_mode\n" > write-mode.tsv
+for side in c rs; do
+  d="write-mode/$side/run"; rm -rf "$d"; mkdir -p "$d"
+  (cd "$d" && M2C_AFL_INPUTS=/work/in/empty ../persist.out > out.txt 2> err.txt)
+  printf "%s\t%s\n" "$side" "$(cat "$d/write-mode" 2>/dev/null || echo -)" >> write-mode.tsv
+done
+
 # SD-21: peak RSS for 1 and for 50000 inputs in one process.
 printf "side\tinputs\tmaxrss_kb\n" > rss.tsv
 for side in c rs; do
@@ -332,6 +345,11 @@ for q in "empty:pchar:NULL" "pchar-cap:pchar:len=5 bytes:68656c6c6f" "pchar-3:pc
 done
 [[ "$(row gen-read c empty 6)" == "char:00|pointer:0000000000000000|"* ]] \
   || { echo "FAIL $t gen-read empty: the C does not read zeros" >&2; fail=1; }
+
+t=afl_writes_result_files_in_place_like_c
+wm() { awk -F'\t' -v s="$1" '$1==s {print $2}' "$W/write-mode.tsv"; }
+if [ "$(wm c)" = plain ] && [ "$(wm rs)" = plain ]; then echo "ok $t: C plain, drop-in plain"
+else echo "FAIL $t: C '$(wm c)', drop-in '$(wm rs)', want plain on both" >&2; fail=1; fi
 
 echo; column -t -s $'\t' "$W/rss.tsv"
 rss() { awk -F'\t' -v s="$1" -v n="$2" '$1==s && $2==n {print $3}' "$W/rss.tsv"; }

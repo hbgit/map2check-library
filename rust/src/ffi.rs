@@ -2449,6 +2449,22 @@ pub extern "C" fn __m2c_rt_nondet_log_to_file() -> std::os::raw::c_char {
     )
 }
 
+/// Selects how the result files (`map2check_property*`, the witness logs,
+/// `klee_log.csv`, `map2check_checked_error`) are written: `on` non-zero
+/// through a temporary file and a rename (SD-20), zero truncated and written
+/// in place as develop's `fopen("w")`. The KLEE generator module calls it
+/// with 1 from its `nondet_init`, before anything is written: its forked
+/// states share the host files. The drop-in core starts in plain mode, so
+/// the AFL++ and `none` generators write as the C runtime; every other build
+/// starts atomic. The user approved this scope of SD-20 on 2026-10-27.
+#[no_mangle]
+pub extern "C" fn __m2c_rt_output_set_atomic(on: std::os::raw::c_int) {
+    ffi_guard(
+        || crate::output::legacy_files::set_atomic_writes(on != 0),
+        (),
+    );
+}
+
 /// Number of rows of the nondet log (`map2check_nondet_get_log().size`,
 /// `NonDetGeneratorKlee.c:57-58`).
 #[no_mangle]
