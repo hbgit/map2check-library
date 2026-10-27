@@ -254,7 +254,6 @@ static void run_pre_init_boundary(void) {
     (void)__m2c_rt_nondet_log_get_i64(0);
     __m2c_rt_nondet_log_set_i64(0, 7);
     (void)__m2c_rt_nondet_log_to_file();
-    __m2c_rt_output_set_atomic(1); /* the default of the host build */
     nondet_log_destroy();
 
     /* WitnessGeneration */
@@ -689,6 +688,17 @@ static void scenario_memtrack_rt_leak(void) {
     map2check_success();
 }
 
+/* SD-20 under KLEE (NonDetGeneratorKlee's nondet_init calls
+ * __m2c_rt_output_set_atomic(1)): never downgrade, so the NONE of
+ * map2check_success leaves the FALSE-MEMTRACK that is_program_correct wrote
+ * (user decision of 2026-10-27). Without the switch, scenario_memtrack_rt_leak
+ * ends with NONE, as the C. In a forked scenario: the switch is process
+ * configuration. */
+static void scenario_klee_never_downgrade(void) {
+    __m2c_rt_output_set_atomic(1);
+    scenario_memtrack_rt_leak();
+}
+
 /* WasmRuntimeStubs.c:110-116: a trap ends the run (SD-19: UNKNOWN). */
 static void scenario_wasm_trap(void) {
     map2check_init(0);
@@ -734,6 +744,8 @@ static void test_analysis_modes(void) {
         /* analysis_is_program_correct wrote FALSE-MEMTRACK and released the
          * leak; map2check_success then overwrites map2check_property with NONE. */
         {scenario_memtrack_rt_leak, 0, "NONE\n", "map2check_property_memtrack",
+         "FALSE-MEMTRACK\n"},
+        {scenario_klee_never_downgrade, 0, "FALSE-MEMTRACK\n", "map2check_property_memtrack",
          "FALSE-MEMTRACK\n"},
         {scenario_wasm_trap, 1, "", "map2check_property__unknown", NULL},
         /* SD-19: with a mode the trap writes only map2check_property__unknown. */

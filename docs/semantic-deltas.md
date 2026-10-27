@@ -747,7 +747,7 @@ map2check_wasm_check_access(0x10010, 4);   /* OVERFLOW, line 0, aborts */
 ### SD-20 — Result files survive other KLEE states (gate ref `C-BUG-property-race`)
 
 **Classification:** intentional
-**Tests:** `rust/src/output/legacy_files.rs::concurrent_reader_never_sees_empty_or_partial_file`, `rust/src/output/legacy_files.rs::write_goes_through_a_temp_file_and_rename`, `rust/src/output/legacy_files.rs::temp_name_collisions_are_skipped`, `rust/src/output/legacy_files.rs::result_files_are_atomic_by_default_outside_dropin`, `rust/src/output/legacy_files.rs::plain_mode_truncates_the_target_in_place_like_fopen_w`, `rust/src/output/legacy_files.rs::atomic_mode_replaces_the_target_by_a_rename`, `rust/src/output/legacy_files.rs::set_atomic_writes_switches_the_property_writer`, `rust/src/ffi_tests.rs::output_set_atomic_selects_the_result_file_write_mode`
+**Tests:** `rust/src/output/legacy_files.rs::concurrent_reader_never_sees_empty_or_partial_file`, `rust/src/output/legacy_files.rs::write_goes_through_a_temp_file_and_rename`, `rust/src/output/legacy_files.rs::temp_name_collisions_are_skipped`, `rust/src/output/legacy_files.rs::result_files_are_atomic_by_default_outside_dropin`, `rust/src/output/legacy_files.rs::plain_mode_truncates_the_target_in_place_like_fopen_w`, `rust/src/output/legacy_files.rs::atomic_mode_replaces_the_target_by_a_rename`, `rust/src/output/legacy_files.rs::set_atomic_writes_switches_the_property_writer`, `rust/src/ffi_tests.rs::output_set_atomic_selects_the_result_file_write_mode`, `rust/src/output/legacy_files.rs::never_downgrade_keeps_a_violation_against_none`, `rust/src/output/legacy_files.rs::never_downgrade_writes_none_when_there_is_no_property_file`, `rust/src/output/legacy_files.rs::never_downgrade_lets_a_violation_replace_none_and_violations`, `rust/src/output/legacy_files.rs::without_never_downgrade_none_replaces_a_violation`, `rust/src/output/legacy_files.rs::write_if_absent_never_replaces_and_cleans_up`
 
 This entry covers a bug of the C runtime of Map2Check `develop` that the
 Rust library fixes. The cutover gate cites it as `C-BUG-property-race` in
@@ -798,6 +798,33 @@ core (the staticlib) stays atomic. Image tests:
 (`klee_symex_writes_result_files_atomically`) and
 `scripts/runtime-ir/test-afl-generator.sh`
 (`afl_writes_result_files_in_place_like_c`).
+
+**Never downgrade under KLEE (approved by the user on 2026-10-27, Task
+3.1):** the temporary file + rename alone does not decide which state's
+content survives. Once the drop-in ended every run through the witness
+module (more writes per state), a KLEE state that finished without a
+violation renamed `NONE` over the `TARGET-REACHED` the violating state had
+just written, before that state reached its abort
+(`scripts/runtime-ir/test-klee-generator.sh`, `unsafe-reach-none`; the C
+kept the violation). So, under the `symex` generator only (the same
+`__m2c_rt_output_set_atomic(1)` of `NonDetGeneratorKlee`'s `nondet_init`
+turns it on), a `map2check_property` whose content is not a violation
+(`NONE`, `UNKNOWN`, the empty `Concurrency` text) never replaces an
+existing `map2check_property`: it is written to a temporary file and
+hard-linked to the target (`link(2)` fails with `EEXIST` when the target
+exists, in one system call, so there is no check-then-write window), and
+the temporary name is removed. A violation is still renamed over the
+target, whatever it held: between two violations the last writer wins, as
+with develop's `fopen("w")` (within one process the first violation is
+final and aborts, SD-03, so two violations only meet across KLEE states).
+The `map2check_property_<prp>` files, `map2check_checked_error` and
+`klee_log.csv` are written only on a violation and are unaffected;
+`track_bb_log.st` carries no verdict and keeps the last writer. Plain mode
+(AFL++, `none`) and the staticlib are unchanged: a `NONE` replaces whatever
+was there. Observable difference from the C under `symex`: a program that
+writes a violation and later `NONE` in the same path (only through direct
+`write_property` calls; instrumented programs abort at the violation)
+keeps the violation (`klee_symex_writes_result_files_atomically`).
 
 **Reproduce:** the program is any one where KLEE forks a state that
 reaches the target and states that do not. With the C runtime:

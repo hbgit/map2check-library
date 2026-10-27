@@ -107,6 +107,69 @@ pub fn set_atomic_writes(on: bool) {
     ATOMIC_WRITES.store(on, std::sync::atomic::Ordering::Relaxed);
 }
 
+/// Never downgrade a verdict (SD-20, user decision of 2026-10-27): under
+/// KLEE the forked states share the host file system, and a state that ends
+/// without a violation must not replace the `map2check_property` a violating
+/// state already wrote. On only in the drop-in core under the KLEE generator
+/// (`__m2c_rt_output_set_atomic(1)` from `NonDetGeneratorKlee`'s
+/// `nondet_init`); off in plain mode and in every build that never calls it
+/// (the staticlib keeps replacing, as before).
+static NEVER_DOWNGRADE: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// Turns the never-downgrade rule on or off (see [`NEVER_DOWNGRADE`]).
+pub fn set_never_downgrade(on: bool) {
+    NEVER_DOWNGRADE.store(on, std::sync::atomic::Ordering::Relaxed);
+}
+
+/// Whether the never-downgrade rule is on.
+pub fn never_downgrade() -> bool {
+    NEVER_DOWNGRADE.load(std::sync::atomic::Ordering::Relaxed)
+}
+
+/// Writes `contents` to `dir/name` only if `dir/name` does not exist, and
+/// atomically: the text goes to a temporary file, which is then hard-linked
+/// to the target. `link(2)` fails with `EEXIST` when the target exists, in
+/// one system call, so no other KLEE state can write the target between a
+/// check and the replacement (there is no separate check). The temporary
+/// name is removed in every case. Returns `Ok(false)` when the target
+/// existed and was left alone. Never truncates, never leaves an empty file.
+fn write_result_file_if_absent(dir: &Path, name: &str, contents: &[u8]) -> io::Result<bool> {
+    use std::io::Write as _;
+    let (tmp, mut file) = create_temp(dir, name)?;
+    let written = file.write_all(contents);
+    drop(file);
+    let result = written.and_then(|()| match std::fs::hard_link(&tmp, dir.join(name)) {
+        Ok(()) => Ok(true),
+        Err(e) if e.kind() == io::ErrorKind::AlreadyExists => Ok(false),
+        Err(e) => Err(e),
+    });
+    let _ = std::fs::remove_file(&tmp);
+    result
+}
+
+/// A new temporary file next to `dir/name` (see [`write_result_file`]).
+fn create_temp(dir: &Path, name: &str) -> io::Result<(std::path::PathBuf, std::fs::File)> {
+    use std::sync::atomic::{AtomicU64, Ordering};
+    static COUNTER: AtomicU64 = AtomicU64::new(0);
+    let pid = std::process::id();
+    let mut attempts = 0u32;
+    loop {
+        let n = COUNTER.fetch_add(1, Ordering::Relaxed);
+        let tmp = dir.join(format!(".{name}.{pid}.{n}.tmp"));
+        match std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&tmp)
+        {
+            Ok(file) => return Ok((tmp, file)),
+            Err(e) if e.kind() == io::ErrorKind::AlreadyExists && attempts < 10_000 => {
+                attempts += 1;
+            }
+            Err(e) => return Err(e),
+        }
+    }
+}
+
 /// Whether result files are written atomically (see [`set_atomic_writes`]).
 pub fn atomic_writes() -> bool {
     ATOMIC_WRITES.load(std::sync::atomic::Ordering::Relaxed)
@@ -144,29 +207,11 @@ pub fn write_atomic_bytes(dir: &Path, name: &str, contents: &[u8]) -> io::Result
 /// file and a rename.
 fn write_result_file(dir: &Path, name: &str, contents: &[u8], atomic: bool) -> io::Result<()> {
     use std::io::Write as _;
-    use std::sync::atomic::{AtomicU64, Ordering};
-    static COUNTER: AtomicU64 = AtomicU64::new(0);
 
     if !atomic {
         return std::fs::File::create(dir.join(name)).and_then(|mut f| f.write_all(contents));
     }
-    let pid = std::process::id();
-    let mut attempts = 0u32;
-    let (tmp, mut file) = loop {
-        let n = COUNTER.fetch_add(1, Ordering::Relaxed);
-        let tmp = dir.join(format!(".{name}.{pid}.{n}.tmp"));
-        match std::fs::OpenOptions::new()
-            .write(true)
-            .create_new(true)
-            .open(&tmp)
-        {
-            Ok(file) => break (tmp, file),
-            Err(e) if e.kind() == io::ErrorKind::AlreadyExists && attempts < 10_000 => {
-                attempts += 1;
-            }
-            Err(e) => return Err(e),
-        }
-    };
+    let (tmp, mut file) = create_temp(dir, name)?;
     let result = file.write_all(contents).and_then(|()| {
         drop(file);
         std::fs::rename(&tmp, dir.join(name))
@@ -285,7 +330,23 @@ pub fn write_property(
         ViolatedProperty::DivByZero => located("FALSE-DIVBYZERO", line, function_name),
         ViolatedProperty::Concurrency => String::new(),
     };
+    // Never downgrade (SD-20, KLEE only): a non-violation (NONE, UNKNOWN,
+    // the empty Concurrency text) never replaces an existing
+    // map2check_property; a violation replaces it, as fopen("w") does.
+    if !is_violation(violated) && never_downgrade() && atomic_writes() {
+        return write_result_file_if_absent(dir, PROPERTY_FILE, text.as_bytes()).map(|_| ());
+    }
     write_atomic(dir, PROPERTY_FILE, &text)
+}
+
+/// Whether `map2check_property` with this property holds a violation (a
+/// FALSE verdict the frontend reports): every property but `None`,
+/// `Unknown` and `Concurrency` (written empty).
+fn is_violation(violated: ViolatedProperty) -> bool {
+    !matches!(
+        violated,
+        ViolatedProperty::None | ViolatedProperty::Unknown | ViolatedProperty::Concurrency
+    )
 }
 
 /// Writes the property files of `result` into `dir`, as the C runtime does
@@ -1010,6 +1071,114 @@ mod tests {
         write_result_file(dir.path(), "f", b"x\n", true).unwrap();
         assert_eq!(std::fs::read(&target).unwrap(), b"x\n");
         assert_ne!(first, std::fs::metadata(&target).unwrap().ino());
+        assert_eq!(std::fs::read_dir(dir.path()).unwrap().count(), 1);
+    }
+
+    /// Runs `f` with the KLEE write mode (atomic + never downgrade) or the
+    /// given one, and restores the defaults of a non-dropin build after.
+    fn with_modes(atomic: bool, never: bool, f: impl FnOnce()) {
+        let _mode = write_mode_test_lock();
+        set_atomic_writes(atomic);
+        set_never_downgrade(never);
+        f();
+        set_atomic_writes(true);
+        set_never_downgrade(false);
+    }
+
+    fn property(dir: &Path) -> String {
+        std::fs::read_to_string(dir.join(PROPERTY_FILE)).unwrap()
+    }
+
+    fn only_property_files(dir: &Path) {
+        for e in std::fs::read_dir(dir).unwrap() {
+            let n = e.unwrap().file_name().into_string().unwrap();
+            assert!(n.starts_with("map2check_property"), "left behind: {n}");
+        }
+    }
+
+    /// SD-20, never downgrade (user decision of 2026-10-27): under KLEE a
+    /// NONE written after a violation leaves the violation in place.
+    #[test]
+    fn never_downgrade_keeps_a_violation_against_none() {
+        with_modes(true, true, || {
+            let dir = tempfile::tempdir().unwrap();
+            write_property_files(
+                dir.path(),
+                &violated(ViolatedProperty::Reachability, 19, "main"),
+            )
+            .unwrap();
+            write_property_files(dir.path(), &AnalysisResult::default()).unwrap();
+            assert_eq!(
+                property(dir.path()),
+                "TARGET-REACHED\nLine: 19\nFunction: main\n"
+            );
+            write_property(dir.path(), ViolatedProperty::Unknown, 0, "").unwrap();
+            write_property(dir.path(), ViolatedProperty::Concurrency, 0, "").unwrap();
+            assert_eq!(
+                property(dir.path()),
+                "TARGET-REACHED\nLine: 19\nFunction: main\n"
+            );
+            only_property_files(dir.path());
+        });
+    }
+
+    /// A NONE with no earlier file is written (atomically: link of a full
+    /// temporary file), and a second NONE leaves it as it is.
+    #[test]
+    fn never_downgrade_writes_none_when_there_is_no_property_file() {
+        with_modes(true, true, || {
+            let dir = tempfile::tempdir().unwrap();
+            write_property_files(dir.path(), &AnalysisResult::default()).unwrap();
+            assert_eq!(property(dir.path()), "NONE\n");
+            write_property_files(dir.path(), &AnalysisResult::default()).unwrap();
+            assert_eq!(property(dir.path()), "NONE\n");
+            only_property_files(dir.path());
+        });
+    }
+
+    /// A violation still replaces a NONE and an earlier violation (the last
+    /// writer wins among violations, as develop's fopen("w")).
+    #[test]
+    fn never_downgrade_lets_a_violation_replace_none_and_violations() {
+        with_modes(true, true, || {
+            let dir = tempfile::tempdir().unwrap();
+            write_property_files(dir.path(), &AnalysisResult::default()).unwrap();
+            write_property_files(dir.path(), &violated(ViolatedProperty::Assert, 5, "f")).unwrap();
+            assert_eq!(property(dir.path()), "ASSERT\nLine: 5\nFunction: f\n");
+            write_property_files(dir.path(), &violated(ViolatedProperty::Overflow, 7, "g"))
+                .unwrap();
+            assert_eq!(property(dir.path()), "OVERFLOW\nLine: 7\nFunction: g\n");
+            only_property_files(dir.path());
+        });
+    }
+
+    /// Plain mode (AFL++, none) and the staticlib default are unchanged: a
+    /// NONE replaces whatever was there, as develop's fopen("w").
+    #[test]
+    fn without_never_downgrade_none_replaces_a_violation() {
+        for (atomic, never) in [(false, false), (true, false), (false, true)] {
+            with_modes(atomic, never, || {
+                let dir = tempfile::tempdir().unwrap();
+                write_property_files(dir.path(), &violated(ViolatedProperty::Assert, 5, "f"))
+                    .unwrap();
+                write_property_files(dir.path(), &AnalysisResult::default()).unwrap();
+                assert_eq!(
+                    property(dir.path()),
+                    "NONE\n",
+                    "atomic {atomic} never {never}"
+                );
+            });
+        }
+    }
+
+    /// The link-or-fail primitive: an existing target is never touched,
+    /// the temporary file is always removed.
+    #[test]
+    fn write_if_absent_never_replaces_and_cleans_up() {
+        let dir = tempfile::tempdir().unwrap();
+        assert!(write_result_file_if_absent(dir.path(), "f", b"one\n").unwrap());
+        assert!(!write_result_file_if_absent(dir.path(), "f", b"two\n").unwrap());
+        assert_eq!(std::fs::read(dir.path().join("f")).unwrap(), b"one\n");
         assert_eq!(std::fs::read_dir(dir.path()).unwrap().count(), 1);
     }
 

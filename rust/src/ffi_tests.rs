@@ -5125,6 +5125,11 @@ fn output_set_atomic_selects_the_result_file_write_mode() {
     assert!(!atomic_writes());
     __m2c_rt_output_set_atomic(7);
     assert!(atomic_writes());
+    assert!(crate::output::legacy_files::never_downgrade());
+    __m2c_rt_output_set_atomic(0);
+    assert!(!crate::output::legacy_files::never_downgrade());
     __m2c_rt_output_set_atomic(1);
     assert!(atomic_writes(), "the default of every non-dropin build");
+    assert!(crate::output::legacy_files::never_downgrade());
+    crate::output::legacy_files::set_never_downgrade(false);
 }

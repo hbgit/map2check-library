@@ -2515,10 +2515,17 @@ pub extern "C" fn __m2c_rt_nondet_log_to_file() -> std::os::raw::c_char {
 /// states share the host files. The drop-in core starts in plain mode, so
 /// the AFL++ and `none` generators write as the C runtime; every other build
 /// starts atomic. The user approved this scope of SD-20 on 2026-10-27.
+/// The same switch turns on the never-downgrade rule (SD-20, user decision
+/// of 2026-10-27): a `NONE` (or other non-violation) `map2check_property`
+/// never replaces an existing one, so a KLEE state that ends without a
+/// violation cannot erase the one another state wrote.
 #[no_mangle]
 pub extern "C" fn __m2c_rt_output_set_atomic(on: std::os::raw::c_int) {
     ffi_guard(
-        || crate::output::legacy_files::set_atomic_writes(on != 0),
+        || {
+            crate::output::legacy_files::set_atomic_writes(on != 0);
+            crate::output::legacy_files::set_never_downgrade(on != 0);
+        },
         (),
     );
 }

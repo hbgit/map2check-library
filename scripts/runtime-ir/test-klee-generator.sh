@@ -37,7 +37,10 @@
 #       (driver): under symex the drop-in writes map2check_property through a
 #       temporary file and a rename (SD-20; NonDetGeneratorKlee's nondet_init
 #       turns it on, user decision of 2026-10-27), seen through a descriptor
-#       held on the old file; the C writes in place ("plain"), recorded;
+#       held on the old file; the C writes in place ("plain"), recorded.
+#       The NONE written after the TARGET-REACHED is kept out by the
+#       never-downgrade rule (SD-20, user decision of 2026-10-27): the
+#       drop-in ends with TARGET-REACHED, the C with NONE;
 #   klee_rust_panic_aborts_without_symbolizer  tests/runtime-ir/klee-extra/
 #       panic.c (driver) with a copy of the drop-in core given a panicking
 #       entry point (panic_shim.py), RUST_BACKTRACE=0 and full: the x == 7
@@ -327,7 +330,12 @@ for c in $CASES; do
       [ "$(row "$name" rs 11)" = atomic ] || why+=" the drop-in wrote '$(row "$name" rs 11)', not atomic;"
       [ "$(row "$name" c 11)" = plain ] || why+=" the C wrote '$(row "$name" c 11)', not plain (develop's fopen(\"w\"));"
       [ "$(row "$name" rs 3)" = - ] || why+=" rust dropped paths: $(row "$name" rs 3);"
-      same "$name" 10 properties
+      # Never downgrade (SD-20, user decision of 2026-10-27): the NONE written
+      # after TARGET-REACHED leaves the violation under symex; the C replaces it.
+      [ "$(row "$name" rs 10)" = "[map2check_property]TARGET-REACHED|Line: 10|Function: first|" ] \
+        || why+=" the drop-in kept '$(row "$name" rs 10)', not the violation (never downgrade);"
+      [ "$(row "$name" c 10)" = "[map2check_property]NONE|" ] \
+        || why+=" the C kept '$(row "$name" c 10)', not NONE;"
       ;;
     gen-*)
       t=klee_generator_driver_matches_c
