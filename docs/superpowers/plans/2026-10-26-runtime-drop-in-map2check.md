@@ -277,6 +277,8 @@ Em todas as tasks desta fase: a semântica de referência é o `.c` citado na c�
 
 ### Task 4.1: Primeira execução do gate
 
+- Diferença esperada, fora da paridade: em execuções com violação sob `symex`, a divisão entre caminhos completos e parciais do KLEE pode diferir do C (ordem do searcher com `--exit-on-error-type=Abort`); o total de `.ktest`, o veredito, a linha e a função precisam bater (Task 2.7, `scripts/runtime-ir/test-klee-generator.sh`).
+
 - [ ] **Step 1:** Rodar `run-corpus.sh` na instalação sobreposta (Task 3.1) com os mesmos `REPS`, geradores e imagem da linha de base do C.
 - [ ] **Step 2:** `compare_baselines.py` → `gate: PASS`. Cada divergência vira uma task de correção na fase 2 com teste RED/GREEN, ou um `SD-xx` aprovado pelo usuário e listado em `deltas-aceitos.tsv`.
 - [ ] **Step 3:** Registrar em `docs/cutover/gate-<data>.md` (commit do `develop`, commit da biblioteca, razões wall/RSS, tarefas > 1,5 com perfil); commit `docs: first differential gate of the drop-in runtime`.
