@@ -11,8 +11,16 @@
 #       names (the type travels in the name), the same property files (NONE);
 #   klee_unsafe_program_reports_same_line  unsafe-reach.c (none, assert),
 #       unsafe-overflow.c (overflow), unsafe-deref.c (memtrack),
-#       unsafe-leak.c (memcleanup): a violation, not NONE, and the same
-#       property files as the C (property, Line, Function);
+#       unsafe-leak.c (memcleanup): a violation, not NONE, the same property
+#       files as the C (property, Line, Function) and the same .ktest total.
+#       The split between completed and partially completed paths is not
+#       compared: with --exit-on-error-type=Abort KLEE stops at the first
+#       abort, and which states finished before it depends on the searcher's
+#       scheduling, which the runtime's instruction counts change;
+#   klee_cover_branches_matches_c          safe.c and unsafe-reach.c in the
+#       Cover-Branches mode (--cover-branches: AnalysisModeNone, KLEE with
+#       --search=dfs and no --exit-on-error-type, caller.cpp:1418-1441): the
+#       same .ktest count and object names as the C;
 #   klee_generator_driver_matches_c        gen-aux.c, gen-aux-big.c,
 #       gen-prune.c call the generator functions directly (no pass): the
 #       same dropped-path verdict, .ktest count, completed paths, object
@@ -33,6 +41,10 @@
 #
 # Usage: test-klee-generator.sh [<drop-in-lib-dir>]
 #   default: builds target/runtime-ir/dropin-lib with build-test-runtime-bc.sh
+# The KLEE flags are written once (klee_flags below); every instrumented case
+# also compares them with the command the frontend itself logged for it
+# (frontend-klee-command.txt, --max-time and the file name aside), so a
+# change in caller.cpp fails the test.
 # Exits 77 (skip) without docker, the image or the C install.
 # Output: target/runtime-ir/klee-gen/ (results.tsv, one directory per case).
 set -euo pipefail
@@ -65,7 +77,8 @@ cp "$ROOT"/tests/runtime-ir/klee/*.c "$W/src/"
 # <program>:<mode>; mode "driver" = no instrumentation, linked in mode none.
 CASES="safe.c:memtrack safe.c:memcleanup safe.c:overflow safe.c:assert safe.c:none
 unsafe-reach.c:none unsafe-reach.c:assert unsafe-overflow.c:overflow unsafe-deref.c:memtrack unsafe-leak.c:memcleanup
-gen-aux.c:driver gen-aux-big.c:driver gen-prune.c:driver"
+gen-aux.c:driver gen-aux-big.c:driver gen-prune.c:driver
+safe.c:cover unsafe-reach.c:cover"
 
 docker run --rm --network none --user "$(id -u):$(id -g)" -e HOME=/work \
   -e MAP2CHECK_PATH=/opt/m2c -e KLEE_RUNTIME_LIBRARY_PATH=/opt/m2c/lib/klee/runtime \
@@ -78,6 +91,15 @@ flags() {
     memtrack) echo "--memtrack" ;; memcleanup) echo "--memcleanup-property" ;;
     overflow) echo "--check-overflow" ;; assert) echo "--check-asserts" ;;
     none) echo "--target-function --target-function-name reach_error" ;;
+    cover) echo "--cover-branches" ;;
+  esac
+}
+# The frontend'"'"'s KLEE flags (caller.cpp:1418-1470) after --max-time: the
+# stop and search policies depend on Cover-Branches.
+klee_flags() {
+  case "$1" in
+    cover) echo "--external-calls=all --search=dfs --optimize --use-cex-cache --solver-backend=z3 --libc=uclibc" ;;
+    *) echo "--external-calls=all --exit-on-error-type=Abort --optimize --use-cex-cache --solver-backend=z3 --libc=uclibc" ;;
   esac
 }
 modules() { # <lib> <mode>: Caller::linkLLVM, Array, symex, witness
@@ -88,7 +110,7 @@ modules() { # <lib> <mode>: Caller::linkLLVM, Array, symex, witness
     memcleanup) mods+=" $L/AnalysisModeMemcleanup.bc $L/AllocationLog.bc $L/ListLog.bc $L/HeapLog.bc" ;;
     overflow) mods+=" $L/AnalysisModeOverflow.bc" ;;
     assert) mods+=" $L/AnalysisModeAssert.bc" ;;
-    none | driver) mods+=" $L/AnalysisModeNone.bc" ;;
+    none | driver | cover) mods+=" $L/AnalysisModeNone.bc" ;;
   esac
   echo "$mods $L/NonDetGeneratorKlee.bc $L/WitnessGeneration.bc"
 }
@@ -130,6 +152,9 @@ for c in $cases; do
       || { echo "$name: no <hash>-output.bc (see $name/inst/m2c.log)" >&2; exit 1; }
     sed "s/\x1b\[[0-9;]*m//g" "$name/inst/m2c.log" | sed -n "s/.*\(timeout -k .*klee .*\)/\1/p" \
       | head -1 > "$name/frontend-klee-command.txt"
+    # The flags between --max-time and the program, spaces collapsed.
+    got="$(sed -n "s/.*\/bin\/klee --max-time=[0-9]*s \(.*\) \.\/[^ ]*\.bc.*/\1/p" "$name/frontend-klee-command.txt" | tr -s " ")"
+    [ "$got" = "$(klee_flags "$mode")" ] || echo "$got" > "$name/flag-drift.txt"
   fi
   for side in c rs; do
     case "$side" in c) L=/opt/m2c/lib ;; rs) L=/rs ;; esac
@@ -137,9 +162,9 @@ for c in $cases; do
     # shellcheck disable=SC2046
     llvm-link-16 "$name/output.bc" $(modules "$L" "$mode") -o "$d/witness-result.bc" 2> "$d/link.err" \
       || { echo "$name/$side: llvm-link-16 failed: $(head -3 "$d/link.err")" >&2; exit 1; }
+    # shellcheck disable=SC2046
     ( cd "$d" && timeout -k 5 $((max_time + 30)) /opt/m2c/bin/klee --max-time=${max_time}s \
-        --external-calls=all --exit-on-error-type=Abort --optimize --use-cex-cache \
-        --solver-backend=z3 --libc=uclibc ./witness-result.bc > ExecutionOutput.log 2> klee.stderr )
+        $(klee_flags "$mode") ./witness-result.bc > ExecutionOutput.log 2> klee.stderr )
     k="$d/klee-last"
     log=-; [ -f "$d/klee_log.csv" ] && log="$(tr "\n" "|" < "$d/klee_log.csv")"
     printf "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n" "$name" "$side" "$(dropped "$k")" \
@@ -165,7 +190,18 @@ for c in $CASES; do
   prog="${c%%:*}"; mode="${c##*:}"
   name="${prog%.c}-$mode"; [ "$mode" = driver ] && name="${prog%.c}"
   why=""
-  case "$prog" in
+  if [ -f "$W/$name/flag-drift.txt" ]; then
+    why+=" the frontend ran KLEE with '$(cat "$W/$name/flag-drift.txt")', the test with the flags of klee_flags;"
+  elif [ "$mode" != driver ] && [ ! -s "$W/$name/frontend-klee-command.txt" ]; then
+    why+=" no KLEE command in the frontend log;"
+  fi
+  case "$mode:$prog" in
+    cover:*)
+      t=klee_cover_branches_matches_c
+      same "$name" 4 ktests; same "$name" 8 "ktest objects"
+      [ "$(row "$name" c 4)" -gt 0 ] || why+=" the C wrote no ktest;"
+      ;;
+    *) case "$prog" in
     safe.c)
       t=klee_safe_program_drops_no_paths
       [ "$(row "$name" rs 3)" = - ] || why+=" rust dropped paths: $(row "$name" rs 3);"
@@ -176,13 +212,14 @@ for c in $CASES; do
     unsafe-*)
       t=klee_unsafe_program_reports_same_line
       case "$(row "$name" c 10)" in -|"[map2check_property]NONE|") why+=" the C reports no violation;" ;; esac
-      same "$name" 10 properties
+      same "$name" 10 properties; same "$name" 4 "ktest total"
       ;;
     gen-*)
       t=klee_generator_driver_matches_c
       same "$name" 3 "dropped paths"; same "$name" 4 ktests; same "$name" 5 "completed paths"
       same "$name" 8 "ktest objects"; same "$name" 9 klee_log.csv; same "$name" 10 properties
       ;;
+    esac ;;
   esac
   if [ -z "$why" ]; then echo "ok $t $name"; else echo "FAIL $t $name:$why" >&2; fail=1; fi
 done

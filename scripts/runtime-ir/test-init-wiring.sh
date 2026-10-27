@@ -13,6 +13,13 @@
 # (target/map2check-it/c/lib) and once with the drop-in. Expected on both: exit
 # 134 (abort) and the same, non-empty property files.
 #
+# map2check_init_calls_analysis_init_then_nondet_init: tests/runtime-ir/
+# init_order.c stands in for the mode and generator modules and records
+# each call into them; linked after the four core modules, the Array
+# container and WitnessGenerationNone of each side, the trace of both starts
+# "analysis_init", "nondet_init", "main: after map2check_init" (C: the
+# order of Map2CheckFunctions.c:37-38).
+#
 # Usage: test-init-wiring.sh [<drop-in-lib-dir>]
 #   default: builds target/runtime-ir/dropin-lib with build-test-runtime-bc.sh
 # Exits 77 (skip) without docker, the image or the C install.
@@ -40,7 +47,7 @@ fi
 
 W="$ROOT/target/runtime-ir/init-wiring"
 rm -rf "$W"; mkdir -p "$W"
-cp "$ROOT/tests/runtime-ir/init_wiring.c" "$W/"
+cp "$ROOT/tests/runtime-ir/init_wiring.c" "$ROOT/tests/runtime-ir/init_order.c" "$W/"
 
 docker run --rm --network none --user "$(id -u):$(id -g)" \
   -v "$CLIB:/c:ro" -v "$LIB:/rs:ro" -v "$W:/work" -w /work "$IMAGE" bash -c '
@@ -71,6 +78,17 @@ for m in memtrack memcleanup overflow assert none; do
     printf "%s\t%s\t%s\t%s\n" "$m" "$side" "$st" "${p:--}"
   done
 done > results.tsv
+clang-16 -O0 -c -emit-llvm init_order.c -o order.bc || exit 1
+for side in c rs; do
+  d="order-$side"; mkdir -p "$d"
+  llvm-link-16 order.bc /$side/Map2CheckFunctions.bc /$side/TrackBBLog.bc /$side/NonDetLog.bc \
+    /$side/PropertyGenerator.bc /$side/ContainerRealloc.bc /$side/WitnessGenerationNone.bc \
+    -o "$d/result.bc" 2> "$d/link.err" || { echo "$d: llvm-link-16: $(head -2 "$d/link.err")" >&2; exit 1; }
+  clang-16 "$d/result.bc" -lm -o "$d/a.out" 2> "$d/native.err" \
+    || { echo "$d: clang-16: $(head -2 "$d/native.err")" >&2; exit 1; }
+  (cd "$d" && ./a.out) > "$d/out.txt" 2>&1
+  printf "%s\t%s\n" "$side" "$(head -3 "$d/init-order.txt" 2>/dev/null | tr "\n" "|")"
+done > order.tsv
 ' || { echo "FAIL: the runs did not complete" >&2; exit 1; }
 
 fail=0
@@ -86,6 +104,15 @@ for m in memtrack memcleanup overflow assert none; do
     echo "ok map2check_init_selects_the_linked_mode $m: $(row "$m" rs 4)"
   else
     echo "FAIL map2check_init_selects_the_linked_mode $m:$why" >&2; fail=1
+  fi
+done
+want="analysis_init|nondet_init|main: after map2check_init|"
+for side in c rs; do
+  got="$(awk -F'\t' -v s="$side" '$1==s {print $2}' "$W/order.tsv")"
+  if [ "$got" = "$want" ]; then
+    echo "ok map2check_init_calls_analysis_init_then_nondet_init $side: $got"
+  else
+    echo "FAIL map2check_init_calls_analysis_init_then_nondet_init $side: '$got', want '$want'" >&2; fail=1
   fi
 done
 [ "$fail" = 0 ] && echo "OK: map2check_init calls the linked analysis_init and nondet_init"

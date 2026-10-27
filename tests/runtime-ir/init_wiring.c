@@ -16,6 +16,9 @@
 
 void map2check_init(int);
 void map2check_success(void);
+/* Map2CheckFunctions.c:57-59, "DO NOTHING": defined by the core module on
+ * both sides (the link fails otherwise) and without effect on the verdict. */
+void __VERIFIER_error(void);
 /* AnalysisModeOverflow.c */
 void map2check_binop_add(long long, long long, unsigned, unsigned, unsigned, char *);
 /* AnalysisModeAssert.c */
@@ -29,6 +32,7 @@ void map2check_add_store_pointer(void *, void *, unsigned, const char *, int, co
 
 int __map2check_main__(void) {
   map2check_init(0);
+  __VERIFIER_error();
 #if defined(M2C_MODE_overflow)
   map2check_binop_add(INT_MAX, 1, 32, 40, 0, "main");
 #elif defined(M2C_MODE_assert)
