@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: GPL-3.0-only
 # Self-tests of the two post-processing scripts of the Rust core's bitcode
 # (D1 route A', D7 "Pós-processamento do núcleo";
-# scripts/runtime-ir/build-test-runtime-bc.sh runs both). They used to run
+# scripts/build-runtime-bc.sh runs both). They used to run
 # inside scripts/build-klee-runtime.sh, which left with the legacy `klee`
 # feature in Task 2.10; the checks are the same.
 #

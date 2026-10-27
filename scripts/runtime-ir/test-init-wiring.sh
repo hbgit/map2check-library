@@ -21,7 +21,7 @@
 # order of Map2CheckFunctions.c:37-38).
 #
 # Usage: test-init-wiring.sh [<drop-in-lib-dir>]
-#   default: builds target/runtime-ir/dropin-lib with build-test-runtime-bc.sh
+#   default: builds target/runtime-ir/dropin-lib with scripts/build-runtime-bc.sh
 # Exits 77 (skip) without docker, the image or the C install.
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
@@ -42,7 +42,7 @@ if [ $# -ge 1 ]; then
   LIB="$(cd "$1" && pwd)"
 else
   LIB="$ROOT/target/runtime-ir/dropin-lib"
-  "$HERE/build-test-runtime-bc.sh" "$LIB"
+  "$ROOT/scripts/build-runtime-bc.sh" "$LIB"
 fi
 
 W="$ROOT/target/runtime-ir/init-wiring"

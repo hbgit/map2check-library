@@ -489,7 +489,7 @@ def gen_klee():
 # longjmp is nondet_cancel below; its callers are nondet_assume (as in C,
 # :31-37), the instrumented program and the glue's map2check_assume*, which
 # the program calls. The Rust core references none of them (guard in
-# build-test-runtime-bc.sh), and none of the IR functions the core calls
+# scripts/build-runtime-bc.sh), and none of the IR functions the core calls
 # (analysis_*, nondet_init/destroy, generate_*) reaches them
 # (test_only_the_assume_entry_points_reach_longjmp). So between _setjmp in
 # main and the longjmp there are only IR and program frames; every core entry

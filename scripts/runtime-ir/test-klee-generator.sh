@@ -12,7 +12,13 @@
 #   klee_unsafe_program_reports_same_line  unsafe-reach.c (none, assert),
 #       unsafe-overflow.c (overflow), unsafe-deref.c (memtrack),
 #       unsafe-leak.c (memcleanup): a violation, not NONE, the same property
-#       files as the C (property, Line, Function) and the same .ktest total.
+#       files as the C (property, Line, Function) and the same .ktest total;
+#       the witness files of the violating path (Task 3.1: the drop-in core
+#       ends the run through WitnessGeneration.bc, as the C map2check_exit):
+#       the same klee_log.csv as the C, pinned by the KLEE generator's
+#       nondet_generate_aux_witness_files (__m2c_rt_nondet_log_* hooks), and
+#       track_bb_log.st and map2check_checked_error written on both sides.
+#       safe.c: no klee_log.csv (no violation) and the same witness files.
 #       The split between completed and partially completed paths is not
 #       compared: with --exit-on-error-type=Abort KLEE stops at the first
 #       abort, and which states finished before it depends on the searcher's
@@ -60,7 +66,7 @@
 # --use-cex-cache, --solver-backend=z3, --libc=uclibc).
 #
 # Usage: test-klee-generator.sh [<drop-in-lib-dir>]
-#   default: builds target/runtime-ir/dropin-lib with build-test-runtime-bc.sh
+#   default: builds target/runtime-ir/dropin-lib with scripts/build-runtime-bc.sh
 # The KLEE flags are written once (klee_flags below); every instrumented case
 # also compares them with the command the frontend itself logged for it
 # (frontend-klee-command.txt, --max-time and the file name aside), so a
@@ -87,7 +93,7 @@ if [ $# -ge 1 ]; then
   LIB="$(cd "$1" && pwd)"
 else
   LIB="$ROOT/target/runtime-ir/dropin-lib"
-  "$HERE/build-test-runtime-bc.sh" "$LIB"
+  "$ROOT/scripts/build-runtime-bc.sh" "$LIB"
 fi
 
 W="$ROOT/target/runtime-ir/klee-gen"
@@ -158,7 +164,7 @@ objects() { # the distinct .ktest object names
     | sed -n "s/^object *[0-9]*: name: .\(.*\).$/\1/p" | sort -u | tr "\n" "," | sed "s/,$//")"
   echo "${n:--}"
 }
-printf "case\tside\tdropped\tktests\tcompleted\tpartial\tinstructions\tobjects\tklee_log\tproperties\twrite_mode\n" > results.tsv
+printf "case\tside\tdropped\tktests\tcompleted\tpartial\tinstructions\tobjects\tklee_log\tproperties\twrite_mode\twitness_files\n" > results.tsv
 for c in $cases; do
   prog="${c%%:*}"; mode="${c##*:}"
   name="${prog%.c}-$mode"; [ "$mode" = driver ] && name="${prog%.c}"
@@ -189,12 +195,13 @@ for c in $cases; do
     k="$d/klee-last"
     log=-; [ -f "$d/klee_log.csv" ] && log="$(tr "\n" "|" < "$d/klee_log.csv")"
     wm=-; [ -f "$d/write-mode" ] && wm="$(cat "$d/write-mode")"
-    printf "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n" "$name" "$side" "$(dropped "$k")" \
+    wf=""; for f in klee_log.csv map2check_checked_error track_bb_log.st; do [ -f "$d/$f" ] && wf+="$f,"; done
+    printf "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n" "$name" "$side" "$(dropped "$k")" \
       "$(ls "$k" 2>/dev/null | grep -c "\.ktest$")" \
       "$(sed -n "s/.*completed paths = //p" "$k/info" 2>/dev/null | head -1)" \
       "$(sed -n "s/.*partially completed paths = //p" "$k/info" 2>/dev/null | head -1)" \
       "$(sed -n "s/^KLEE: done: total instructions = //p" "$k/info" 2>/dev/null | head -1)" \
-      "$(objects "$k")" "$log" "$(props "$d")" "$wm" >> results.tsv
+      "$(objects "$k")" "$log" "$(props "$d")" "$wm" "${wf:--}" >> results.tsv
   done
 done
 ' inner "$CASES" "$KLEE_MAX_TIME" || { echo "FAIL: the KLEE runs did not complete" >&2; exit 1; }
@@ -304,12 +311,16 @@ for c in $CASES; do
       [ "$(row "$name" rs 3)" = - ] || why+=" rust dropped paths: $(row "$name" rs 3);"
       [ "$(row "$name" c 3)" = - ] || why+=" C dropped paths: $(row "$name" c 3);"
       same "$name" 4 ktests; same "$name" 5 "completed paths"; same "$name" 8 "ktest objects"
-      same "$name" 10 properties
+      same "$name" 10 properties; same "$name" 9 klee_log.csv; same "$name" 12 "witness files"
+      [ "$(row "$name" c 9)" = - ] || why+=" the C wrote klee_log.csv on a safe program;"
       ;;
     unsafe-*)
       t=klee_unsafe_program_reports_same_line
       case "$(row "$name" c 10)" in -|"[map2check_property]NONE|") why+=" the C reports no violation;" ;; esac
       same "$name" 10 properties; same "$name" 4 "ktest total"
+      same "$name" 9 klee_log.csv; same "$name" 12 "witness files"
+      [ "$(row "$name" c 9)" != - ] || why+=" the C wrote no klee_log.csv;"
+      [[ "$(row "$name" c 12)" == *map2check_checked_error* ]] || why+=" the C wrote no map2check_checked_error;"
       ;;
     write-mode.c)
       t=klee_symex_writes_result_files_atomically

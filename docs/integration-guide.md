@@ -55,9 +55,19 @@ cargo build --profile runtime --features wasm   # target/runtime/libmap2check.a
 
 The drop-in runtime as the 21 bitcode modules Map2Check links (the Rust core
 built from `klee/Cargo.toml` with rustc 1.72.1 and the LLVM 16 tools, and
-the IR modules) is a test build today
-(`scripts/runtime-ir/build-test-runtime-bc.sh <out-dir>`); plan Task 3.1
-productizes it.
+the IR modules):
+
+```sh
+scripts/build-runtime-bc.sh <out-dir>          # exactly the 21 lib/*.bc, deterministic
+scripts/it/overlay-install.sh <c-install> <out-dir> <install>
+```
+
+The second command copies an installed Map2Check (`<c-install>`, e.g. from
+`scripts/it/build-map2check.sh`) and replaces only its `lib/*.bc`; `bin/`,
+the plugins and every symlink stay as they are. The frontend then runs the
+Rust runtime unchanged. Whether a run writes the witness files depends only
+on the witness module the frontend links (`WitnessGeneration.bc` or
+`WitnessGenerationNone.bc`), as in the C runtime.
 
 `build.rs` regenerates `include/map2check.h` on every build. The header is
 not committed (`.gitignore`), so always take it from the same build as the

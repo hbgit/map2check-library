@@ -28,7 +28,7 @@
 #               (CmpLog solves the guard), capped at CRASH_SECS.
 #
 # Usage: measure-afl-generator.sh [<drop-in-lib-dir>]
-#   default: builds target/runtime-ir/dropin-lib with build-test-runtime-bc.sh
+#   default: builds target/runtime-ir/dropin-lib with scripts/build-runtime-bc.sh
 # Environment: REPS (5), SECS (20), CRASH_SECS (30).
 # Output: target/runtime-ir/afl-perf/runs.tsv and summary.txt; exits 1 when
 # the median ratio on link-smoke is below 0.90.
@@ -50,7 +50,7 @@ if [ $# -ge 1 ]; then
   LIB="$(cd "$1" && pwd)"
 else
   LIB="$ROOT/target/runtime-ir/dropin-lib"
-  "$HERE/build-test-runtime-bc.sh" "$LIB"
+  "$ROOT/scripts/build-runtime-bc.sh" "$LIB"
 fi
 
 W="$ROOT/target/runtime-ir/afl-perf"

@@ -141,7 +141,7 @@ e não repetem as tarefas já listadas.
   2.10) a rota legada (feature `klee`, `scripts/build-klee-runtime.sh`,
   `tests/klee_paths.sh`) saiu: o núcleo é a feature `dropin` de
   `klee/Cargo.toml` (rustc 1.72.1, bitcode LLVM 16,
-  `scripts/runtime-ir/build-test-runtime-bc.sh`), testado sob KLEE 3.1 por
+  `scripts/build-runtime-bc.sh`), testado sob KLEE 3.1 por
   `scripts/runtime-ir/test-klee-generator.sh`.
 
 - [ ] **Medir e controlar a regressão de desempenho.** Criar benchmarks

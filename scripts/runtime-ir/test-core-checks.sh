@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: GPL-3.0-only
-# Fixture test of the core checks of build-test-runtime-bc.sh (--check-core,
+# Fixture test of the core checks of scripts/build-runtime-bc.sh (--check-core,
 # Task 2.10 fix round 1): the instruction-line ceiling and no
 # llvm.bitreverse, on synthetic .ll files (no LLVM tools needed).
 #   small      3 instruction lines, no bitreverse          -> OK
@@ -9,7 +9,7 @@
 #   lines      only lines inside define bodies count       -> OK under 3 with 2 + globals
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
-BUILD="$HERE/build-test-runtime-bc.sh"
+BUILD="$(cd "$HERE/.." && pwd)/build-runtime-bc.sh"
 T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
 cat > "$T/small.ll" <<'EOF'
 @g = global i32 0

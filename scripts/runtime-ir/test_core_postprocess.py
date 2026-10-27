@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-only
 """Tests of the D7 post-processing helpers of the drop-in core
-(build-test-runtime-bc.sh): stub_personality.py, drop_dwarf_flag.py and the
+(scripts/build-runtime-bc.sh): stub_personality.py, drop_dwarf_flag.py and the
 check_no_freeze.py guard. Run: python3 -I -m unittest discover -s scripts/runtime-ir
 """
 import os

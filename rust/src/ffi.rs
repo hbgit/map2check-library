@@ -190,18 +190,37 @@ pub extern "C" fn map2check_init(is_sv_comp: std::os::raw::c_int) {
     );
 }
 
-/// The calls of the drop-in core into the mode and generator modules it is
-/// linked with (D7 layout A-fwd). Not in `include/map2check.h`: the IR
-/// modules define these names, the library does not.
+/// The calls of the drop-in core into the mode, generator and witness
+/// modules it is linked with (D7 layout A-fwd). Not in
+/// `include/map2check.h`: the IR modules define these names, the library
+/// does not. Every call is made with the state lock released: the modules
+/// call back into the core.
 ///
 /// cbindgen:ignore
 #[cfg(feature = "dropin")]
-mod dropin {
+pub(crate) mod dropin {
     extern "C" {
         /// `analysis_init` of the linked `AnalysisMode*.bc`.
         fn analysis_init();
         /// `nondet_init` of the linked `NonDetGenerator*.bc`.
         fn nondet_init();
+        /// `analysis_generate_aux_witness_files` of the linked
+        /// `AnalysisMode*.bc`.
+        fn analysis_generate_aux_witness_files();
+        /// `nondet_generate_aux_witness_files` of the linked
+        /// `NonDetGenerator*.bc`: `klee_log.csv` (AFL++, KLEE) or nothing
+        /// (none).
+        fn nondet_generate_aux_witness_files();
+        /// `generate_aux_files(MAP2CHECK_CONTAINER *, Bool)` of the linked
+        /// `WitnessGeneration.bc` (forwards to
+        /// `__m2c_rt_witness_generate_aux_files`) or `WitnessGenerationNone.bc`
+        /// (empty).
+        fn generate_aux_files(
+            trackbb_log: *mut std::os::raw::c_void,
+            violation: std::os::raw::c_char,
+        );
+        /// `generate_confirmation_file` of the linked witness module.
+        fn generate_confirmation_file();
     }
 
     /// `Map2CheckFunctions.c:37-38`.
@@ -212,6 +231,36 @@ mod dropin {
             analysis_init();
             nondet_init();
         }
+    }
+
+    /// `generate_aux_files(&trackbb_log, gotError)` of `map2check_exit`
+    /// (`Map2CheckFunctions.c:95`). The core keeps the basic-block log
+    /// itself, so the container pointer is null (D7, finding 6).
+    pub(crate) fn witness_generate_aux_files(violation: bool) {
+        // SAFETY: a C function of the linked witness module; the pointer is
+        // never dereferenced (`__m2c_rt_witness_generate_aux_files`).
+        unsafe { generate_aux_files(std::ptr::null_mut(), std::os::raw::c_char::from(violation)) }
+    }
+
+    /// `generate_confirmation_file()` of `map2check_exit`
+    /// (`Map2CheckFunctions.c:98`).
+    pub(crate) fn witness_generate_confirmation_file() {
+        // SAFETY: a `void (void)` C function of the linked witness module.
+        unsafe { generate_confirmation_file() }
+    }
+
+    /// `analysis_generate_aux_witness_files()` of `generate_aux_files`
+    /// (`WitnessGeneration.c:17`).
+    pub(crate) fn mode_generate_aux_witness_files() {
+        // SAFETY: a `void (void)` C function of the linked mode module.
+        unsafe { analysis_generate_aux_witness_files() }
+    }
+
+    /// `nondet_generate_aux_witness_files()` of `generate_aux_files`
+    /// (`WitnessGeneration.c:27`).
+    pub(crate) fn generator_generate_aux_witness_files() {
+        // SAFETY: a `void (void)` C function of the linked generator module.
+        unsafe { nondet_generate_aux_witness_files() }
     }
 }
 
@@ -634,7 +683,12 @@ pub extern "C" fn __m2c_rt_witness_generate_confirmation_file() {
 /// `WitnessGeneration.bc` instead of `WitnessGenerationNone.bc`
 /// (`caller.cpp:624-640`); the host programs that link the staticlib
 /// (`tests/ffi_harness.c`, the link tests of `scripts/runtime-ir/`) call
-/// this instead. No IR module calls it.
+/// this instead. No IR module calls it, and the drop-in core (feature
+/// `dropin`) ignores the option: it ends a run through the
+/// `generate_aux_files`/`generate_confirmation_file` of the witness module it
+/// is linked with, as the C does (Task 3.1). It stays for the staticlib,
+/// which cannot reference those module functions (they would be undefined in
+/// `cargo test` and in every program that links the staticlib alone).
 #[no_mangle]
 pub extern "C" fn __m2c_rt_witness_enable() {
     ffi_guard(|| state::update_config(|c| c.witness = true), ());

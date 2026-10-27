@@ -5,6 +5,7 @@ on:
     branches: [ "main", "develop", "release/**" ]
   pull_request:
     branches: [ "main", "develop", "release/**" ]
+  workflow_dispatch:
 
 jobs:
   build_and_test:
@@ -133,6 +134,13 @@ jobs:
         run: |
           cargo build --release --all-features
           scripts/runtime-ir/test-wasm-link.sh
+
+      # Sobreposição de instalação (Task 3.1): uma cópia de uma instalação do
+      # Map2Check em que só os 21 lib/*.bc mudam; bin/, plugins e symlinks
+      # ficam iguais. Aqui só as fixtures (a instalação real do C não existe
+      # no runner).
+      - name: Teste da sobreposição de instalação (fixtures)
+        run: scripts/it/test-overlay-install.sh
 
       # Nenhuma relocação da staticlib pode ter como alvo um nome que um
       # módulo IR define (uma chamada interna a um export #[no_mangle] seria
@@ -329,21 +337,68 @@ jobs:
       - name: Autotestes do pós-processamento do bitcode (scripts/klee-*.py)
         run: scripts/test-klee-postprocess.sh
 
-      # Build de teste dos 21 módulos .bc do drop-in (Task 2.7; o build
-      # definitivo é da Task 3.1): núcleo Rust com o pós-processamento da D7
-      # e os 20 módulos IR montados com llvm-as-16. Usa o LLVM 16 instalado
-      # acima, sem a imagem; o script confere que o llvm-dis-16 lê os 21, que
-      # o núcleo não define nome de módulo IR, que não sobra nenhum `freeze`
-      # (o KLEE 3.1 não o executa) e, desde a Task 2.10, que o núcleo tem
-      # menos de 80 000 linhas de instrução e nenhum llvm.bitreverse
-      # (test-core-checks.sh é o teste dessas duas guardas). Rodar o KLEE
-      # sobre eles precisa da imagem e não é feito aqui.
-      - name: Build de teste dos módulos .bc do runtime drop-in
+      # Os 21 módulos .bc do drop-in (Task 3.1, scripts/build-runtime-bc.sh):
+      # núcleo Rust com o pós-processamento da D7 e os 20 módulos IR montados
+      # com llvm-as-16. Usa o LLVM 16 instalado acima, sem a imagem; o build
+      # confere que o llvm-dis-16 lê os 21, que o núcleo não define nome de
+      # módulo IR, que não sobra nenhum `freeze` (o KLEE 3.1 não o executa),
+      # que o núcleo tem menos de 80 000 linhas de instrução e nenhum
+      # llvm.bitreverse (test-core-checks.sh é o teste dessas duas guardas).
+      # test-build-runtime-bc.sh constrói duas vezes, do zero, e exige a lista
+      # exata dos 21 arquivos e os mesmos sha256 (determinismo); a matriz de
+      # link precisa da imagem e roda no job runtime_matrix.
+      - name: Os 21 módulos .bc do runtime drop-in (lista, leitura, determinismo)
         run: |
           scripts/runtime-ir/test-core-checks.sh
-          scripts/runtime-ir/build-test-runtime-bc.sh target/runtime-ir/dropin-lib
+          MATRIX=0 scripts/test-build-runtime-bc.sh
 
       - name: Checar dependências do lockfile KLEE (cargo-deny)
         uses: EmbarkStudios/cargo-deny-action@v2
         with:
           manifest-path: ./klee/Cargo.toml
+
+  # Matriz de link dos 21 .bc (Task 3.1) na imagem do Map2Check. A imagem
+  # map2check-dev:develop-<commit12> não está num registro: o job baixa o
+  # develop (scripts/fetch-map2check.sh, que reescreve vendor/MAP2CHECK_VERSION
+  # no runner: o commit testado é o HEAD do develop do dia, não
+  # necessariamente o fixado no repositório), constrói a imagem a partir do
+  # Dockerfile.dev dele (camadas no cache do GitHub Actions) e a instalação do
+  # C (scripts/it/build-map2check.sh), gera os .bc e roda a matriz sem e com
+  # --ref. Longo (a imagem compila KLEE, AFL++, crab/clam, dg); só em push e
+  # sob demanda, não em pull_request.
+  runtime_matrix:
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 240
+    steps:
+      - name: Baixar o código do repositório
+        uses: actions/checkout@v4
+
+      - name: Instalar o rustc 1.72.1 (LLVM 16)
+        run: rustup toolchain install 1.72.1 --profile minimal
+
+      - name: Baixar o Map2Check (branch develop, sem .git)
+        run: |
+          scripts/fetch-map2check.sh
+          echo "MAP2CHECK_COMMIT12=$(sed -n 's/^commit=//p' vendor/MAP2CHECK_VERSION | cut -c1-12)" >> "$GITHUB_ENV"
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Construir a imagem do Map2Check (Dockerfile.dev do develop)
+        uses: docker/build-push-action@v6
+        with:
+          context: vendor/map2check
+          file: vendor/map2check/Dockerfile.dev
+          tags: map2check-dev:develop-${{ env.MAP2CHECK_COMMIT12 }}
+          load: true
+          cache-from: type=gha,scope=map2check-dev
+          cache-to: type=gha,scope=map2check-dev,mode=max
+
+      - name: Construir e instalar o Map2Check (C) na imagem
+        run: scripts/it/build-map2check.sh
+
+      - name: Os 21 .bc, determinismo e a matriz de link (sem e com --ref)
+        run: scripts/test-build-runtime-bc.sh
+
+      - name: Sobreposição sobre a instalação do C
+        run: BC_DIR=target/runtime-bc-test/a/out scripts/it/test-overlay-install.sh

@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: GPL-3.0-only
-# Test-only build of the drop-in runtime as the 21 bitcode modules of the D7
-# layout A-fwd (docs/cutover/d7-layout.md), pulled forward from Task 3.1 by
-# Task 2.7 so that the KLEE generator can run under real KLEE. Task 3.1
-# productizes it (scripts/build-runtime-bc.sh, determinism, install overlay).
+# The drop-in runtime as the 21 bitcode modules Map2Check links (the D7
+# layout A-fwd, docs/cutover/d7-layout.md): exactly the file names the
+# frontend's Caller::linkLLVM passes to llvm-link, nothing else in <out-dir>.
+# Deterministic: two builds of the same tree give the same bytes
+# (scripts/test-build-runtime-bc.sh). scripts/it/overlay-install.sh puts them
+# into a copy of a C install of Map2Check.
 #
 #   Map2CheckFunctions.bc  the Rust core: klee/Cargo.toml with rustc 1.72.1
 #                          (D1, route A'), features `dropin,wasm`, fat LTO,
@@ -41,8 +43,8 @@
 # both checks were in tests/klee_paths.sh until Task 2.10;
 # llvm-dis-16 reads all 21 modules.
 #
-# Usage: build-test-runtime-bc.sh <out-dir>
-#        build-test-runtime-bc.sh --check-core <final.ll>   (the two checks
+# Usage: build-runtime-bc.sh <out-dir>
+#        build-runtime-bc.sh --check-core <final.ll>   (the two checks
 #          above on a disassembled core; scripts/runtime-ir/test-core-checks.sh)
 # Environment: M2C_CORE_MAX_LINES (default 80000), the line ceiling.
 # The Rust step runs on the host (rustup toolchain KLEE_RUSTC_TOOLCHAIN,
@@ -52,8 +54,8 @@
 # Environment: CARGO_TARGET_DIR (default target/dropin-core).
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
-ROOT="$(cd "$HERE/../.." && pwd)"
-die() { echo "build-test-runtime-bc: error: $*" >&2; exit 1; }
+ROOT="$(cd "$HERE/.." && pwd)"
+die() { echo "build-runtime-bc: error: $*" >&2; exit 1; }
 
 MODULES="Map2CheckFunctions TrackBBLog NonDetLog PropertyGenerator ContainerRealloc ContainerBTree BTree AnalysisModeMemtrack AnalysisModeMemcleanup AnalysisModeOverflow AnalysisModeAssert AnalysisModeNone AllocationLog ListLog HeapLog NonDetGeneratorNone NonDetGeneratorKlee NonDetGeneratorAFL WasmRuntimeStubs WitnessGeneration WitnessGenerationNone"
 
@@ -165,7 +167,7 @@ postprocess() {
     n=$((n + 1))
   done
   [ "$(ls "$out"/*.bc | wc -l)" = 21 ] || { echo "expected 21 modules in $out" >&2; return 1; }
-  echo "build-test-runtime-bc: $n modules readable by llvm-dis-16"
+  echo "build-runtime-bc: $n modules readable by llvm-dis-16"
 }
 
 if [ "${1:-}" = --check-core ]; then
@@ -183,6 +185,10 @@ fi
 [ $# -eq 1 ] || { echo "usage: $0 <out-dir>" >&2; exit 2; }
 mkdir -p "$1"
 OUT="$(cd "$1" && pwd)"
+# <out-dir> holds the 21 modules and nothing else: an earlier output is
+# replaced, any other file is refused rather than deleted.
+others="$(cd "$OUT" && ls -A | grep -vxF -f <(for m in $MODULES; do echo "$m.bc"; done; echo .work) || true)"
+[ -z "$others" ] || die "$OUT has files that are not runtime modules: $(echo $others)"
 rm -f "$OUT"/*.bc
 TOOLCHAIN="${KLEE_RUSTC_TOOLCHAIN:-1.72.1}"
 TARGET_DIR="${CARGO_TARGET_DIR:-$ROOT/target/dropin-core}"
@@ -208,7 +214,7 @@ mapfile -t bcs < <(find "$deps" -maxdepth 1 -name 'map2check-*.bc')
 [ "${#bcs[@]}" -eq 1 ] || die "expected one map2check-*.bc in $deps, found ${#bcs[@]}"
 cp "${bcs[0]}" "$work/core.bc"
 
-python3 -I "$HERE/gen_ll.py" "$ROOT/docs/runtime-abi/inventory.tsv" "$work/ll"
+python3 -I "$ROOT/scripts/runtime-ir/gen_ll.py" "$ROOT/docs/runtime-abi/inventory.tsv" "$work/ll"
 tail -n +2 "$ROOT/docs/runtime-abi/inventory.tsv" | cut -f1 > "$work/abi.txt"
 
 host_llvm=1
@@ -222,8 +228,10 @@ else
   docker image inspect "$IMAGE" >/dev/null 2>&1 || die "no LLVM 16 tools on PATH and no image $IMAGE"
   docker run --rm --network none --user "$(id -u):$(id -g)" \
     -v "$ROOT:/repo:ro" -v "$OUT:/out" "$IMAGE" \
-    /repo/scripts/runtime-ir/build-test-runtime-bc.sh --postprocess /repo /out/.work /out \
+    /repo/scripts/build-runtime-bc.sh --postprocess /repo /out/.work /out \
     || die "post-processing failed (in $IMAGE)"
 fi
 rm -rf "$work"
-echo "build-test-runtime-bc: wrote the 21 modules to $OUT (rustc $TOOLCHAIN, LLVM $llvm_version)"
+[ "$(cd "$OUT" && ls -A | sort)" = "$(for m in $MODULES; do echo "$m.bc"; done | sort)" ] \
+  || die "$OUT does not hold exactly the 21 modules"
+echo "build-runtime-bc: wrote the 21 modules to $OUT (rustc $TOOLCHAIN, LLVM $llvm_version)"

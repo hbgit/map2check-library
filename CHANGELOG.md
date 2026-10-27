@@ -15,6 +15,27 @@ the C ABI or the JSON report must update them.
 
 ## [Unreleased]
 
+### Added
+
+- **The runtime as the 21 bitcode modules Map2Check links (Task 3.1).**
+  `scripts/build-runtime-bc.sh <out-dir>` (was the test build
+  `scripts/runtime-ir/build-test-runtime-bc.sh`) writes exactly
+  `Map2CheckFunctions.bc` ... `WitnessGenerationNone.bc`, the same bytes on
+  every build; `scripts/it/overlay-install.sh` copies a C install of
+  Map2Check and replaces only its `lib/*.bc`.
+
+### Changed
+
+- **The drop-in core ends a run through the linked witness module (Task
+  3.1).** In `Map2CheckFunctions.bc`, `map2check_exit` calls the
+  `generate_aux_files`/`generate_confirmation_file` of `WitnessGeneration.bc`
+  or `WitnessGenerationNone.bc`, as `Map2CheckFunctions.c:89-102` does, and
+  `generate_aux_files` calls the `analysis_generate_aux_witness_files` of the
+  mode module and the `nondet_generate_aux_witness_files` of the generator
+  module, which alone writes `klee_log.csv` (`WitnessGeneration.c:15-29`).
+  Before, the drop-in wrote no witness file at all: nothing turned the
+  witness option on. The staticlib keeps `__m2c_rt_witness_enable`.
+
 ## [2.0.0-rc.1] - 2026-10-27
 
 ### Breaking changes

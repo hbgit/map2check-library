@@ -14,9 +14,13 @@
 
 use std::path::{Path, PathBuf};
 
-use super::legacy_files::{self, LegacyLogs};
+use super::legacy_files;
+#[cfg(not(feature = "dropin"))]
+use super::legacy_files::LegacyLogs;
+#[cfg(not(feature = "dropin"))]
+use crate::analysismode::mode::AnalysisMode;
 use crate::{
-    analysismode::mode::{self, AnalysisMode},
+    analysismode::mode,
     caller::AnalysisResult,
     state::{self, AnalysisState, Config},
 };
@@ -60,7 +64,9 @@ const SEED_REPLAY_ENV: &str = "MAP2CHECK_SEED_REPLAY";
 /// `generate_aux_files` (`WitnessGeneration.c:15-29`): the basic-block log,
 /// the logs of the memory modes (`analysis_generate_aux_witness_files`,
 /// `AnalysisModeMemtrack.c:148-152`) and, on a violation or when
-/// `MAP2CHECK_SEED_REPLAY` is set, the nondet log.
+/// `MAP2CHECK_SEED_REPLAY` is set, the nondet log. The staticlib's body; the
+/// drop-in core calls the linked modules instead ([`rt_generate_aux_files`]).
+#[cfg(not(feature = "dropin"))]
 pub(crate) fn generate_aux_files(
     dir: &Path,
     config: Config,
@@ -126,7 +132,9 @@ pub(crate) fn generate_confirmation_file(dir: &Path) {
 /// `__m2c_rt_witness_generate_aux_files`: [`generate_aux_files`] on the
 /// state of the run, into the output directory, whatever the mode and the
 /// witness option (the IR module `WitnessGeneration.bc` is linked only into
-/// witness builds, D7).
+/// witness builds, D7). The staticlib (host programs, tests) has no mode or
+/// generator module to call, so the core writes their files itself.
+#[cfg(not(feature = "dropin"))]
 pub(crate) fn rt_generate_aux_files(violation: bool) {
     let Some(dir) = output_dir() else {
         return;
@@ -137,6 +145,34 @@ pub(crate) fn rt_generate_aux_files(violation: bool) {
         Ok(())
     }) {
         eprintln!("[map2check] error: {e}");
+    }
+}
+
+/// `__m2c_rt_witness_generate_aux_files` in the drop-in core: the body of
+/// `generate_aux_files` (`WitnessGeneration.c:15-29`) with the modules it is
+/// linked with: `track_bb_log.st`, then `analysis_generate_aux_witness_files`
+/// of the mode module (the logs of the memory modes), then, on a violation or
+/// when `MAP2CHECK_SEED_REPLAY` is set, `nondet_generate_aux_witness_files`
+/// of the generator module, which alone writes `klee_log.csv`
+/// (`NonDetGeneratorNone.c` writes nothing, `NonDetGeneratorKlee.c:55-61`
+/// pins the values first). The calls run with the state lock released.
+#[cfg(feature = "dropin")]
+pub(crate) fn rt_generate_aux_files(violation: bool) {
+    let Some(dir) = output_dir() else {
+        return;
+    };
+    if let Err(e) = state::with_state(|s| {
+        report(
+            legacy_files::TRACKBB_LOG_FILE,
+            legacy_files::write_trackbb_log(&dir, &s.bbtrack),
+        );
+        Ok(())
+    }) {
+        eprintln!("[map2check] error: {e}");
+    }
+    crate::ffi::dropin::mode_generate_aux_witness_files();
+    if violation || std::env::var_os(SEED_REPLAY_ENV).is_some() {
+        crate::ffi::dropin::generator_generate_aux_witness_files();
     }
 }
 
@@ -179,7 +215,10 @@ pub(crate) fn destroy(config: Config, s: &mut AnalysisState) {
 /// verdict is known: the aux files (witness on), `map2check_destroy`, and on
 /// an error the confirmation file (witness on) and the abort. With no `dir`
 /// (no mode) nothing is written and nothing aborts. Returns only without an
-/// error, or without `dir`.
+/// error, or without `dir`. The staticlib decides the witness by
+/// `config.witness` (`__m2c_rt_witness_enable`); the drop-in core by the
+/// witness module it is linked with (the other `finish`).
+#[cfg(not(feature = "dropin"))]
 fn finish(dir: Option<&Path>, config: Config) {
     let failed = match state::with_state(|s| {
         let failed = s.got_error || !s.result.ok;
@@ -202,6 +241,42 @@ fn finish(dir: Option<&Path>, config: Config) {
         if config.witness {
             generate_confirmation_file(dir);
         }
+        std::process::abort();
+    }
+}
+
+/// The end of `map2check_exit` in the drop-in core, as the C
+/// (`Map2CheckFunctions.c:94-101`): `generate_aux_files(&trackbb_log,
+/// gotError)` of the linked witness module (`WitnessGeneration.bc` writes the
+/// aux files, `WitnessGenerationNone.bc` nothing), `map2check_destroy`, and
+/// on an error `generate_confirmation_file` of the witness module and the
+/// abort. `config.witness` plays no part. The module calls run with the
+/// state lock released. With no `dir` (no mode) no module is called and
+/// nothing aborts. Returns only without an error, or without `dir`.
+#[cfg(feature = "dropin")]
+fn finish(dir: Option<&Path>, config: Config) {
+    let Some(dir) = dir else {
+        if let Err(e) = state::with_state(|s| {
+            destroy(config, s);
+            Ok(())
+        }) {
+            eprintln!("[map2check] error: {e}");
+        }
+        return;
+    };
+    let failed = match state::with_state(|s| Ok(s.got_error || !s.result.ok)) {
+        Ok(failed) => failed,
+        Err(e) => unknown_and_abort(dir, config, &e),
+    };
+    crate::ffi::dropin::witness_generate_aux_files(failed);
+    if let Err(e) = state::with_state(|s| {
+        destroy(config, s);
+        Ok(())
+    }) {
+        unknown_and_abort(dir, config, &e);
+    }
+    if failed {
+        crate::ffi::dropin::witness_generate_confirmation_file();
         std::process::abort();
     }
 }
@@ -272,8 +347,14 @@ fn unknown_and_abort(dir: &Path, config: Config, error: &crate::error::Map2Check
         ..AnalysisResult::default()
     };
     write_properties(dir, &unknown);
+    #[cfg(not(feature = "dropin"))]
     if config.witness {
         generate_confirmation_file(dir);
+    }
+    #[cfg(feature = "dropin")]
+    {
+        let _ = config;
+        crate::ffi::dropin::witness_generate_confirmation_file();
     }
     std::process::abort();
 }

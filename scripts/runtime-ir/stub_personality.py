@@ -11,7 +11,7 @@ its functions become abort():
 - std::panicking::rust_panic_with_hook (any hash): std's panic path, which
   every core::panicking call reaches. Its inlined get_backtrace_style keeps
   a `freeze` that KLEE 3.1 cannot execute ("illegal instruction"), and the
-  freeze guard of build-test-runtime-bc.sh allows none. Under panic = abort
+  freeze guard of scripts/build-runtime-bc.sh allows none. Under panic = abort
   the hook ends in abort anyway; only the panic message is no longer
   printed. Approved by the user on 2026-10-27 (D7 item 3).
 

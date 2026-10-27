@@ -607,7 +607,7 @@ class Generated(unittest.TestCase):
         map2check_assume* that call them. None of the functions the Rust core
         calls into the IR (analysis_*, nondet_init/destroy, generate_*) is
         among them, so no Rust frame is ever below a longjmp;
-        build-test-runtime-bc.sh checks the core side (it references none of
+        scripts/build-runtime-bc.sh checks the core side (it references none of
         these names)."""
         out = run_gen()
         reach = set()

@@ -37,11 +37,11 @@
 #       afl-fuzz with the frontend's environment and flags (CmpLog included)
 #       until the first crash, on each side; each side's crashing input
 #       replayed, standalone from stdin as the frontend does, through both
-#       sides' -fuzzed.out: exit 134 and the same property files.
-#   info: the replay through -witness-fuzzed.out (the frontend's
-#       confirmation, caller.cpp:1656-1680) is printed, not asserted: the
-#       drop-in core does not call the external generate_confirmation_file
-#       yet (Task 3.1, plan Step 1), so map2check_checked_error differs.
+#       sides' -fuzzed.out: exit 134 and the same property files; and
+#       through both sides' -witness-fuzzed.out (the frontend's confirmation,
+#       caller.cpp:1656-1680): map2check_checked_error written on both sides
+#       (Task 3.1: the drop-in core calls the generate_confirmation_file of
+#       WitnessGeneration.bc, as the C map2check_exit does).
 #
 # Programs: the installed C Map2Check (target/map2check-it/c) instruments
 # each one (--debug --nondet-generator afl <mode>) and its <hash>-output.bc
@@ -58,7 +58,7 @@
 # come from are checked below, so a change there fails the test.
 #
 # Usage: test-afl-generator.sh [<drop-in-lib-dir>]
-#   default: builds target/runtime-ir/dropin-lib with build-test-runtime-bc.sh
+#   default: builds target/runtime-ir/dropin-lib with scripts/build-runtime-bc.sh
 # Environment: AFL_CRASH_SECS (default 60), the cap of each afl-fuzz run.
 # Exits 77 (skip) without docker, the image or the C install.
 # Output: target/runtime-ir/afl-gen/ (results.tsv, one directory per case).
@@ -107,7 +107,7 @@ if [ $# -ge 1 ]; then
   LIB="$(cd "$1" && pwd)"
 else
   LIB="$ROOT/target/runtime-ir/dropin-lib"
-  "$HERE/build-test-runtime-bc.sh" "$LIB"
+  "$ROOT/scripts/build-runtime-bc.sh" "$LIB"
 fi
 
 W="$ROOT/target/runtime-ir/afl-gen"
@@ -374,7 +374,12 @@ for from in c rs; do
       || why+=" properties rust '$(rrow "$from" rs/fuzzed 4)' vs C '$(rrow "$from" c/fuzzed 4)';"
     [ "$(rrow "$from" rs/witness-fuzzed 4)" = "$(rrow "$from" c/witness-fuzzed 4)" ] \
       || why+=" witness properties rust '$(rrow "$from" rs/witness-fuzzed 4)' vs C '$(rrow "$from" c/witness-fuzzed 4)';"
-    echo "info $t $from-crash: map2check_checked_error C $(rrow "$from" c/witness-fuzzed 5), rust $(rrow "$from" rs/witness-fuzzed 5) (Task 3.1)"
+    for side in c rs; do
+      [ "$(rrow "$from" "$side/witness-fuzzed" 3)" = 134 ] \
+        || why+=" $side/witness-fuzzed exit $(rrow "$from" "$side/witness-fuzzed" 3), want 134;"
+      [ "$(rrow "$from" "$side/witness-fuzzed" 5)" = yes ] \
+        || why+=" $side/witness-fuzzed wrote no map2check_checked_error;"
+    done
   fi
   if [ -z "$why" ]; then echo "ok $t $from-crash: $(rrow "$from" rs/fuzzed 4)"
   else echo "FAIL $t $from-crash:$why" >&2; fail=1; fi
