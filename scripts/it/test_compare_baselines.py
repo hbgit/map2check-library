@@ -278,12 +278,91 @@ class CompareBaselinesTest(unittest.TestCase):
 
     # --- desempenho ---------------------------------------------------------
 
-    def _perf_case(self, wall_r=10.0, rss_r=1000, n=5):
+    def _perf_case(self, wall_r=10.0, rss_r=1000, n=5, gen="symex", wall_c=10.0):
+        # symex por padrão: o desconto de compilação só vale em afl e hybrid.
         c, r = [], []
         for i in range(n):
-            c += rows("d/t%d" % i, wall=10.0, rss=1000)
-            r += rows("d/t%d" % i, wall=wall_r, rss=rss_r)
+            c += rows("d/t%d" % i, gen=gen, wall=wall_c, rss=1000)
+            r += rows("d/t%d" % i, gen=gen, wall=wall_r, rss=rss_r)
         return self.run_gate(c, r)
+
+    # --- desconto de compilação (afl e hybrid, decisão de 2026-10-27) --------
+
+    def test_compile_allowance_constant(self):
+        self.assertEqual(cb.COMPILE_ALLOWANCE_S, 2.0)
+        self.assertEqual(sorted(cb.ALLOWANCE_GENERATORS), ["afl", "hybrid"])
+
+    def test_afl_raw_ratio_above_limit_passes_after_allowance(self):
+        # Bruta 3,0/1,0 = 3,0; com desconto (3,0 - 2,0)/1,0 = 1,0.
+        code, out = self._perf_case(wall_c=1.0, wall_r=3.0, gen="afl")
+        line = self.criterion(out, "wall")
+        self.assertIn("PASS", line)
+        self.assertIn("2.0 s", line)
+        self.assertIn("afl", line)
+        self.assertGate(code, out, True)
+
+    def test_hybrid_raw_ratio_above_limit_passes_after_allowance(self):
+        code, out = self._perf_case(wall_c=1.0, wall_r=3.0, gen="hybrid")
+        self.assertIn("PASS", self.criterion(out, "wall"))
+        self.assertGate(code, out, True)
+
+    def test_afl_still_fails_after_allowance(self):
+        # (3,2 - 2,0)/1,0 = 1,2 > 1,10.
+        code, out = self._perf_case(wall_c=1.0, wall_r=3.2, gen="afl")
+        line = self.criterion(out, "wall")
+        self.assertIn("FAIL", line)
+        self.assertIn("2.0 s", line)
+        self.assertGate(code, out, False)
+
+    def test_symex_gets_no_allowance(self):
+        # Com desconto daria (3,0 - 2,0)/1,0 = 1,0; sem ele, 3,0.
+        code, out = self._perf_case(wall_c=1.0, wall_r=3.0, gen="symex")
+        line = self.criterion(out, "wall")
+        self.assertIn("FAIL", line)
+        self.assertIn("symex", line)
+        self.assertGate(code, out, False)
+
+    def test_allowance_boundary_1_10_passes(self):
+        code, out = self._perf_case(wall_c=1.0, wall_r=3.1, gen="afl")
+        self.assertIn("PASS", self.criterion(out, "wall"))
+        self.assertGate(code, out, True)
+
+    def test_allowance_boundary_1_11_fails(self):
+        code, out = self._perf_case(wall_c=1.0, wall_r=3.11, gen="hybrid")
+        self.assertIn("FAIL", self.criterion(out, "wall"))
+        self.assertGate(code, out, False)
+
+    def test_allowance_clamps_at_zero(self):
+        # max(1,5 - 2,0, 0) = 0: razão 0, não negativa.
+        code, out = self._perf_case(wall_c=1.0, wall_r=1.5, gen="afl")
+        line = self.criterion(out, "wall")
+        self.assertIn("PASS", line)
+        self.assertIn("mediana 0.000", line)
+        self.assertGate(code, out, True)
+
+    def test_allowance_is_per_rep_before_median(self):
+        # max(x - 2, 0) por repetição: [0, 0, 1, 1, 1] -> mediana 1,0.
+        c = rows("d/safe", wall=1.0)
+        r = rows("d/safe", wall=[1.0, 1.5, 3.0, 3.0, 3.0])
+        code, out = self.run_gate(c, r)
+        self.assertIn("mediana 1.000", self.criterion(out, "wall"))
+
+    def test_warning_uses_adjusted_ratio_for_afl(self):
+        c, r = [], []
+        for i in range(5):
+            c += rows("d/t%d" % i, wall=1.0)
+            # t0: bruta 3,4, ajustada 1,4 (sem aviso); t1: bruta 3,6, ajustada 1,6.
+            r += rows("d/t%d" % i, wall={0: 3.4, 1: 3.6}.get(i, 3.0))
+        code, out = self.run_gate(c, r)
+        warns = [l for l in out if l.startswith("warning:")]
+        self.assertEqual(len(warns), 1, out)
+        self.assertIn("d/t1", warns[0])
+        self.assertIn("1.60", warns[0])
+        self.assertIn("2.0 s", warns[0])
+
+    def test_rss_ignores_allowance(self):
+        code, out = self._perf_case(wall_c=1.0, wall_r=3.0, gen="afl", rss_r=1370)
+        self.assertIn("FAIL", self.criterion(out, "rss"))
 
     def test_wall_median_1_10_passes(self):
         code, out = self._perf_case(wall_r=11.0)

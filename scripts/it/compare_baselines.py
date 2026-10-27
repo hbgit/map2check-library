@@ -31,13 +31,17 @@ Critérios (uma linha cada, `<nome>: PASS|FAIL <detalhe>`):
   witness         witness presente onde o C gerou um
   expected        acertos contra expected_verdict, por gerador, não diminuem
   deltas          toda linha de deltas-aceitos.tsv cita um SD-xx existente
-  wall            mediana de wall_rust/wall_c <= 1,10
+  wall            mediana de wall_rust/wall_c <= 1,10; em afl e hybrid cada
+                  wall_rust vira max(wall_rust - 2,0 s, 0) antes da razão
+                  (custo fixo de compilação, decisão de 2026-10-27); symex
+                  sem desconto. A linha imprime o desconto e a mediana bruta.
   timeouts        contagem de TIMEOUT (vereditos por moda) por gerador não aumenta
   rss             mediana de maxrss_rust/maxrss_c <= 1,36
 Divergências em verdict/failed-details/witness só passam com uma linha em
 deltas-aceitos.tsv (task prp gen field c_value rust_value sd_ref) cujo sd_ref
 existe como título `SD-xx` em docs/semantic-deltas.md. Uma chave isolada com
-razão > 1,5 gera só uma linha `warning:`. Última linha: `gate: PASS` ou
+razão > 1,5 gera só uma linha `warning:` (em afl e hybrid, sobre a razão de
+wall com desconto). Última linha: `gate: PASS` ou
 `gate: FAIL`; código de saída 0 ou 1.
 """
 
@@ -54,6 +58,11 @@ DELTA_COLUMNS = ["task", "prp", "gen", "field", "c_value", "rust_value", "sd_ref
 WALL_MAX = 1.10
 RSS_MAX = 1.36
 WARN_RATIO = 1.5
+# Custo fixo de compilação descontado de cada wall_rust em afl e hybrid: as três
+# compilações do núcleo pelo afl-clang-fast no frontend (docs/cutover/decisoes.md,
+# "Critério de tempo do gate para afl e híbrido", aprovado em 2026-10-27).
+COMPILE_ALLOWANCE_S = 2.0
+ALLOWANCE_GENERATORS = frozenset({"afl", "hybrid"})
 EPS = 1e-9
 
 ROOT = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
@@ -94,6 +103,15 @@ def mode(values):
     return sorted(counts.items(), key=lambda kv: (-kv[1], kv[0]))[0][0]
 
 
+def allowance(gen):
+    return COMPILE_ALLOWANCE_S if gen in ALLOWANCE_GENERATORS else 0.0
+
+
+def adjusted_wall(gen, wall):
+    """wall_rust com o desconto de compilação do gerador (nunca negativo)."""
+    return max(wall - allowance(gen), 0.0)
+
+
 def aggregate(rows):
     """{(task, prp, gen): resumo por moda/mediana das repetições}."""
     groups = {}
@@ -108,6 +126,8 @@ def aggregate(rows):
             "tag": tag, "line": line, "function": function,
             "witness": mode([r["witness"] for r in rs]),
             "wall": statistics.median(float(r["wall_s"]) for r in rs),
+            "wall_adj": statistics.median(adjusted_wall(key[2], float(r["wall_s"]))
+                                          for r in rs),
             "rss": statistics.median(float(r["maxrss_kb"]) for r in rs),
             "reps": len(rs),
         }
@@ -251,20 +271,44 @@ def main(argv=None):
     report("expected", exp_ok, "(" + ", ".join(exp_parts) + ")")
 
     # desempenho
-    def ratios(field):
+    def ratios(r_field, c_field):
         out = []
         for key in common:
-            if c[key][field] > 0:
-                out.append((r[key][field] / c[key][field], key))
+            if c[key][c_field] > 0:
+                out.append((r[key][r_field] / c[key][c_field], key))
         return out
 
-    for field, name, limit in (("wall", "wall", WALL_MAX), ("rss", "rss", RSS_MAX)):
-        rs = ratios(field)
-        med = statistics.median(x for x, _ in rs) if rs else 1.0
-        report(name, med <= limit + EPS, "(mediana %.3f, limite %.2f, %d chaves)" % (med, limit, len(rs)))
-        for x, key in rs:
-            if x > WARN_RATIO + EPS:
-                lines.append("warning: %s %s %s razão %s %.2f > %.1f" % (key + (name, x, WARN_RATIO)))
+    def med(rs):
+        return statistics.median(x for x, _ in rs) if rs else 1.0
+
+    # wall: razão com desconto em afl/hybrid (critério) e bruta (informativa).
+    adj, raw = ratios("wall_adj", "wall"), ratios("wall", "wall")
+    m = med(adj)
+    per_gen = []
+    for g in gens:
+        ga = [x for x in adj if x[1][2] == g]
+        gr = [x for x in raw if x[1][2] == g]
+        if not ga:
+            continue
+        per_gen.append("%s %.3f (bruta %.3f, desconto %.1f s)" % (
+            g, med(ga), med(gr), allowance(g)))
+    report("wall", m <= WALL_MAX + EPS,
+           "(mediana %.3f, limite %.2f, %d chaves; desconto de compilação %.1f s por "
+           "execução em %s, symex sem desconto; mediana bruta %.3f; por gerador: %s)" % (
+               m, WALL_MAX, len(adj), COMPILE_ALLOWANCE_S,
+               ", ".join(sorted(ALLOWANCE_GENERATORS)), med(raw), "; ".join(per_gen)))
+    for x, key in adj:
+        if x > WARN_RATIO + EPS:
+            note = (" (com desconto de %.1f s)" % allowance(key[2])) if allowance(key[2]) else ""
+            lines.append("warning: %s %s %s razão wall %.2f > %.1f%s" % (
+                key + (x, WARN_RATIO, note)))
+
+    rs = ratios("rss", "rss")
+    m = med(rs)
+    report("rss", m <= RSS_MAX + EPS, "(mediana %.3f, limite %.2f, %d chaves)" % (m, RSS_MAX, len(rs)))
+    for x, key in rs:
+        if x > WARN_RATIO + EPS:
+            lines.append("warning: %s %s %s razão rss %.2f > %.1f" % (key + (x, WARN_RATIO)))
 
     to_parts, to_ok = [], True
     for g in gens:
