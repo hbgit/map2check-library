@@ -150,6 +150,17 @@ int main(int argc, char **argv) {
     map2check_wasm_malloc(0x400, 16);
     map2check_wasm_check_access(0x40c, 4);
     map2check_wasm_check_access(0x40d, 4);
+  } else if (is(c, "wasm-shared-log")) {
+    /* Tells the IR forwarders from the legacy map2check_wasm_* exports
+     * (feature wasm, own table), both defined under
+     * --allow-multiple-definition. The IR shares develop's allocation log
+     * with map2check_malloc (AnalysisModeMemtrack.c:403-436): the access and
+     * the free of BLOCK are valid and the wasm block leaks (FALSE-MEMTRACK).
+     * The legacy table never saw BLOCK: OVERFLOW at the access. */
+    map2check_malloc(BLOCK, 16);
+    map2check_wasm_check_access((uint64_t)(uintptr_t)BLOCK, 4);
+    map2check_wasm_free((uint64_t)(uintptr_t)BLOCK, 70);
+    map2check_wasm_malloc(0x400, 8);
   } else if (is(c, "valid")) {
     /* char *s = calloc(2, 2); strcpy(s, "ab"); puts(s); free(s); a VLA; a
      * NULL realloc argument; then the end-of-program hooks. */

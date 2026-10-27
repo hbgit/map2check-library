@@ -45,7 +45,13 @@ done
 # The legacy exports map2check_check_deref and map2check_wasm_{malloc,free,
 # check_access} stay until Task 2.10; they are the only names allowed to
 # clash, and the linker keeps the IR's (listed before the library).
-NAMES='analysis_(init|destroy|is_program_correct|generate_aux_witness_files)|map2check_(add_store_pointer|alloca|calloc|check_cstring|check_deref|free|free_resolved_address|function|load|malloc|non_static_alloca|posix)|map2check_wasm_(malloc|free|check_access)|update_reference_list_log|heap_log|list_log|allocation_log|ERROR_DEREF'
+# Every name the module defines, plus its C-only globals and helpers from
+# the inventory (the logs, ERROR_DEREF, update_reference_list_log).
+NAMES="$( { sed -nE 's/^define[^@]*@([A-Za-z0-9_.]+)\(.*/\1/p' "$OUT/AnalysisModeMemtrack.ll"
+  awk -F'\t' 'NR>1 && $5 ~ /(^|\+)AnalysisModeMemtrack\.bc(\+|$)/ {print $1}' "$ROOT/docs/runtime-abi/inventory.tsv"; } \
+  | sort -u | paste -sd'|')"
+[ "$(sed -nE 's/^define[^@]*@([A-Za-z0-9_.]+)\(.*/\1/p' "$OUT/AnalysisModeMemtrack.ll" | wc -l)" = 19 ] \
+  || { echo "FAIL: AnalysisModeMemtrack.ll does not define the 19 C names" >&2; exit 1; }
 LEGACY='map2check_check_deref|map2check_wasm_(malloc|free|check_access)'
 defined="$(nm --defined-only --extern-only "$LIB" 2>/dev/null | awk 'NF==3 {print $3}' | grep -xE "$NAMES" || true)"
 leaks="$(printf '%s\n' "$defined" | grep -vxE "$LEGACY" | grep . || true)"
@@ -128,6 +134,11 @@ for bin in array btree; do
   # :430-436: FALSE_OVERFLOW, line 0, function "".
   check "$bin" wasm-access 134 "map2check_property=$(prop OVERFLOW 0 '')" \
     "map2check_property_overflow=$(prop OVERFLOW 0 '')"
+  # The IR map2check_wasm_* (not the legacy exports) won the link: they
+  # share the allocation log with map2check_malloc, so only the wasm leak is
+  # reported (the legacy table would report OVERFLOW at the access).
+  check "$bin" wasm-shared-log 134 'map2check_property=FALSE-MEMTRACK\n' \
+    'map2check_property_memtrack=FALSE-MEMTRACK\n'
   # A correct run: the analysis_* hooks, then NONE.
   check "$bin" valid 0 'map2check_property=NONE\n' 'heap_log.csv=0x10000300;vla;8\n' \
     'allocation_log.csv=0x10000100;0;1\n' \

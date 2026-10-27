@@ -1661,6 +1661,22 @@ fn memtrack_rt_boundary_child() {
                     __m2c_rt_memtrack_map2check_check_deref(52, main);
                     __m2c_rt_memtrack_map2check_free_resolved_address(addr(BLOCK), 53, main, 0);
                 }
+                "free of a literal NULL" => {
+                    // free(0): not a LoadInst, so the pass emits the resolved
+                    // free with isNullValid 0 (MemoryTrackPass.cpp:428-436).
+                    __m2c_rt_memtrack_map2check_free_resolved_address(
+                        std::ptr::null(),
+                        54,
+                        main,
+                        0,
+                    );
+                }
+                "wasm leak" => {
+                    // A lifted malloc never freed: develop free()s the
+                    // linear-memory offset (AllocationLog.c:91) and glibc
+                    // aborts before FALSE_MEMTRACK is written (SD-19).
+                    __m2c_rt_memtrack_map2check_wasm_malloc(0x400, 16);
+                }
                 other => panic!("caso desconhecido {other}"),
             }
         }
@@ -1668,6 +1684,43 @@ fn memtrack_rt_boundary_child() {
         map2check_success();
         println!("{RETURNED}");
     }
+}
+
+/// SD-23: develop's `find_row_with_address(NULL)` returns NULL and the
+/// release writes through it (SIGSEGV, no property file); the core goes on
+/// and the run ends correct.
+#[test]
+fn sd23_free_of_a_literal_null_goes_on_where_develop_crashes() {
+    let (output, files) = memtrack_rt_case("free of a literal NULL");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert_eq!(output.status.code(), Some(0), "{stdout}");
+    assert!(stdout.contains(RETURNED));
+    assert_eq!(
+        files,
+        BTreeMap::from([("map2check_property".to_owned(), "NONE\n".to_owned())])
+    );
+}
+
+/// SD-19: a leaked wasm block is FALSE-MEMTRACK; the core does not free()
+/// the offset as develop does.
+#[test]
+fn sd19_wasm_leak_is_false_memtrack_without_freeing_the_offset() {
+    let (output, files) = memtrack_rt_case("wasm leak");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert_eq!(output.status.signal(), Some(6), "{stdout}");
+    assert_eq!(
+        files,
+        BTreeMap::from([
+            (
+                "map2check_property".to_owned(),
+                "FALSE-MEMTRACK\n".to_owned()
+            ),
+            (
+                "map2check_property_memtrack".to_owned(),
+                "FALSE-MEMTRACK\n".to_owned()
+            ),
+        ])
+    );
 }
 
 /// The files `memtrack_rt_boundary_child` leaves for `case`.

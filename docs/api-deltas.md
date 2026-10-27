@@ -99,7 +99,7 @@ build with `--features libfuzzer`.
 | `__m2c_rt_memtrack_analysis_generate_aux_witness_files` | `void __m2c_rt_memtrack_analysis_generate_aux_witness_files(void)` | — | new | Task 2.5, forwarded from `analysis_generate_aux_witness_files` (`AnalysisModeMemtrack.c:148-152`): writes `heap_log.csv`, `allocation_log.csv` and `list_log.csv` from the drop-in logs, in the C formats. |
 | `__m2c_rt_memtrack_map2check_check_cstring` | `void __m2c_rt_memtrack_map2check_check_cstring(const char *string)` | — | new | Task 2.5, forwarded from `map2check_check_cstring` (`AnalysisModeMemtrack.c:159-166`): each byte up to the terminator must lie in a tracked block (`map2check_load` of 1 byte); stops before the first invalid byte with `ERROR_DEREF` set. NULL does nothing. |
 | `__m2c_rt_memtrack_map2check_load` | `void __m2c_rt_memtrack_map2check_load(const void *ptr, int size)` | — | new | Task 2.5, forwarded from `map2check_load` (`AnalysisModeMemtrack.c:168-174`): sets `ERROR_DEREF` when no heap-log row (`HeapLog.c:37-52`) and no live allocation (`AllocationLog.c:127-148`) covers the access. Takes `int size` as the C definition; the pass declares `i64` (MemoryTrackPass.cpp:885). |
-| `__m2c_rt_memtrack_map2check_free_resolved_address` | `void __m2c_rt_memtrack_map2check_free_resolved_address(const void *ptr, unsigned int line, const char *function_name, short is_null_valid)` | — | new | Task 2.5, forwarded from `map2check_free_resolved_address` (`AnalysisModeMemtrack.c:176-195`): `is_invalid_free` (`ListLog.c:95-118`) records `FALSE-FREE`; otherwise the row is freed and the references updated. A block never stored through a pointer is `FALSE-FREE`, as in develop (SD-13 stays for the legacy export). `short isNullValid` as the C definition; the pass declares `i1`. |
+| `__m2c_rt_memtrack_map2check_free_resolved_address` | `void __m2c_rt_memtrack_map2check_free_resolved_address(const void *ptr, unsigned int line, const char *function_name, short is_null_valid)` | — | new | Task 2.5, forwarded from `map2check_free_resolved_address` (`AnalysisModeMemtrack.c:176-195`): `is_invalid_free` (`ListLog.c:95-118`) records `FALSE-FREE`; otherwise the row is freed and the references updated. A block never stored through a pointer is `FALSE-FREE`, as in develop (SD-13 stays for the legacy export). A release with no allocation row (literal `free(NULL)`) goes on where develop crashes (SD-23). `short isNullValid` as the C definition; the pass declares `i1`. |
 | `__m2c_rt_memtrack_map2check_add_store_pointer` | `void __m2c_rt_memtrack_map2check_add_store_pointer(const void *var, const void *value, unsigned int scope, const char *name, int line, const char *function_name)` | — | new | Task 2.5, forwarded from `map2check_add_store_pointer` (`AnalysisModeMemtrack.c:258-307`): a list row (C step) unless redundant, then `update_reference_list_log`. |
 | `__m2c_rt_memtrack_map2check_check_deref` | `void __m2c_rt_memtrack_map2check_check_deref(int line, const char *function_name)` | — | new | Task 2.5, forwarded from `map2check_check_deref` (`AnalysisModeMemtrack.c:309-315`): with `ERROR_DEREF` set records `FALSE-DEREF` at `line`. The C signature `(int, const char *)`; the legacy export `map2check_check_deref(const void *, uint32_t, uint32_t, const char *)` stays until Task 2.10, so the IR forwarder and the staticlib still clash by name. |
 | `__m2c_rt_memtrack_map2check_malloc` | `void __m2c_rt_memtrack_map2check_malloc(const void *ptr, int size)` | — | new | Task 2.5, forwarded from `map2check_malloc` (`AnalysisModeMemtrack.c:317-335`): revives the row of a known address or appends one; a block whose low 32 bits are zero (`int addr = (long)ptr`) records `UNKNOWN` (`map2check_property__unknown`). |
@@ -323,11 +323,12 @@ or `map2check_posix` is ignored (develop reads `*ptr`); a release whose block
 has no allocation row (a NULL block with `isNullValid` 0 that `is_invalid_free`
 lets through, or any untracked block in memcleanup mode) stops there, with
 no row or reference update (develop writes through the NULL that
-`find_row_with_address` returns, `:190-192`, `:372-375`); a function or
+`find_row_with_address` returns, `:190-192`, `:372-375`; SD-23); a function or
 variable name of 35 bytes or more is cut at 35 bytes in the logs (develop's
-`strncpy` leaves no terminator and `%s` reads past the array). At the end of
+`strncpy` leaves no terminator and `%s` reads past the array; SD-17). At the end of
 the run `valid_allocation_log` does not `free()` the leaked blocks
-(`AllocationLog.c:91`); the process ends right after. `klee_log.csv` of a
+(`AllocationLog.c:91`); the process ends right after (for a wasm offset
+develop's `free()` aborts before the verdict: SD-19). `klee_log.csv` of a
 drop-in witness run is still the legacy log until Task 3.1.
 
 **NULL function name.** The core entry points (overflow included) write a

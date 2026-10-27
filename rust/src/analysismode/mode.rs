@@ -161,9 +161,15 @@ pub fn analysis_is_program_correct(
         // AnalysisModeMemcleanup.c:138-148 — FALSE_MEMCLEANUP only when the
         // last leaked address (valid_allocation_log, AllocationLog.c:69-101)
         // is still referenced by a pointer variable (is_memcleanup_error,
-        // ListLog.c:40-65). An unreachable leak gives no verdict.
-        Some(AnalysisMode::Memcleanup) => memtrack::has_develop_memcleanup_error(&state.memtrack)
-            .then_some(ViolatedProperty::MemsafetyMemcleanup),
+        // ListLog.c:40-65). An unreachable leak gives no verdict. The drop-in
+        // logs are checked first with that rule, as in memtrack.
+        Some(AnalysisMode::Memcleanup) => state
+            .c_memory
+            .is_program_correct(MemMode::Memcleanup)
+            .or_else(|| {
+                memtrack::has_develop_memcleanup_error(&state.memtrack)
+                    .then_some(ViolatedProperty::MemsafetyMemcleanup)
+            }),
         // AnalysisModeNone.c:19 — TRUE.
         Some(AnalysisMode::None) => None,
         // AnalysisModeOverflow.c:283 — TRUE.
@@ -476,6 +482,25 @@ mod tests {
     fn program_correct_target_ignores_leak() {
         let c = config(Some(AnalysisMode::Target), true);
         assert_eq!(analysis_is_program_correct(c, &mut leaked_state()), None);
+    }
+
+    #[test]
+    fn program_correct_memcleanup_checks_the_drop_in_logs_with_the_c_rule() {
+        // AnalysisModeMemcleanup.c:138-148 over the drop-in logs: only a
+        // leak still referenced by a pointer is FALSE_MEMCLEANUP.
+        let c = config(Some(AnalysisMode::Memcleanup), false);
+        let mut s = AnalysisState::default();
+        assert!(s.c_memory.malloc(0x1000, 8));
+        assert_eq!(analysis_is_program_correct(c, &mut s), None);
+        let mut s = AnalysisState::default();
+        let mut step = 0;
+        assert!(s.c_memory.malloc(0x1000, 8));
+        s.c_memory
+            .add_store_pointer(&mut step, 0x10, 0x1000, 1, b"p", 1, b"main");
+        assert_eq!(
+            analysis_is_program_correct(c, &mut s),
+            Some(ViolatedProperty::MemsafetyMemcleanup)
+        );
     }
 
     #[test]

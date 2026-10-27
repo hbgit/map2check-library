@@ -4557,3 +4557,37 @@ fn memtrack_rt_wasm_checks_use_the_allocation_log() {
     __m2c_rt_memtrack_map2check_wasm_free(0x800, 9);
     assert_violated(ViolatedProperty::MemsafetyFree, 9, "");
 }
+
+#[test]
+fn sd23_memtrack_rt_release_without_allocation_row_goes_on() {
+    let _guard = memtrack_rt();
+    // SAFETY: NULL is only compared; C strings.
+    unsafe {
+        __m2c_rt_memtrack_map2check_add_store_pointer(
+            addr(0x10),
+            std::ptr::null(),
+            1,
+            c"p".as_ptr(),
+            1,
+            c"main".as_ptr(),
+        );
+        __m2c_rt_memtrack_map2check_free_resolved_address(std::ptr::null(), 2, c"main".as_ptr(), 0);
+    }
+    // develop SIGSEGVs in find_row_with_address's NULL row; no verdict, no
+    // row, no reference update here.
+    assert_ok();
+    assert_eq!(c_list_log(), "0;0x10;(nil);1;0;0;p;1;main;0\n");
+    assert_eq!(c_allocation_log(), "");
+}
+
+#[test]
+fn memtrack_rt_check_deref_keeps_a_negative_c_line() {
+    let _guard = memtrack_rt();
+    __m2c_rt_memtrack_map2check_load(addr(0x9000), 1);
+    // SAFETY: C string.
+    unsafe { __m2c_rt_memtrack_map2check_check_deref(-1, c"main".as_ptr()) };
+    // The int is stored as its u32 bit pattern; the property files print
+    // it back with %d (write_property_files: `line as i32`), so "-1".
+    assert_violated(ViolatedProperty::MemsafetyDeref, u32::MAX, "main");
+    assert_eq!(snapshot(|s| s.result.line as i32), -1);
+}

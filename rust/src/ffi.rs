@@ -1090,7 +1090,12 @@ unsafe fn rt_mem_check_deref(
     if with_c_memory(false, |m, _| m.check_deref(mode)) {
         // SAFETY: caller contract.
         let fname = unsafe { c_str(function_name) };
-        record_violation(ViolatedProperty::MemsafetyDeref, line as u32, fname, false);
+        // The result keeps lines as u32; the C `int` is stored as its bit
+        // pattern and the property files print it back with `%d`
+        // (`write_property_files`: `line as i32`), so a negative line reads
+        // as in C.
+        let line = u32::from_ne_bytes(line.to_ne_bytes());
+        record_violation(ViolatedProperty::MemsafetyDeref, line, fname, false);
     }
 }
 
@@ -1205,6 +1210,54 @@ unsafe fn rt_mem_free(
         let fname = unsafe { c_str(function_name) };
         record_violation(ViolatedProperty::MemsafetyFree, line, fname, false);
     }
+}
+
+/// `map2check_alloca` (`AnalysisModeMemtrack.c:386-391`).
+///
+/// # Safety
+/// `name` must be null or a valid null-terminated C string.
+unsafe fn rt_mem_alloca(
+    name: *const std::os::raw::c_char,
+    ptr: *const std::os::raw::c_void,
+    size: std::os::raw::c_int,
+    size_of_primitive: std::os::raw::c_int,
+    line: std::os::raw::c_int,
+    scope: std::os::raw::c_int,
+) {
+    // SAFETY: caller contract.
+    let name = unsafe { c_bytes(name) };
+    with_c_memory((), |m, _| {
+        m.alloca(name, ptr as u64, size, size_of_primitive, line, scope)
+    });
+}
+
+/// `map2check_non_static_alloca` (`AnalysisModeMemtrack.c:380-384`).
+///
+/// # Safety
+/// `name` must be null or a valid null-terminated C string.
+unsafe fn rt_mem_non_static_alloca(
+    name: *const std::os::raw::c_char,
+    ptr: *const std::os::raw::c_void,
+    size: std::os::raw::c_int,
+    size_of_primitive: std::os::raw::c_int,
+    line: std::os::raw::c_int,
+    scope: std::os::raw::c_int,
+) {
+    // SAFETY: caller contract.
+    let name = unsafe { c_bytes(name) };
+    with_c_memory((), |m, _| {
+        m.non_static_alloca(name, ptr as u64, size, size_of_primitive, line, scope)
+    });
+}
+
+/// `map2check_function` (`AnalysisModeMemtrack.c:393-397`).
+///
+/// # Safety
+/// `name` must be null or a valid null-terminated C string.
+unsafe fn rt_mem_function(name: *const std::os::raw::c_char, ptr: *const std::os::raw::c_void) {
+    // SAFETY: caller contract.
+    let name = unsafe { c_bytes(name) };
+    with_c_memory((), |m, _| m.function(name, ptr as u64));
 }
 
 /// `analysis_init` of the memtrack mode (`AnalysisModeMemtrack.c:125-130`):
@@ -1428,14 +1481,9 @@ pub unsafe extern "C" fn __m2c_rt_memtrack_map2check_non_static_alloca(
     line: std::os::raw::c_int,
     scope: std::os::raw::c_int,
 ) {
+    // SAFETY: forwarded caller contract.
     ffi_guard(
-        || {
-            // SAFETY: caller contract.
-            let name = unsafe { c_bytes(name) };
-            with_c_memory((), |m, _| {
-                m.non_static_alloca(name, ptr as u64, size, size_of_primitive, line, scope)
-            });
-        },
+        || unsafe { rt_mem_non_static_alloca(name, ptr, size, size_of_primitive, line, scope) },
         (),
     );
 }
@@ -1455,14 +1503,9 @@ pub unsafe extern "C" fn __m2c_rt_memtrack_map2check_alloca(
     line: std::os::raw::c_int,
     scope: std::os::raw::c_int,
 ) {
+    // SAFETY: forwarded caller contract.
     ffi_guard(
-        || {
-            // SAFETY: caller contract.
-            let name = unsafe { c_bytes(name) };
-            with_c_memory((), |m, _| {
-                m.alloca(name, ptr as u64, size, size_of_primitive, line, scope)
-            });
-        },
+        || unsafe { rt_mem_alloca(name, ptr, size, size_of_primitive, line, scope) },
         (),
     );
 }
@@ -1478,14 +1521,8 @@ pub unsafe extern "C" fn __m2c_rt_memtrack_map2check_function(
     name: *const std::os::raw::c_char,
     ptr: *const std::os::raw::c_void,
 ) {
-    ffi_guard(
-        || {
-            // SAFETY: caller contract.
-            let name = unsafe { c_bytes(name) };
-            with_c_memory((), |m, _| m.function(name, ptr as u64));
-        },
-        (),
-    );
+    // SAFETY: forwarded caller contract.
+    ffi_guard(|| unsafe { rt_mem_function(name, ptr) }, ());
 }
 
 /// `map2check_wasm_malloc` (`AnalysisModeMemtrack.c:403-416`): the block of
@@ -1503,7 +1540,9 @@ pub extern "C" fn __m2c_rt_memtrack_map2check_wasm_free(offset: u64, line: std::
     ffi_guard(
         || {
             if !with_c_memory(true, |m, _| m.wasm_free(offset)) {
-                record_violation(ViolatedProperty::MemsafetyFree, line as u32, "", false);
+                // The C `int` line as its bit pattern (see rt_mem_check_deref).
+                let line = u32::from_ne_bytes(line.to_ne_bytes());
+                record_violation(ViolatedProperty::MemsafetyFree, line, "", false);
             }
         },
         (),

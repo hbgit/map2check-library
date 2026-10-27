@@ -180,6 +180,8 @@ A aprovação aceita a proposta junto com estas condições.
 - O `--btree` do C não é referência válida. Sob `symex`, dá SUCCEEDED errado em 3 tarefas cujo veredito esperado é falso: `lis_unsafe`, `memleaks_test1-1` e `memleaks_test17_2-1`. Também perde `list-ext` (FAILED → UNKNOWN, nos dois geradores).
 - Números de pico de RSS (mediana, 30 tarefas `valid-memsafety`): symex C-btree 136,3 MB contra Rust 221,2 MB; afl C-btree 94,3 MB contra Rust 92,3 MB. O maior pico do Rust é 472 MB.
 
+**Ressalva do `--btree` do C (Task 2.5, drop-in):** no C, `find_row_with_address` e as buscas de `get_element_at` sobre `ContainerBTree.c`/`BTree.c` devolvem a linha da página carregada, e o runtime a altera no lugar (`row->size = 0; row->is_free = TRUE`, `AnalysisModeMemtrack.c:190-192`, `:372-375`) sem regravá-la. Se `CHECK_AND_RELEASE_PAGES` (`BTree.c:32`, chamado em `:125` e `:166`) liberar a página antes de ela ir para o disco (limite `B_TREE_MAX_OPEN_PAGES` = 133682 páginas, `BTree.h:39-40`), a liberação se perde e um free some do log. O container único do Rust (`memtrack::c_mode::CMemory`, servido aos dois conjuntos de módulos, que são IR vazios) não tem esse caso. Na prática ele é inalcançável: exige mais de 133682 páginas abertas.
+
 **Desvio da condição literal da Task 2.6:** a condição (RSS do Rust ≤ o do C com `--btree` em todas as tarefas) **não** é atendida: sob `symex` o Rust fica acima em 30 de 30 tarefas, por um excesso fixo de cerca de 80 MB. O mantenedor aprovou explicitamente se afastar dela, pelo motivo acima.
 
 ## D4

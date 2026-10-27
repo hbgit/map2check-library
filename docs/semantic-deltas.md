@@ -562,7 +562,7 @@ map2check_map_malloc(NULL, 4);   /* writes map2check_property__unknown, aborts *
 ### SD-17 — The memory and nondet logs are rebuilt from this library's records
 
 **Classification:** accepted limitation
-**Tests:** `rust/src/ffi_golden_tests.rs::false_free_matches_c_runtime`, `rust/src/ffi_golden_tests.rs::false_free_resolved_matches_c_runtime`, `rust/src/ffi_golden_tests.rs::none_matches_c_runtime`, `rust/src/ffi_golden_tests.rs::false_memtrack_matches_c_runtime`, `rust/src/ffi_tests.rs::list_log_free_row_names_the_variable_passed_to_free`, `rust/src/ffi_tests.rs::failing_free_keeps_its_list_log_row_like_develop`, `rust/src/output/legacy_files.rs::nondet_rows_use_develop_types_and_value_formats`, `rust/src/ffi_golden_tests.rs::nondet_types_match_c_runtime`
+**Tests:** `rust/src/ffi_golden_tests.rs::false_free_matches_c_runtime`, `rust/src/ffi_golden_tests.rs::false_free_resolved_matches_c_runtime`, `rust/src/ffi_golden_tests.rs::none_matches_c_runtime`, `rust/src/ffi_golden_tests.rs::false_memtrack_matches_c_runtime`, `rust/src/ffi_tests.rs::memtrack_rt_names_are_cut_at_35_bytes_except_the_variable_name`, `rust/src/memtrack/c_mode.rs::cname_cuts_at_35_bytes_and_at_the_first_nul`, `rust/src/ffi_tests.rs::nondet_function_name_is_cut_at_35_bytes_and_null_is_empty`, `rust/src/ffi_tests.rs::list_log_free_row_names_the_variable_passed_to_free`, `rust/src/ffi_tests.rs::failing_free_keeps_its_list_log_row_like_develop`, `rust/src/output/legacy_files.rs::nondet_rows_use_develop_types_and_value_formats`, `rust/src/ffi_golden_tests.rs::nondet_types_match_c_runtime`
 
 **Rust:** `heap_log.csv`, `allocation_log.csv`, `list_log.csv` and
 `klee_log.csv` are rebuilt at the end of the run by replaying the memory
@@ -582,8 +582,16 @@ appends before it checks (`AnalysisModeMemtrack.c:346-358`); the golden
   byte, value format and type number included (golden `NONDET-TYPES`,
   SD-18).
 - **Long function names.** Develop copies names into `char[35]` with
-  `strncpy` (`FUNCTION_MAX_LENGTH_NAME`), which leaves names of 35 or more
-  characters unterminated; this library writes the whole name.
+  `strncpy` (`FUNCTION_MAX_LENGTH_NAME`; `ListLog.c:133`, `HeapLog.c:25`,
+  `NonDetLog.c`), which leaves a name of 35 or more bytes unterminated, so
+  its `%s` prints the 35 bytes and then whatever follows the array
+  (undefined behaviour). This library cuts the name at 35 bytes: the
+  function name of `list_log.csv` and the variable name of `heap_log.csv`
+  on the drop-in path (`__m2c_rt_memtrack_*`, Task 2.5), and the function
+  name of `klee_log.csv` on both paths (Task 2.2). The legacy replay of
+  `list_log.csv` and `heap_log.csv` still writes the whole name. The
+  variable name of `list_log.csv` is a pointer in C and is written whole
+  on both paths. The user approved the cut on 2026-10-26.
 - **NULL names.** Develop prints `(null)` for a NULL name; this library
   prints an empty string, as everywhere else (SD-09).
 
@@ -642,7 +650,7 @@ int __map2check_main__(void) {
 ### SD-19 — The wasm2c runtime: a bad access is OVERFLOW, and four small differences
 
 **Classification:** C behaviour preserved on purpose
-**Tests:** `rust/src/ffi_tests.rs::wasm_access_past_the_block_is_reported_as_develop_does`, `rust/src/ffi_tests.rs::wasm_free_of_an_untracked_offset_is_a_false_free_at_the_line`, `rust/src/ffi_tests.rs::wasm_double_free_is_not_reported_as_develop`, `rust/src/ffi_tests.rs::wasm_access_inside_a_freed_inner_block_is_covered_by_the_older_block`, `rust/src/ffi_tests.rs::wasm_checks_are_inactive_in_modes_without_memory_checks`, `rust/src/ffi_tests.rs::wasm_first_violation_is_final`, `rust/src/ffi_tests.rs::rt_funcref_table_allocates_zeroed_elements`
+**Tests:** `rust/src/ffi_tests.rs::wasm_access_past_the_block_is_reported_as_develop_does`, `rust/src/ffi_tests.rs::wasm_free_of_an_untracked_offset_is_a_false_free_at_the_line`, `rust/src/ffi_tests.rs::wasm_double_free_is_not_reported_as_develop`, `rust/src/ffi_tests.rs::wasm_access_inside_a_freed_inner_block_is_covered_by_the_older_block`, `rust/src/ffi_tests.rs::wasm_checks_are_inactive_in_modes_without_memory_checks`, `rust/src/ffi_tests.rs::wasm_first_violation_is_final`, `rust/src/ffi_tests.rs::rt_funcref_table_allocates_zeroed_elements`, `rust/src/ffi_golden_tests.rs::sd19_wasm_leak_is_false_memtrack_without_freeing_the_offset`
 
 **Rust (feature `wasm`):** `map2check_wasm_check_access(offset, size)`
 reports an access that does not lie inside a live registered block as
@@ -679,6 +687,16 @@ Differences:
   `max_size` is left untouched in both.
 - **Grow.** `wasm_rt_grow_memory` does not clear bytes when the new size is
   not larger than the old one (develop would `memset` a wrapped length).
+- **Leaked block (Task 2.5, drop-in path).** At the end of a wasm run that
+  leaks a lifted `malloc` block, develop's `valid_allocation_log` calls
+  `free((void *)addr)` on the linear-memory offset (`AllocationLog.c:91`),
+  which is not a host heap pointer, so glibc aborts (`free(): invalid
+  pointer`) before `analysis_is_program_correct` writes `FALSE_MEMTRACK`
+  (`AnalysisModeMemtrack.c:139-142`). The frontend sees an abort with no
+  property file. `__m2c_rt_memtrack_*` never calls `free()` on a logged
+  address, so the run reports `FALSE-MEMTRACK` (`map2check_property` and
+  `map2check_property_memtrack`) and aborts. The user approved this on
+  2026-10-26.
 
 **Reproduce (link with `--features wasm`, analysis mode memtrack):**
 
@@ -829,3 +847,44 @@ only the runtime itself uses. They are listed as `c-only` in
 76 names fails to link with the C runtime and links with the Rust one. A
 program that defines a `__m2c_rt_*` name fails to link with the Rust runtime
 only.
+
+### SD-23 — A release with no allocation row goes on where develop crashes
+
+**Classification:** intentional
+**Tests:** `rust/src/ffi_golden_tests.rs::sd23_free_of_a_literal_null_goes_on_where_develop_crashes`, `rust/src/ffi_tests.rs::sd23_memtrack_rt_release_without_allocation_row_goes_on`, `rust/src/memtrack/c_mode.rs::a_release_without_allocation_row_stops_where_develop_crashes`
+
+The user approved this on 2026-10-26.
+
+**Rust:** on the drop-in path (`__m2c_rt_memtrack_*`, Task 2.5), when a
+release that the free check let through finds no allocation row for the
+block, the core stops there. It updates no row and no reference, records
+nothing, and the run goes on to its normal end. With a correct program that
+end is `NONE`.
+
+**C runtime of Map2Check `develop`:** `map2check_free_resolved_address`
+(`AnalysisModeMemtrack.c:176-195`) and `map2check_free` (`:351-378`) write
+through the row that `find_row_with_address` (`AllocationLog.c:103-118`)
+returns, with no NULL test (`row->size = 0`, `:190-192` and `:372-375`). For
+an address with no row that is a NULL dereference: the process gets
+SIGSEGV and writes no property file.
+
+**Cause:** the pass emits `map2check_free_resolved_address(ptr, line, fn, 0)`
+for a free whose argument is not a `LoadInst` (`MemoryTrackPass.cpp:428-436`).
+- In memtrack mode a literal `free(NULL)` or `free(0)` reaches the release:
+  `is_invalid_free` is FALSE for NULL (`ListLog.c:97-99`), and NULL has no
+  row.
+- In memcleanup mode, `error = FALSE` (`AnalysisModeMemcleanup.c:168`, `:342`)
+  lets every free through, so a free of an untracked or stack address has no
+  row either.
+
+**Reproduce:**
+
+```c
+/* the program: */
+int main(void) { free(0); return 0; }
+/* the calls the pass emits, with AnalysisModeMemtrack.bc: */
+map2check_init(0);
+analysis_init();
+map2check_free_resolved_address(NULL, 1, "main", 0); /* Rust: nothing; develop: SIGSEGV */
+map2check_success();                                  /* Rust: NONE */
+```
