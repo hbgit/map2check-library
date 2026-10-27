@@ -2423,6 +2423,9 @@ fn memtrack_mode_reports_any_leak_reachable_or_not() {
 mod wasm {
     use super::*;
     use crate::wasm::{
+        __m2c_rt_wasm_allocate_funcref_table, __m2c_rt_wasm_allocate_memory, __m2c_rt_wasm_free,
+        __m2c_rt_wasm_free_funcref_table, __m2c_rt_wasm_free_memory, __m2c_rt_wasm_grow_memory,
+        __m2c_rt_wasm_init, __m2c_rt_wasm_is_initialized, __m2c_rt_wasm_trap,
         map2check_wasm_check_access, map2check_wasm_free, map2check_wasm_malloc,
         w2c_wasi__snapshot__preview1_proc_exit, wasm_rt_allocate_funcref_table,
         wasm_rt_allocate_memory, wasm_rt_free, wasm_rt_free_funcref_table, wasm_rt_free_memory,
@@ -2738,11 +2741,180 @@ mod wasm {
     fn rt_init_free_and_is_initialized_follow_the_stub() {
         // The stub is "always initialised for KLEE": true from the start,
         // false after wasm_rt_free, true again after wasm_rt_init.
+        let _g = INIT_FLAG.lock().unwrap_or_else(|e| e.into_inner());
+        wasm_rt_init();
         assert!(wasm_rt_is_initialized());
         wasm_rt_free();
         assert!(!wasm_rt_is_initialized());
         wasm_rt_init();
         assert!(wasm_rt_is_initialized());
+    }
+
+    // ── __m2c_rt_wasm_* (the core entry points of WasmRuntimeStubs.ll) ─────
+    //
+    // The IR module defines the C names `wasm_rt_*` and forwards each one to
+    // `__m2c_rt_wasm_*`; the expectations are those of WasmRuntimeStubs.c
+    // (line numbers of the develop copy cited per test). The descriptors
+    // cross the C ABI as `void *`.
+
+    fn p(m: &mut wasm_rt_memory_t) -> *mut std::os::raw::c_void {
+        (m as *mut wasm_rt_memory_t).cast()
+    }
+
+    #[test]
+    fn m2c_rt_wasm_allocate_memory_zeroes_and_sets_every_field() {
+        // WasmRuntimeStubs.c:22-35: calloc(1, page_size * initial_pages); data_end,
+        // page_size, size, pages and max_pages set; is64 untouched.
+        let mut m = mem();
+        m.is64 = true;
+        // SAFETY: `m` is a valid descriptor; freed below.
+        unsafe { __m2c_rt_wasm_allocate_memory(p(&mut m), 2, 5, false, 65536) };
+        assert!(!m.data.is_null());
+        assert_eq!(
+            (m.size, m.pages, m.max_pages, m.page_size),
+            (2 * 65536, 2, 5, 65536)
+        );
+        assert!(m.is64, "is64 is not written (WasmRuntimeStubs.c:34)");
+        // SAFETY: data_end is one past the block that data starts.
+        assert_eq!(unsafe { m.data.add(m.size as usize) }, m.data_end);
+        // SAFETY: the block is `size` bytes long and calloc'd.
+        assert!((0..m.size as usize).all(|i| unsafe { *m.data.add(i) } == 0));
+        // SAFETY: allocated above.
+        unsafe { __m2c_rt_wasm_free_memory(p(&mut m)) };
+    }
+
+    #[test]
+    fn m2c_rt_wasm_grow_memory_returns_old_pages_zero_fills_and_fails_with_uint32_max() {
+        // WasmRuntimeStubs.c:41-63.
+        let mut m = mem();
+        // SAFETY: valid descriptor, freed below.
+        unsafe {
+            __m2c_rt_wasm_allocate_memory(p(&mut m), 1, 3, false, 65536);
+            *m.data = 0xAA;
+            assert_eq!(__m2c_rt_wasm_grow_memory(p(&mut m), 0), 1, ":47-49");
+            assert_eq!(__m2c_rt_wasm_grow_memory(p(&mut m), 1), 1, ":62");
+            assert_eq!((m.pages, m.size), (2, 2 * 65536));
+            assert_eq!(*m.data, 0xAA, "old contents kept (realloc)");
+            assert_eq!(*m.data.add(65536), 0, "new pages zeroed (:57)");
+            assert_eq!(m.data.add(m.size as usize), m.data_end, ":59");
+            let fail = u64::from(u32::MAX);
+            assert_eq!(
+                __m2c_rt_wasm_grow_memory(p(&mut m), 2),
+                fail,
+                "past max_pages (:44-46)"
+            );
+            assert_eq!(
+                __m2c_rt_wasm_grow_memory(p(&mut m), u64::MAX),
+                fail,
+                "wrap (:44)"
+            );
+            assert_eq!(m.pages, 2, "a failed grow changes nothing");
+            m.page_size = 0;
+            assert_eq!(__m2c_rt_wasm_grow_memory(p(&mut m), 1), 2);
+            assert_eq!(m.size, 3 * 65536, "zero page_size defaults to 64 KiB (:50)");
+            __m2c_rt_wasm_free_memory(p(&mut m));
+        }
+    }
+
+    #[test]
+    fn m2c_rt_wasm_free_memory_nulls_the_data_and_zeroes_the_size() {
+        // WasmRuntimeStubs.c:66-70: pages and max_pages are left as they were.
+        let mut m = mem();
+        // SAFETY: valid descriptor.
+        unsafe {
+            __m2c_rt_wasm_allocate_memory(p(&mut m), 1, 3, false, 65536);
+            __m2c_rt_wasm_free_memory(p(&mut m));
+        }
+        assert!(m.data.is_null());
+        assert_eq!((m.size, m.pages, m.max_pages), (0, 1, 3));
+    }
+
+    #[test]
+    fn m2c_rt_wasm_funcref_table_allocates_and_frees() {
+        // WasmRuntimeStubs.c:73-84 (element size: SD-19).
+        // SAFETY: an all-zero table descriptor is valid.
+        let mut t: wasm_rt_funcref_table_t = unsafe { std::mem::zeroed() };
+        let tp: *mut std::os::raw::c_void = (&mut t as *mut wasm_rt_funcref_table_t).cast();
+        // SAFETY: valid descriptor, freed below.
+        unsafe { __m2c_rt_wasm_allocate_funcref_table(tp, 4, 10) };
+        assert!(!t.data.is_null());
+        assert_eq!(
+            (t.size, t.max_size),
+            (4, 0),
+            "max_size is not written (:77)"
+        );
+        // SAFETY: 4 calloc'd elements.
+        unsafe {
+            assert!((*t.data.add(3)).module_instance.is_null());
+            __m2c_rt_wasm_free_funcref_table(tp);
+        }
+        assert!(t.data.is_null(), ":83");
+        assert_eq!(t.size, 4, "size is not reset (:81-84)");
+    }
+
+    const TRAP_CHILD_ENV: &str = "M2C_WASM_TRAP_CHILD";
+
+    /// Runs this test in a child process (the trap aborts) and returns its
+    /// end signal and the files it wrote.
+    fn trap_child(case: &str) -> (Option<i32>, Vec<String>, String) {
+        use std::os::unix::process::ExitStatusExt;
+        let dir = tempfile::tempdir().unwrap();
+        let out = std::process::Command::new(std::env::current_exe().unwrap())
+            .args(["--exact", "ffi::tests::wasm::m2c_rt_wasm_trap_aborts"])
+            .args(["--nocapture", "--test-threads=1"])
+            .env(TRAP_CHILD_ENV, case)
+            .env(crate::output::termination::OUTPUT_DIR_ENV, dir.path())
+            .output()
+            .unwrap();
+        let mut files: Vec<String> = std::fs::read_dir(dir.path())
+            .unwrap()
+            .map(|e| e.unwrap().file_name().into_string().unwrap())
+            .collect();
+        files.sort();
+        let unknown = std::fs::read_to_string(dir.path().join("map2check_property__unknown"))
+            .unwrap_or_default();
+        (out.status.signal(), files, unknown)
+    }
+
+    #[test]
+    fn m2c_rt_wasm_trap_aborts() {
+        // WasmRuntimeStubs.c:110-116: map2check_error() aborts; it never
+        // returns. SD-19: with a mode set the verdict is UNKNOWN (the file
+        // develop's map2check_error leaves for the frontend).
+        if let Some(case) = std::env::var_os(TRAP_CHILD_ENV) {
+            started((case == "mode").then_some(AnalysisMode::Memtrack));
+            __m2c_rt_wasm_trap(3);
+            println!("returned");
+            return;
+        }
+        let (signal, files, unknown) = trap_child("mode");
+        assert_eq!(signal, Some(6));
+        assert_eq!(files, ["map2check_property__unknown"]);
+        assert_eq!(unknown, "UNKNOWN\n");
+        let (signal, files, _) = trap_child("no-mode");
+        assert_eq!(signal, Some(6), "aborts with no mode too");
+        assert!(
+            files.is_empty(),
+            "nothing is written without a mode: {files:?}"
+        );
+    }
+
+    /// The initialised flag is one process-wide static: the tests that flip it
+    /// take this lock.
+    static INIT_FLAG: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+    #[test]
+    fn m2c_rt_wasm_init_free_and_is_initialized_follow_the_stub() {
+        // WasmRuntimeStubs.c:96-108: initialised from the start, false after
+        // wasm_rt_free, true after wasm_rt_init, and init/free repeat freely.
+        let _g = INIT_FLAG.lock().unwrap_or_else(|e| e.into_inner());
+        __m2c_rt_wasm_init();
+        __m2c_rt_wasm_free();
+        __m2c_rt_wasm_free();
+        assert!(!__m2c_rt_wasm_is_initialized());
+        __m2c_rt_wasm_init();
+        __m2c_rt_wasm_init();
+        assert!(__m2c_rt_wasm_is_initialized());
     }
 
     #[test]

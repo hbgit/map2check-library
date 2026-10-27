@@ -166,12 +166,22 @@ for sym in ("analysis_init", "analysis_destroy", "analysis_is_program_correct",
                                          "load", "malloc", "non_static_alloca", "posix"))):
     IMPLEMENTED[("AnalysisModeMemcleanup", sym)] = f"__m2c_rt_memcleanup_{sym}"
 
+# WasmRuntimeStubs.c (Task 2.9): the nine wasm_rt_* functions forward to
+# __m2c_rt_wasm_<name>. w2c_wasi__snapshot__preview1_proc_exit has an empty C
+# body (see C_EMPTY). The struct-pointer parameters lower to ptr.
+for sym in ("allocate_memory", "grow_memory", "free_memory", "allocate_funcref_table",
+            "free_funcref_table", "init", "free", "is_initialized", "trap"):
+    IMPLEMENTED[("WasmRuntimeStubs", f"wasm_rt_{sym}")] = f"__m2c_rt_wasm_{sym}"
+
 # Functions whose C body is empty, so the unmarked empty define is the C
 # behaviour, not a stub: WitnessGenerationNone.c ("DO NOTHING").
 # AnalysisModeAssert.c:25-27 __VERIFIER_assert ("DO NOTHING").
+# WasmRuntimeStubs.c:90-93 w2c_wasi__snapshot__preview1_proc_exit (only
+# `(void)instance; (void)code;`).
 C_EMPTY = {("WitnessGenerationNone", "generate_aux_files"),
            ("WitnessGenerationNone", "generate_confirmation_file"),
-           ("AnalysisModeAssert", "__VERIFIER_assert")}
+           ("AnalysisModeAssert", "__VERIFIER_assert"),
+           ("WasmRuntimeStubs", "w2c_wasi__snapshot__preview1_proc_exit")}
 
 # Modules whose symbols are all runtime-internal C helpers (container rows by
 # value, log files): the Rust core keeps that logic private, so the module is

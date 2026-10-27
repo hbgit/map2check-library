@@ -125,6 +125,15 @@ jobs:
           cargo build --release --all-features
           scripts/runtime-ir/test-afl-ir.sh
 
+      # Stubs wasm (Task 2.9): gera WasmRuntimeStubs.ll, confere a sintaxe e
+      # liga um driver C que chama os wasm_rt_* como a saída do wasm2c; cada
+      # nome C chega ao seu __m2c_rt_wasm_*. Os exports legados de mesmo nome
+      # da staticlib ficam até a Task 2.10 (lista exata de exceções).
+      - name: Gerar, conferir e ligar o módulo IR WasmRuntimeStubs
+        run: |
+          cargo build --release --all-features
+          scripts/runtime-ir/test-wasm-link.sh
+
       # Os símbolos C dos modos e dos geradores KLEE e AFL++ são definidos só pelos
       # módulos IR: o .ll entra como artefato extra da cobertura.
       # Usa os .ll dos passos anteriores. A staticlib medida é a do núcleo do
@@ -137,7 +146,8 @@ jobs:
             target/runtime-ir/AnalysisModeOverflow.ll \
             target/runtime-ir/AnalysisModeAssert.ll target/runtime-ir/AnalysisModeNone.ll \
             target/runtime-ir/AnalysisModeMemtrack.ll target/runtime-ir/AnalysisModeMemcleanup.ll \
-            target/runtime-ir/NonDetGeneratorKlee.ll target/runtime-ir/NonDetGeneratorAFL.ll
+            target/runtime-ir/NonDetGeneratorKlee.ll target/runtime-ir/NonDetGeneratorAFL.ll \
+            target/runtime-ir/WasmRuntimeStubs.ll
 
       # Os testes da lib sem as features legadas: o build do núcleo do
       # drop-in. Cobre o que só existe sem elas (o __VERIFIER_error do C).

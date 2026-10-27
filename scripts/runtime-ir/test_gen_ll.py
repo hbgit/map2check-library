@@ -17,6 +17,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.abspath(os.path.join(HERE, "..", ".."))
 INVENTORY = os.path.join(ROOT, "docs", "runtime-abi", "inventory.tsv")
 FFI_RS = os.path.join(ROOT, "rust", "src", "ffi.rs")
+WASM_RS = os.path.join(ROOT, "rust", "src", "wasm.rs")
 HEADER_H = os.path.join(ROOT, "include", "map2check.h")
 GEN = os.path.join(HERE, "gen_ll.py")
 sys.path.insert(0, HERE)
@@ -214,6 +215,27 @@ class Generated(unittest.TestCase):
         self.assertEqual(defined(text), want)
         self.assertIn("define void @wasm_rt_trap(i32 %a0)", text)
 
+    def test_wasm_module_forwards_to_the_core_and_proc_exit_is_empty(self):
+        """WasmRuntimeStubs.bc (Task 2.9): the nine wasm_rt_* forward to
+        __m2c_rt_wasm_<name> with the C signature (struct pointers are ptr, the
+        enum is i32, bool is zeroext i1); proc_exit is an empty C body
+        (WasmRuntimeStubs.c:90-93), so an unmarked empty define."""
+        text = read(os.path.join(run_gen("--module", "WasmRuntimeStubs"), "WasmRuntimeStubs.ll"))
+        names = ("allocate_memory", "grow_memory", "free_memory", "allocate_funcref_table",
+                 "free_funcref_table", "init", "free", "is_initialized", "trap")
+        for n in names:
+            self.assertEqual(gen_ll.IMPLEMENTED[("WasmRuntimeStubs", f"wasm_rt_{n}")], f"__m2c_rt_wasm_{n}")
+            self.assertRegex(text, rf"tail call [^@]*@__m2c_rt_wasm_{n}\(", n)
+        self.assertNotIn(("WasmRuntimeStubs", "w2c_wasi__snapshot__preview1_proc_exit"), gen_ll.IMPLEMENTED)
+        for line in ("define void @wasm_rt_allocate_memory(ptr %a0, i64 %a1, i64 %a2, i1 zeroext %a3, i32 %a4) {",
+                     "define i64 @wasm_rt_grow_memory(ptr %a0, i64 %a1) {",
+                     "define void @wasm_rt_allocate_funcref_table(ptr %a0, i32 %a1, i32 %a2) {",
+                     "define zeroext i1 @wasm_rt_is_initialized() {",
+                     "define void @wasm_rt_trap(i32 %a0) {",
+                     "define void @w2c_wasi__snapshot__preview1_proc_exit(ptr %a0, i32 %a1) {\n  ret void\n}"):
+            self.assertIn(line, text)
+        self.assertNotIn("m2c-stub", text)
+
     def test_writes_every_module_once(self):
         out = run_gen()
         self.assertEqual({n[:-3] for n in os.listdir(out)}, ALL_MODULES)
@@ -397,14 +419,15 @@ class Generated(unittest.TestCase):
                     self.assertEqual(line.endswith("; m2c-stub"), not real, f"{module}.{sym}")
                 else:
                     self.assertNotIn("m2c-stub", line, f"{module}.{sym}")
-        # Still stubs: the wasm module (Task 2.9). The generator modules have none.
-        text = read(os.path.join(out, "WasmRuntimeStubs.ll"))
-        self.assertIn("{ ; m2c-stub", text)
+        # No module has a stub left (Task 2.9 delivered the wasm module).
+        for name in os.listdir(out):
+            self.assertNotIn("m2c-stub", read(os.path.join(out, name)), name)
         # The empty C bodies: WitnessGenerationNone.c, AnalysisModeAssert.c:25-27
         # (__VERIFIER_assert); all "DO NOTHING".
         self.assertEqual(gen_ll.C_EMPTY, {("WitnessGenerationNone", "generate_aux_files"),
                                           ("WitnessGenerationNone", "generate_confirmation_file"),
-                                          ("AnalysisModeAssert", "__VERIFIER_assert")})
+                                          ("AnalysisModeAssert", "__VERIFIER_assert"),
+                                          ("WasmRuntimeStubs", "w2c_wasi__snapshot__preview1_proc_exit")})
         self.assertIn("define void @generate_confirmation_file() {\n  ret void\n}",
                       read(os.path.join(out, "WitnessGenerationNone.ll")))
 
@@ -622,7 +645,7 @@ class Generated(unittest.TestCase):
         self.assertIn("icmp ugt i32 %len0, 4096", body)
 
     def test_every_forwarder_target_is_a_rust_core_export(self):
-        src = read(FFI_RS)
+        src = read(FFI_RS) + read(WASM_RS)
         exported = set(re.findall(r'#\[no_mangle\]\s*(?:#\[[^\]]*\]\s*)*pub (?:unsafe )?extern "C" fn (\w+)\(',
                                   src))
         for (module, sym), target in sorted(gen_ll.IMPLEMENTED.items()):

@@ -187,8 +187,7 @@ pub mod rt {
     ///
     /// # Safety
     /// `mem` must point to a writable `wasm_rt_memory_t`.
-    #[no_mangle]
-    pub unsafe extern "C" fn wasm_rt_allocate_memory(
+    pub(super) unsafe fn wasm_rt_allocate_memory_impl(
         mem: *mut wasm_rt_memory_t,
         initial_pages: u64,
         max_pages: u64,
@@ -218,8 +217,7 @@ pub mod rt {
     ///
     /// # Safety
     /// `mem` must point to a memory set up by [`wasm_rt_allocate_memory`].
-    #[no_mangle]
-    pub unsafe extern "C" fn wasm_rt_grow_memory(mem: *mut wasm_rt_memory_t, pages: u64) -> u64 {
+    pub(super) unsafe fn wasm_rt_grow_memory_impl(mem: *mut wasm_rt_memory_t, pages: u64) -> u64 {
         ffi_guard(
             || {
                 let failure = u64::from(u32::MAX);
@@ -269,8 +267,7 @@ pub mod rt {
     ///
     /// # Safety
     /// `mem` must point to a memory set up by [`wasm_rt_allocate_memory`].
-    #[no_mangle]
-    pub unsafe extern "C" fn wasm_rt_free_memory(mem: *mut wasm_rt_memory_t) {
+    pub(super) unsafe fn wasm_rt_free_memory_impl(mem: *mut wasm_rt_memory_t) {
         ffi_guard(
             || {
                 // SAFETY: caller guarantees `mem` is a valid descriptor whose
@@ -293,8 +290,7 @@ pub mod rt {
     ///
     /// # Safety
     /// `table` must point to a writable `wasm_rt_funcref_table_t`.
-    #[no_mangle]
-    pub unsafe extern "C" fn wasm_rt_allocate_funcref_table(
+    pub(super) unsafe fn wasm_rt_allocate_funcref_table_impl(
         table: *mut wasm_rt_funcref_table_t,
         elements: u32,
         _max_elements: u32,
@@ -320,8 +316,7 @@ pub mod rt {
     /// # Safety
     /// `table` must point to a table set up by
     /// [`wasm_rt_allocate_funcref_table`].
-    #[no_mangle]
-    pub unsafe extern "C" fn wasm_rt_free_funcref_table(table: *mut wasm_rt_funcref_table_t) {
+    pub(super) unsafe fn wasm_rt_free_funcref_table_impl(table: *mut wasm_rt_funcref_table_t) {
         ffi_guard(
             || {
                 // SAFETY: caller guarantees `table` is valid; data is calloc'd.
@@ -339,11 +334,7 @@ pub mod rt {
     ///
     /// # Safety
     /// `instance` is never dereferenced and may be null.
-    #[no_mangle]
-    pub unsafe extern "C" fn w2c_wasi__snapshot__preview1_proc_exit(
-        instance: *mut c_void,
-        code: u32,
-    ) {
+    pub(super) unsafe fn proc_exit_impl(instance: *mut c_void, code: u32) {
         ffi_guard(
             || {
                 let _ = (instance, code);
@@ -352,22 +343,137 @@ pub mod rt {
         );
     }
 
+    /// Legacy export of the old API, kept until Task 2.10: the IR module
+    /// `WasmRuntimeStubs.ll` defines this C name and wins the link; the body
+    /// is `wasm_rt_allocate_memory_impl`, which `__m2c_rt_wasm_*` also calls (never the
+    /// exported name, which the IR's definition would replace).
+    ///
+    /// # Safety
+    /// As `wasm_rt_allocate_memory_impl`.
+    #[no_mangle]
+    pub unsafe extern "C" fn wasm_rt_allocate_memory(
+        mem: *mut wasm_rt_memory_t,
+        initial_pages: u64,
+        max_pages: u64,
+        is64: bool,
+        page_size: u32,
+    ) {
+        // SAFETY: forwarded caller contract.
+        ffi_guard(
+            || unsafe {
+                wasm_rt_allocate_memory_impl(mem, initial_pages, max_pages, is64, page_size)
+            },
+            (),
+        )
+    }
+
+    /// Legacy export of the old API, kept until Task 2.10: the IR module
+    /// `WasmRuntimeStubs.ll` defines this C name and wins the link; the body
+    /// is `wasm_rt_grow_memory_impl`, which `__m2c_rt_wasm_*` also calls (never the
+    /// exported name, which the IR's definition would replace).
+    ///
+    /// # Safety
+    /// As `wasm_rt_grow_memory_impl`.
+    #[no_mangle]
+    pub unsafe extern "C" fn wasm_rt_grow_memory(mem: *mut wasm_rt_memory_t, pages: u64) -> u64 {
+        // SAFETY: forwarded caller contract.
+        ffi_guard(
+            || unsafe { wasm_rt_grow_memory_impl(mem, pages) },
+            u64::from(u32::MAX),
+        )
+    }
+
+    /// Legacy export of the old API, kept until Task 2.10: the IR module
+    /// `WasmRuntimeStubs.ll` defines this C name and wins the link; the body
+    /// is `wasm_rt_free_memory_impl`, which `__m2c_rt_wasm_*` also calls (never the
+    /// exported name, which the IR's definition would replace).
+    ///
+    /// # Safety
+    /// As `wasm_rt_free_memory_impl`.
+    #[no_mangle]
+    pub unsafe extern "C" fn wasm_rt_free_memory(mem: *mut wasm_rt_memory_t) {
+        // SAFETY: forwarded caller contract.
+        ffi_guard(|| unsafe { wasm_rt_free_memory_impl(mem) }, ())
+    }
+
+    /// Legacy export of the old API, kept until Task 2.10: the IR module
+    /// `WasmRuntimeStubs.ll` defines this C name and wins the link; the body
+    /// is `wasm_rt_allocate_funcref_table_impl`, which `__m2c_rt_wasm_*` also calls (never the
+    /// exported name, which the IR's definition would replace).
+    ///
+    /// # Safety
+    /// As `wasm_rt_allocate_funcref_table_impl`.
+    #[no_mangle]
+    pub unsafe extern "C" fn wasm_rt_allocate_funcref_table(
+        table: *mut wasm_rt_funcref_table_t,
+        elements: u32,
+        max_elements: u32,
+    ) {
+        // SAFETY: forwarded caller contract.
+        ffi_guard(
+            || unsafe { wasm_rt_allocate_funcref_table_impl(table, elements, max_elements) },
+            (),
+        )
+    }
+
+    /// Legacy export of the old API, kept until Task 2.10: the IR module
+    /// `WasmRuntimeStubs.ll` defines this C name and wins the link; the body
+    /// is `wasm_rt_free_funcref_table_impl`, which `__m2c_rt_wasm_*` also calls (never the
+    /// exported name, which the IR's definition would replace).
+    ///
+    /// # Safety
+    /// As `wasm_rt_free_funcref_table_impl`.
+    #[no_mangle]
+    pub unsafe extern "C" fn wasm_rt_free_funcref_table(table: *mut wasm_rt_funcref_table_t) {
+        // SAFETY: forwarded caller contract.
+        ffi_guard(|| unsafe { wasm_rt_free_funcref_table_impl(table) }, ())
+    }
+
+    /// Legacy export of the old API, kept until Task 2.10: the IR module
+    /// `WasmRuntimeStubs.ll` defines this C name and wins the link; the body
+    /// is `proc_exit_impl`, which `__m2c_rt_wasm_*` also calls (never the
+    /// exported name, which the IR's definition would replace).
+    ///
+    /// # Safety
+    /// As `proc_exit_impl`.
+    #[no_mangle]
+    pub unsafe extern "C" fn w2c_wasi__snapshot__preview1_proc_exit(
+        instance: *mut c_void,
+        code: u32,
+    ) {
+        // SAFETY: forwarded caller contract.
+        ffi_guard(|| unsafe { proc_exit_impl(instance, code) }, ())
+    }
+
     /// "Always initialised for KLEE": true from the start.
     static INITIALIZED: AtomicBool = AtomicBool::new(true);
 
+    pub(super) fn wasm_rt_is_initialized_impl() -> bool {
+        ffi_guard(|| INITIALIZED.load(Ordering::Relaxed), true)
+    }
+
+    pub(super) fn wasm_rt_init_impl() {
+        ffi_guard(|| INITIALIZED.store(true, Ordering::Relaxed), ());
+    }
+
+    pub(super) fn wasm_rt_free_impl() {
+        ffi_guard(|| INITIALIZED.store(false, Ordering::Relaxed), ());
+    }
+
+    /// Legacy exports of the old API, kept until Task 2.10 (see above).
     #[no_mangle]
     pub extern "C" fn wasm_rt_is_initialized() -> bool {
-        ffi_guard(|| INITIALIZED.load(Ordering::Relaxed), true)
+        ffi_guard(wasm_rt_is_initialized_impl, true)
     }
 
     #[no_mangle]
     pub extern "C" fn wasm_rt_init() {
-        ffi_guard(|| INITIALIZED.store(true, Ordering::Relaxed), ());
+        ffi_guard(wasm_rt_init_impl, ())
     }
 
     #[no_mangle]
     pub extern "C" fn wasm_rt_free() {
-        ffi_guard(|| INITIALIZED.store(false, Ordering::Relaxed), ());
+        ffi_guard(wasm_rt_free_impl, ())
     }
 
     /// A trap ends the run. develop calls `map2check_error()`, which writes no
@@ -375,8 +481,7 @@ pub mod rt {
     /// records an UNKNOWN verdict (a first violation, final) and aborts.
     /// `wasm-rt.h` declares the function `noreturn`, so it never returns, not
     /// even with no analysis mode set.
-    #[no_mangle]
-    pub extern "C" fn wasm_rt_trap(code: u32) -> ! {
+    pub(super) fn wasm_rt_trap_impl(code: u32) -> ! {
         ffi_guard(
             || {
                 let _ = code;
@@ -386,9 +491,135 @@ pub mod rt {
         );
         std::process::abort()
     }
+
+    /// Legacy export of the old API, kept until Task 2.10 (see above).
+    #[no_mangle]
+    pub extern "C" fn wasm_rt_trap(code: u32) -> ! {
+        ffi_guard(|| wasm_rt_trap_impl(code), ());
+        std::process::abort()
+    }
 }
 
 pub use rt::*;
+
+// ── Core entry points of `WasmRuntimeStubs.ll` (Task 2.9, D7 A-fwd) ─────────
+//
+// The IR module `WasmRuntimeStubs.ll` (`scripts/runtime-ir/gen_ll.py`) defines
+// the C names `wasm_rt_*` the lifted code calls and forwards each one to the
+// `__m2c_rt_wasm_*` below; `w2c_wasi__snapshot__preview1_proc_exit` has an
+// empty C body (`WasmRuntimeStubs.c:90-93`) and is an empty IR define. The
+// descriptors cross the C ABI as `void *` (the header does not know the wabt
+// structs). The behaviour is `rt`'s, one-to-one with `WasmRuntimeStubs.c`.
+// Task 2.10 removes the legacy `wasm_rt_*` exports of `rt`, which delegate to
+// the `*_impl` functions these call (a `__m2c` function must never call the
+// exported C name: the IR module defines it and forwards back here).
+
+use std::os::raw::c_void;
+
+/// `wasm_rt_allocate_memory` (`WasmRuntimeStubs.c:22-35`): `calloc`ed linear
+/// memory of `initial_pages` pages; `is64` is not stored.
+///
+/// # Safety
+/// `mem` must point to a writable `wasm_rt_memory_t`.
+#[no_mangle]
+pub unsafe extern "C" fn __m2c_rt_wasm_allocate_memory(
+    mem: *mut c_void,
+    initial_pages: u64,
+    max_pages: u64,
+    is64: bool,
+    page_size: u32,
+) {
+    // SAFETY: forwarded caller contract.
+    ffi_guard(
+        || unsafe {
+            rt::wasm_rt_allocate_memory_impl(mem.cast(), initial_pages, max_pages, is64, page_size)
+        },
+        (),
+    );
+}
+
+/// `wasm_rt_grow_memory` (`WasmRuntimeStubs.c:41-63`): the previous page
+/// count, or `UINT32_MAX` on failure.
+///
+/// # Safety
+/// `mem` must point to a memory set up by `__m2c_rt_wasm_allocate_memory`.
+#[no_mangle]
+pub unsafe extern "C" fn __m2c_rt_wasm_grow_memory(mem: *mut c_void, pages: u64) -> u64 {
+    // SAFETY: forwarded caller contract.
+    ffi_guard(
+        || unsafe { rt::wasm_rt_grow_memory_impl(mem.cast(), pages) },
+        u64::from(u32::MAX),
+    )
+}
+
+/// `wasm_rt_free_memory` (`WasmRuntimeStubs.c:66-70`).
+///
+/// # Safety
+/// `mem` must point to a memory set up by `__m2c_rt_wasm_allocate_memory`.
+#[no_mangle]
+pub unsafe extern "C" fn __m2c_rt_wasm_free_memory(mem: *mut c_void) {
+    // SAFETY: forwarded caller contract.
+    ffi_guard(|| unsafe { rt::wasm_rt_free_memory_impl(mem.cast()) }, ());
+}
+
+/// `wasm_rt_allocate_funcref_table` (`WasmRuntimeStubs.c:73-78`; the element
+/// size is SD-19).
+///
+/// # Safety
+/// `table` must point to a writable `wasm_rt_funcref_table_t`.
+#[no_mangle]
+pub unsafe extern "C" fn __m2c_rt_wasm_allocate_funcref_table(
+    table: *mut c_void,
+    elements: u32,
+    max_elements: u32,
+) {
+    // SAFETY: forwarded caller contract.
+    ffi_guard(
+        || unsafe { rt::wasm_rt_allocate_funcref_table_impl(table.cast(), elements, max_elements) },
+        (),
+    );
+}
+
+/// `wasm_rt_free_funcref_table` (`WasmRuntimeStubs.c:81-84`).
+///
+/// # Safety
+/// `table` must point to a table set up by
+/// `__m2c_rt_wasm_allocate_funcref_table`.
+#[no_mangle]
+pub unsafe extern "C" fn __m2c_rt_wasm_free_funcref_table(table: *mut c_void) {
+    // SAFETY: forwarded caller contract.
+    ffi_guard(
+        || unsafe { rt::wasm_rt_free_funcref_table_impl(table.cast()) },
+        (),
+    );
+}
+
+/// `wasm_rt_init` (`WasmRuntimeStubs.c:102-104`): marks the runtime initialised.
+#[no_mangle]
+pub extern "C" fn __m2c_rt_wasm_init() {
+    ffi_guard(rt::wasm_rt_init_impl, ());
+}
+
+/// `wasm_rt_free` (`WasmRuntimeStubs.c:106-108`): marks it not initialised.
+#[no_mangle]
+pub extern "C" fn __m2c_rt_wasm_free() {
+    ffi_guard(rt::wasm_rt_free_impl, ());
+}
+
+/// `wasm_rt_is_initialized` (`WasmRuntimeStubs.c:98-100`): true from the start.
+#[no_mangle]
+pub extern "C" fn __m2c_rt_wasm_is_initialized() -> bool {
+    ffi_guard(rt::wasm_rt_is_initialized_impl, true)
+}
+
+/// `wasm_rt_trap` (`WasmRuntimeStubs.c:110-116`): never returns. Records an
+/// UNKNOWN verdict, then aborts (SD-19).
+#[no_mangle]
+pub extern "C" fn __m2c_rt_wasm_trap(code: u32) {
+    ffi_guard(|| rt::wasm_rt_trap_impl(code), ());
+    // The impl aborts; a panic that ffi_guard caught must not return either.
+    std::process::abort()
+}
 
 #[cfg(test)]
 mod tests {
