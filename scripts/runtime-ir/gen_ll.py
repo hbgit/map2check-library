@@ -318,42 +318,53 @@ done:
 
 """
 
-PCHAR = """declare ptr @malloc(i64)
+def pchar(cap):
+    """map2check_non_det_pchar: a nondet unsigned length, NULL when it is 0 or
+    malloc fails, then length - 1 nondet chars and a NUL. `cap` is the AFL++
+    reader's MAP2CHECK_MAX_FUZZED_STRING (NonDetGeneratorAFL.c:128-129); the
+    KLEE generator mallocs the length as is (NonDetGeneratorKlee.c:94-109),
+    cap None."""
+    if cap is None:
+        clamp = "  %len = add i32 %len0, 0\n"
+    else:
+        clamp = (f"  %big = icmp ugt i32 %len0, {cap}\n"
+                 f"  %len = select i1 %big, i32 {cap}, i32 %len0\n")
+    return ("declare ptr @malloc(i64)\n\n"
+            "define ptr @map2check_non_det_pchar() {\n"
+            "entry:\n"
+            "  %len0 = call i32 @map2check_non_det_unsigned()\n"
+            "  %z = icmp eq i32 %len0, 0\n"
+            "  br i1 %z, label %null, label %go\n"
+            "null:\n"
+            "  ret ptr null\n"
+            "go:\n"
+            + clamp +
+            "  %n = zext i32 %len to i64\n"
+            "  %s = call ptr @malloc(i64 %n)\n"
+            "  %isnull = icmp eq ptr %s, null\n"
+            "  br i1 %isnull, label %null, label %head\n"
+            "head:\n"
+            "  %i = phi i32 [ 0, %go ], [ %i1, %body ]\n"
+            "  %last = sub i32 %len, 1\n"
+            "  %c = icmp ult i32 %i, %last\n"
+            "  br i1 %c, label %body, label %done\n"
+            "body:\n"
+            "  %ch = call signext i8 @map2check_non_det_char()\n"
+            "  %ix = zext i32 %i to i64\n"
+            "  %q = getelementptr i8, ptr %s, i64 %ix\n"
+            "  store i8 %ch, ptr %q\n"
+            "  %i1 = add i32 %i, 1\n"
+            "  br label %head\n"
+            "done:\n"
+            "  %ix2 = zext i32 %i to i64\n"
+            "  %q2 = getelementptr i8, ptr %s, i64 %ix2\n"
+            "  store i8 0, ptr %q2\n"
+            "  ret ptr %s\n"
+            "}\n\n")
 
-define ptr @map2check_non_det_pchar() {
-entry:
-  %len0 = call i32 @map2check_non_det_unsigned()
-  %z = icmp eq i32 %len0, 0
-  br i1 %z, label %null, label %go
-null:
-  ret ptr null
-go:
-  %big = icmp ugt i32 %len0, 4096
-  %len = select i1 %big, i32 4096, i32 %len0
-  %n = zext i32 %len to i64
-  %s = call ptr @malloc(i64 %n)
-  %isnull = icmp eq ptr %s, null
-  br i1 %isnull, label %null, label %head
-head:
-  %i = phi i32 [ 0, %go ], [ %i1, %body ]
-  %last = sub i32 %len, 1
-  %c = icmp ult i32 %i, %last
-  br i1 %c, label %body, label %done
-body:
-  %ch = call signext i8 @map2check_non_det_char()
-  %ix = zext i32 %i to i64
-  %q = getelementptr i8, ptr %s, i64 %ix
-  store i8 %ch, ptr %q
-  %i1 = add i32 %i, 1
-  br label %head
-done:
-  %ix2 = zext i32 %i to i64
-  %q2 = getelementptr i8, ptr %s, i64 %ix2
-  store i8 0, ptr %q2
-  ret ptr %s
-}
 
-"""
+# MAP2CHECK_MAX_FUZZED_STRING of NonDetGeneratorAFL.c.
+AFL_MAX_FUZZED_STRING = 4096
 
 
 def gen_none():
@@ -431,7 +442,7 @@ def gen_klee():
                           f"  %p = alloca {ty}\n"
                           f"  call void @klee_make_symbolic(ptr %p, i64 {size}, ptr @.n.{t})\n"
                           f"  %v = load {ty}, ptr %p\n  ret {ty} %v\n"))
-    out.append(PCHAR)
+    out.append(pchar(None))
     out.append(LOG_BYTES)
     out.append(define("map2check_non_det_memory", "void", ["ptr", "i64"],
                       "  %z = icmp eq i64 %a1, 0\n  br i1 %z, label %out, label %go\n"
@@ -580,7 +591,7 @@ def gen_afl():
         out.append(define(f"map2check_non_det_{t}", (ty, NONDET_EXT.get(t)), [],
                           f"  %p = alloca {ty}\n  call void @m2c_afl_get_bytes(ptr %p, i64 {size})\n"
                           f"  %v = load {ty}, ptr %p\n  ret {ty} %v\n"))
-    out.append(PCHAR)
+    out.append(pchar(AFL_MAX_FUZZED_STRING))
     out.append(LOG_BYTES)
     out.append(define("map2check_non_det_memory", "void", ["ptr", "i64"],
                       "  call void @m2c_afl_get_bytes(ptr %a0, i64 %a1)\n"

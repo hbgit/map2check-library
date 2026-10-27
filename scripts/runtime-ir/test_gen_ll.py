@@ -397,7 +397,7 @@ class Generated(unittest.TestCase):
                     self.assertEqual(line.endswith("; m2c-stub"), not real, f"{module}.{sym}")
                 else:
                     self.assertNotIn("m2c-stub", line, f"{module}.{sym}")
-        # Still stubs: the generator and wasm modules (Phase 3 / Task 2.7).
+        # Still stubs: the wasm module (Task 2.9). The generator modules have none.
         text = read(os.path.join(out, "WasmRuntimeStubs.ll"))
         self.assertIn("{ ; m2c-stub", text)
         # The empty C bodies: WitnessGenerationNone.c, AnalysisModeAssert.c:25-27
@@ -467,6 +467,61 @@ class Generated(unittest.TestCase):
                        "call signext i8 @__m2c_rt_nondet_log_to_file()"):
             self.assertIn(needle, body)
         self.assertNotIn("nondet_log_value", text)
+
+    def test_klee_generator_is_complete_without_stubs(self):
+        """NonDetGeneratorKlee.c (Task 2.7): main, the 21 typed generators with
+        klee_make_symbolic of a sizeof(type) object named "non_det_<t>",
+        pchar, memory, nondet_assume, nondet_init/destroy and the witness
+        log; nothing else and no stub."""
+        text = read(os.path.join(run_gen("--module", "NonDetGeneratorKlee"), "NonDetGeneratorKlee.ll"))
+        self.assertNotIn("m2c-stub", text)
+        types = ["int", "char", "pointer", "ushort", "short", "long", "unsigned", "ulong", "bool",
+                 "uchar", "size_t", "loff_t", "sector_t", "uint", "double", "float", "longlong",
+                 "ulonglong", "u8", "u16", "u32"]
+        self.assertEqual(len(types), 21)
+        want = {"main", "nondet_init", "nondet_destroy", "nondet_assume",
+                "nondet_generate_aux_witness_files", "map2check_non_det_pchar",
+                "map2check_non_det_memory", *(f"map2check_non_det_{t}" for t in types)}
+        self.assertEqual(defined(text) - {"m2c_log_bytes"}, want)
+        sizes = {"char": 1, "uchar": 1, "u8": 1, "short": 2, "ushort": 2, "u16": 2, "int": 4,
+                 "unsigned": 4, "uint": 4, "u32": 4, "bool": 4, "float": 4, "long": 8, "ulong": 8,
+                 "size_t": 8, "loff_t": 8, "sector_t": 8, "longlong": 8, "ulonglong": 8,
+                 "double": 8, "pointer": 8}
+        for t in types:
+            body = text.split(f"@map2check_non_det_{t}() {{", 1)[1].split("\n}\n", 1)[0]
+            self.assertIn(f"call void @klee_make_symbolic(ptr %p, i64 {sizes[t]}, ptr @.n.{t})", body, t)
+            self.assertIn(f'@.n.{t} = private unnamed_addr constant [{len(t) + 9} x i8] c"non_det_{t}\\00"',
+                          text, t)
+        # main(argc, argv) -> __map2check_main__(argc, argv) (NonDetGeneratorKlee.c:18).
+        self.assertIn("define i32 @main(i32 %a0, ptr %a1) {\n"
+                      "  %r = call i32 @__map2check_main__(i32 %a0, ptr %a1)\n  ret i32 %r\n}", text)
+        # nondet_assume: a one-byte "map2check_pruned" object, then _exit(0).
+        body = text.split("define void @nondet_assume(i32 %a0) {", 1)[1].split("\n}\n", 1)[0]
+        self.assertIn("call void @klee_make_symbolic(ptr %p, i64 1, ptr @.pruned)", body)
+        self.assertIn("call void @_exit(i32 0)", body)
+        self.assertIn('c"map2check_pruned\\00"', text)
+        for f, callee in (("nondet_init", "nondet_log_init"), ("nondet_destroy", "nondet_log_destroy")):
+            self.assertIn(f"define void @{f}() {{\n  call void @{callee}()\n  ret void\n}}", text)
+        # memory: one fresh "non_det_memory" object of `size` bytes, copied
+        # in, logged byte by byte, freed (NonDetGeneratorKlee.c:140-153).
+        body = text.split("define void @map2check_non_det_memory(ptr %a0, i64 %a1) {", 1)[1].split("\n}\n", 1)[0]
+        for needle in ("call ptr @malloc(i64 %a1)", "call void @klee_make_symbolic(ptr %b, i64 %a1, ptr @.memobj)",
+                       "@llvm.memcpy.p0.p0.i64(ptr %a0, ptr %b, i64 %a1", "call void @m2c_log_bytes(ptr %b, i64 %a1)",
+                       "call void @free(ptr %b)"):
+            self.assertIn(needle, body)
+
+    def test_klee_pchar_has_no_length_cap_and_afl_keeps_its_own(self):
+        """NonDetGeneratorKlee.c:94-109 mallocs the symbolic length as is; only
+        NonDetGeneratorAFL.c:128-129 caps it at MAP2CHECK_MAX_FUZZED_STRING."""
+        out = run_gen()
+        klee = read(os.path.join(out, "NonDetGeneratorKlee.ll"))
+        afl = read(os.path.join(out, "NonDetGeneratorAFL.ll"))
+        body = klee.split("define ptr @map2check_non_det_pchar() {", 1)[1].split("\n}\n", 1)[0]
+        self.assertNotIn("4096", body)
+        self.assertIn("call i32 @map2check_non_det_unsigned()", body)
+        self.assertIn("call signext i8 @map2check_non_det_char()", body)
+        body = afl.split("define ptr @map2check_non_det_pchar() {", 1)[1].split("\n}\n", 1)[0]
+        self.assertIn("icmp ugt i32 %len0, 4096", body)
 
     def test_every_forwarder_target_is_a_rust_core_export(self):
         src = read(FFI_RS)

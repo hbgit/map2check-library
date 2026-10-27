@@ -102,13 +102,25 @@ jobs:
           cargo build --release --all-features
           scripts/runtime-ir/test-memcleanup-link.sh
 
-      # Os símbolos C dos modos são definidos só pelos módulos IR: o .ll
-      # entra como artefato extra da cobertura.
-      # Usa a staticlib e o .ll do passo anterior.
+      # Gerador KLEE (Task 2.7): gera NonDetGeneratorKlee.ll, confere a
+      # sintaxe com clang -c -x ir, que não há stub nem intrínseco além dos do
+      # NonDetGeneratorKlee.c, e que a staticlib não define nenhum dos seus
+      # nomes C. O módulo chama intrínsecos do KLEE e não liga nativamente:
+      # roda sob o KLEE 3.1 em scripts/runtime-ir/test-klee-generator.sh, que
+      # precisa da imagem do Map2Check e não roda aqui.
+      - name: Gerar e conferir o módulo IR NonDetGeneratorKlee
+        run: |
+          cargo build --release --all-features
+          scripts/runtime-ir/test-klee-ir.sh
+
+      # Os símbolos C dos modos e do gerador KLEE são definidos só pelos
+      # módulos IR: o .ll entra como artefato extra da cobertura.
+      # Usa a staticlib e os .ll dos passos anteriores.
       - name: Conferir cobertura da ABI do runtime C (pending.txt)
         run: scripts/runtime-abi-coverage.sh target/runtime-ir/AnalysisModeOverflow.ll \
             target/runtime-ir/AnalysisModeAssert.ll target/runtime-ir/AnalysisModeNone.ll \
-            target/runtime-ir/AnalysisModeMemtrack.ll target/runtime-ir/AnalysisModeMemcleanup.ll
+            target/runtime-ir/AnalysisModeMemtrack.ll target/runtime-ir/AnalysisModeMemcleanup.ll \
+            target/runtime-ir/NonDetGeneratorKlee.ll
 
       - name: Instalar cargo-tarpaulin
         uses: taiki-e/install-action@v2
@@ -250,6 +262,12 @@ jobs:
       - name: Clippy do build KLEE (rustc 1.72.1, feature klee)
         run: RUSTUP_TOOLCHAIN=1.72.1 cargo clippy --locked --manifest-path klee/Cargo.toml --features klee,wasm -- -D warnings
 
+      # O núcleo do runtime drop-in (feature `dropin`, Task 2.7): o
+      # map2check_init chama o analysis_init e o nondet_init externos dos
+      # módulos IR; só existe neste manifesto.
+      - name: Clippy do núcleo drop-in (rustc 1.72.1, feature dropin)
+        run: RUSTUP_TOOLCHAIN=1.72.1 cargo clippy --locked --manifest-path klee/Cargo.toml --features dropin,wasm -- -D warnings
+
       # O script roda os autotestes da troca de intrínsecos antes de usá-la:
       # equivalência por lli-16 em tests/klee/lower-intrinsics.ll e recusa
       # de tests/klee/unknown-intrinsic.ll; qualquer intrínseco que o KLEE
@@ -264,6 +282,15 @@ jobs:
         run: |
           test -s target/klee/map2check-klee.bc
           llvm-dis-16 target/klee/map2check-klee.bc -o /dev/null
+
+      # Build de teste dos 21 módulos .bc do drop-in (Task 2.7; o build
+      # definitivo é da Task 3.1): núcleo Rust com o pós-processamento da D7
+      # (e o freeze rebaixado para o KLEE 3.1) e os 20 módulos IR montados com
+      # llvm-as-16. Usa o LLVM 16 instalado acima, sem a imagem; o script
+      # confere que o llvm-dis-16 lê os 21 e que o núcleo não define nome de
+      # módulo IR. Rodar o KLEE sobre eles precisa da imagem e não é feito aqui.
+      - name: Build de teste dos módulos .bc do runtime drop-in
+        run: scripts/runtime-ir/build-test-runtime-bc.sh target/runtime-ir/dropin-lib
 
       - name: Checar dependências do lockfile KLEE (cargo-deny)
         uses: EmbarkStudios/cargo-deny-action@v2
