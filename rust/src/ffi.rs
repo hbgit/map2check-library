@@ -158,15 +158,51 @@ pub(crate) fn ffi_guard<T>(f: impl FnOnce() -> T, default: T) -> T {
 /// called before any tracking function. `is_sv_comp` only sets develop's
 /// `sv_comp`, which nothing reads, so it is accepted and ignored. Like
 /// develop, it leaves the property files of an earlier run alone.
+///
+/// In the drop-in core (feature `dropin`, klee/Cargo.toml) it then calls the
+/// external `analysis_init` and `nondet_init`, in that order, as
+/// `Map2CheckFunctions.c:37-38` does: the linked mode module selects the
+/// mode, the linked generator module starts the nondet log. Both are defined
+/// only by those IR modules (D7), so builds that link the staticlib alone
+/// (cargo test, `tests/ffi_harness.c`, the host link tests) do not have the
+/// feature and call `analysis_init` themselves. The calls run outside the
+/// state lock: both come back into the core.
 #[no_mangle]
 pub extern "C" fn map2check_init(is_sv_comp: std::os::raw::c_int) {
     ffi_guard(
         || {
             let _ = is_sv_comp;
             state::init();
+            #[cfg(feature = "dropin")]
+            dropin::init_linked_modules();
         },
         (),
     );
+}
+
+/// The calls of the drop-in core into the mode and generator modules it is
+/// linked with (D7 layout A-fwd). Not in `include/map2check.h`: the IR
+/// modules define these names, the library does not.
+///
+/// cbindgen:ignore
+#[cfg(feature = "dropin")]
+mod dropin {
+    extern "C" {
+        /// `analysis_init` of the linked `AnalysisMode*.bc`.
+        fn analysis_init();
+        /// `nondet_init` of the linked `NonDetGenerator*.bc`.
+        fn nondet_init();
+    }
+
+    /// `Map2CheckFunctions.c:37-38`.
+    pub(super) fn init_linked_modules() {
+        // SAFETY: both are `void (void)` C functions of the linked modules,
+        // which only call back into the core's exports.
+        unsafe {
+            analysis_init();
+            nondet_init();
+        }
+    }
 }
 
 /// Resets the global analysis state without aborting the caller.
@@ -1832,7 +1868,8 @@ pub unsafe extern "C" fn __m2c_rt_memcleanup_map2check_function(
 // `map2check_nondet_get_log` and the `nondet_log` global are private to the
 // Rust core (SD-22): `crate::nondet::c_log` and `AnalysisState::c_nondet`.
 // The generator modules (`map2check_non_det_<t>`, `main`, `nondet_init`...)
-// are IR (Task 3.1); `nondet_init` there calls `nondet_log_init`.
+// are IR (`scripts/runtime-ir/gen_ll.py`; KLEE: Task 2.7); `nondet_init` there
+// calls `nondet_log_init`.
 
 /// Appends one row to the nondet log: `new_nondet_call` with the current
 /// step, then `helper_map2check_nondet_append_element`, which advances the

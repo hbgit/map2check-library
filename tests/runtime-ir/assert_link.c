@@ -27,7 +27,11 @@ int __map2check_main__(void) { return 0; }
 
 int main(int argc, char **argv) {
   const char *c = argc > 1 ? argv[1] : "";
-  map2check_init(0); /* in C, map2check_init calls analysis_init */
+  /* In C, map2check_init calls analysis_init (Map2CheckFunctions.c:37); so does
+   * the drop-in core (feature dropin, scripts/runtime-ir/test-init-wiring.sh).
+   * This staticlib has no such feature, so the call is made by hand; a
+   * second call would be harmless in both runtimes (new empty logs). */
+  map2check_init(0);
   analysis_init();
 #ifdef MODE_ASSERT
   if (!strcmp(c, "assert0")) map2check_assert(0, 21, "main");

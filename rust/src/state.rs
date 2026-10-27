@@ -178,9 +178,10 @@ fn with_state_recovering(f: impl FnOnce(&mut AnalysisState)) {
             let mut guard = poisoned.into_inner();
             f(&mut guard);
             // `Mutex::clear_poison` is unstable in rustc 1.72, which builds
-            // the KLEE runtime. That build has `panic = "abort"`, so no
-            // caught panic can poison the lock there (D1, "Custo do pin").
-            #[cfg(not(feature = "klee"))]
+            // the KLEE runtime and the drop-in core (klee/Cargo.toml). Those
+            // builds have `panic = "abort"`, so no caught panic can poison
+            // the lock there (D1, "Custo do pin").
+            #[cfg(not(any(feature = "klee", feature = "dropin")))]
             state.clear_poison();
         }
     }

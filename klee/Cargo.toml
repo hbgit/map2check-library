@@ -44,6 +44,15 @@ thiserror = ">=2.0, <=2.0.20"
 [features]
 klee = []
 wasm = []
+# The Rust core of the drop-in Map2CheckFunctions.bc (D7, layout A-fwd; test
+# build: scripts/runtime-ir/build-test-runtime-bc.sh). Its map2check_init
+# calls the external analysis_init and nondet_init, which only the linked
+# mode and generator modules define, in that order (Map2CheckFunctions.c:
+# 37-38). Not a feature of the main manifest: cargo test, the ffi harness,
+# the golden tests and the host link tests link the staticlib without those
+# modules and keep calling analysis_init by hand. Not with `klee`, whose
+# legacy exports (`main`, `__VERIFIER_*`) belong to the generator modules.
+dropin = []
 
 # panic = "abort": nothing catches a panic under KLEE, and the unwind
 # machinery is code KLEE would have to execute. Fat LTO and one codegen unit

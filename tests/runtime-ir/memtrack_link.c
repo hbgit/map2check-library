@@ -106,7 +106,11 @@ int main(int argc, char **argv) {
                is(c, "POSIX-MEMALIGN");
   if (golden)
     map2check_enable_witness(); /* the goldens are witness binaries */
-  map2check_init(0);            /* in C, map2check_init calls analysis_init */
+  /* In C, map2check_init calls analysis_init (Map2CheckFunctions.c:37); so does
+   * the drop-in core (feature dropin, scripts/runtime-ir/test-init-wiring.sh).
+   * This staticlib has no such feature, so the call is made by hand; a
+   * second call would be harmless in both runtimes (new empty logs). */
+  map2check_init(0);
   analysis_init();
   if (golden) {
     golden_tracking();

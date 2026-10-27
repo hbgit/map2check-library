@@ -37,7 +37,11 @@ int __map2check_main__(void) { return 0; }
 int main(int argc, char **argv) {
   const char *c = argc > 1 ? argv[1] : "";
   char fn[] = "main";
-  map2check_init(0); /* in C, map2check_init calls analysis_init */
+  /* In C, map2check_init calls analysis_init (Map2CheckFunctions.c:37); so does
+   * the drop-in core (feature dropin, scripts/runtime-ir/test-init-wiring.sh).
+   * This staticlib has no such feature, so the call is made by hand; a
+   * second call would be harmless in both runtimes (new empty logs). */
+  map2check_init(0);
   analysis_init();
   if (!strcmp(c, "add")) map2check_binop_add(INT_MAX, 1, 32, 20, 0, fn);
   else if (!strcmp(c, "sub")) map2check_binop_sub(INT_MIN, 1, 32, 21, 0, fn);
