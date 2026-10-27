@@ -273,6 +273,18 @@ Em todas as tasks desta fase: a semântica de referência é o `.c` citado na c�
 
 ---
 
+### Task 3.3: Encolher o núcleo drop-in (decisão do usuário, 2026-10-27)
+
+A checagem prévia da Task 4.1 deu mediana de tempo de parede rust/c 2,78 (afl 9,31; híbrido 7,25; symex 1,21), contra o limite 1,10. A causa medida é o tamanho do `Map2CheckFunctions.bc`: 762 580 bytes e 43 340 linhas de IR, contra 6 272 bytes e 257 linhas no C. O frontend compila o núcleo ligado três vezes com `afl-clang-fast`, a ~2 s cada. Mudar o frontend é proibido (regras 2 e 3).
+
+**Files:** `rust/src/` (código compilado no build `dropin`), `klee/Cargo.toml`, `scripts/build-runtime-bc.sh`.
+
+- [ ] **Step 1:** Medir o ponto de partida: linhas de IR e bytes do núcleo, e o tempo de uma compilação `afl-clang-fast` do programa de fumaça ligado ao núcleo, no C e no Rust.
+- [ ] **Step 2:** Reduzir o núcleo `dropin`: sem `serde_json`, `std::fmt`/`io` pesados nem código só da API antiga; `no_std` + `alloc` onde couber; `opt-level` `s`/`z`; pânico direto para `abort`. Comportamento da ABI C inalterado: todos os testes de host, de link, de imagem e a matriz `--ref` continuam passando. A lista de pós-processamento da D7 não muda sem aprovação do usuário.
+- [ ] **Step 3:** Novo guarda no `build-runtime-bc.sh`: teto de linhas de IR do núcleo no valor alcançado mais uma folga pequena.
+- [ ] **Step 4:** Repetir a checagem prévia da Task 4.1 (mesmo subconjunto, mesmo método). Se a mediana não ficar ≤ 1,10, parar e levar o número ao usuário.
+- [ ] **Step 5:** Commit `perf: shrink the drop-in core the frontend compiles`.
+
 ## Fase 4 — Gate diferencial
 
 ### Task 4.1: Primeira execução do gate
@@ -306,4 +318,4 @@ Em todas as tasks desta fase: a semântica de referência é o `.c` citado na c�
 
 ## Execution order
 
-0.1 → 0.2 → 0.3 → 0.4 → **1.1 (D7, aprovação)** → 2.0 → 2.1 → 2.2 → 2.3 → 2.4 → 2.5 → 2.6 → 2.7 → 2.8 → 2.9 → 2.10 → 3.1 → 3.2 → 4.1 → 4.2 → 5.1.
+0.1 → 0.2 → 0.3 → 0.4 → **1.1 (D7, aprovação)** → 2.0 → 2.1 → 2.2 → 2.3 → 2.4 → 2.5 → 2.6 → 2.7 → 2.8 → 2.9 → 2.10 → 3.1 → 3.2 → 3.3 → 4.1 → 4.2 → 5.1.
