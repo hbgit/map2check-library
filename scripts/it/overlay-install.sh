@@ -11,10 +11,13 @@
 # Usage: overlay-install.sh <c-install> <bc-dir> <out-install>
 #   <c-install>    a Map2Check install whose lib/ holds the 21 C modules;
 #   <bc-dir>       exactly the 21 drop-in modules (other .bc are refused);
-#   <out-install>  created; an earlier overlay there (it has
-#                  lib/Map2CheckFunctions.bc) is replaced, anything else is
-#                  refused. It may not lie inside <c-install>.
-# The C install is never written. Test: scripts/it/test-overlay-install.sh.
+#   <out-install>  created; an earlier overlay there (it has the marker
+#                  file .map2check-overlay this script writes) is replaced,
+#                  anything else (a C install included) is refused and left
+#                  alone. It may not lie inside <c-install>.
+# The C install is never written. The overlay gets one file the C install
+# does not have: .map2check-overlay, with the source install and the sha256
+# of the 21 modules. Test: scripts/it/test-overlay-install.sh.
 set -euo pipefail
 die() { echo "overlay-install: error: $*" >&2; exit 1; }
 [ $# -eq 3 ] || { echo "usage: $0 <c-install> <bc-dir> <out-install>" >&2; exit 2; }
@@ -35,9 +38,13 @@ mkdir -p "$(dirname "$3")"
 OUT="$(cd "$(dirname "$3")" && pwd)/$(basename "$3")"
 case "$OUT/" in "$C/"*) die "$OUT lies inside $C" ;; esac
 case "$C/" in "$OUT/"*) die "$C lies inside $OUT" ;; esac
+MARKER=.map2check-overlay
 if [ -e "$OUT" ] || [ -L "$OUT" ]; then
-  [ -d "$OUT" ] && [ -f "$OUT/lib/Map2CheckFunctions.bc" ] \
-    || die "$OUT exists and is not an earlier overlay"
+  # Only a directory this script made is ever deleted: a C install has
+  # lib/Map2CheckFunctions.bc too, so that is no proof.
+  [ -d "$OUT" ] && [ ! -L "$OUT" ] && [ -f "$OUT/$MARKER" ] && [ ! -L "$OUT/$MARKER" ] \
+    && head -1 "$OUT/$MARKER" | grep -q '^map2check-overlay ' \
+    || die "$OUT exists and is not an earlier overlay (no $MARKER); not touched"
   rm -rf "$OUT"
 fi
 
@@ -50,6 +57,13 @@ for m in $MODULES; do
   chmod --reference="$C/lib/$m.bc" "$tmp/lib/$m.bc.new"
   mv -f "$tmp/lib/$m.bc.new" "$tmp/lib/$m.bc"
 done
+[ ! -e "$tmp/$MARKER" ] || die "$C has a $MARKER: it is an overlay, not a C install"
+{
+  echo "map2check-overlay 1"
+  echo "c-install $C"
+  echo "bc-dir $BC"
+  (cd "$BC" && for m in $MODULES; do sha256sum "$m.bc"; done)
+} > "$tmp/$MARKER"
 mv "$tmp" "$OUT"
 trap - EXIT
 echo "overlay-install: $OUT = $C with the 21 modules of $BC"

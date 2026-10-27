@@ -16,7 +16,12 @@
 #       <out-install> inside the C install, an <out-install> that is not an
 #       install, and wrong usage: non-zero exit, nothing created;
 #   overlay_replaces_an_earlier_overlay  a second run on the same
-#       <out-install> gives the same tree.
+#       <out-install> gives the same tree;
+#   overlay_marker                     the overlay has .map2check-overlay
+#       (source install, the 21 sha256), the only path the C install lacks;
+#   overlay_refuses_a_c_install_as_output  a copy of the C install given as
+#       <out-install> (it has lib/Map2CheckFunctions.bc but no marker) is
+#       refused and left byte for byte as it was.
 # Real install (when M2C_INSTALL and BC_DIR exist): the same checks on
 # target/map2check-it/c with the output of scripts/build-runtime-bc.sh;
 # bin/ and the binary byte-identical, lib/klee/runtime and lib/clang kept.
@@ -47,13 +52,18 @@ tree() { # <dir> [exclude-regex]
 # Checks <c> <bc> <out>: the overlay against the C install and the modules.
 check() {
   local c="$1" bc="$2" out="$3" label="$4" m why=""
-  local mods_re='^\./lib/[A-Za-z0-9]+\.bc$'
+  local mods_re='^\./(lib/[A-Za-z0-9]+\.bc|\.map2check-overlay)$'
   diff <(tree "$c" "$mods_re") <(tree "$out" "$mods_re") > "$T/diff" \
     || why+=" paths other than lib/*.bc differ: $(grep '^[<>]' "$T/diff" | head -5 | tr '\n' ' ');"
   for m in $MODULES; do
     cmp -s "$bc/$m.bc" "$out/lib/$m.bc" || why+=" lib/$m.bc is not the drop-in one;"
   done
   [ "$(cd "$out/lib" && ls *.bc | wc -l)" = 21 ] || why+=" lib/ has $(cd "$out/lib" && ls *.bc | wc -l) .bc;"
+  [ ! -e "$c/.map2check-overlay" ] || why+=" the C install got a marker;"
+  [ "$(head -1 "$out/.map2check-overlay" 2>/dev/null)" = "map2check-overlay 1" ] || why+=" no marker;"
+  [ "$(grep -c '\.bc$' "$out/.map2check-overlay" 2>/dev/null)" = 21 ] || why+=" the marker lacks the 21 sha256;"
+  (cd "$bc" && grep '\.bc$' "$out/.map2check-overlay" | sha256sum -c --quiet) > /dev/null 2>&1 \
+    || why+=" the marker sha256 do not match $bc;"
   [ "$(tree "$c/bin")" = "$(tree "$out/bin")" ] || why+=" bin/ differs;"
   if [ -z "$why" ]; then ok "$label"; else bad "$label:$why"; fi
 }
@@ -103,6 +113,11 @@ mkdir -p "$T/notinstall"; echo data > "$T/notinstall/file"
 st=0; "$OVERLAY" "$C" "$BC" "$T/notinstall" > "$T/log" 2>&1 || st=$?
 if [ "$st" != 0 ] && [ "$(cat "$T/notinstall/file")" = data ]; then ok "overlay_refuses an <out-install> that is not an install"
 else bad "overlay_refuses an <out-install> that is not an install: exit $st"; fi
+cp -a "$C" "$T/c-copy"; c_copy="$(tree "$T/c-copy")"
+st=0; "$OVERLAY" "$C" "$BC" "$T/c-copy" > "$T/log" 2>&1 || st=$?
+if [ "$st" != 0 ] && [ "$(tree "$T/c-copy")" = "$c_copy" ]; then
+  ok "overlay_refuses_a_c_install_as_output (exit $st: $(head -1 "$T/log"))"
+else bad "overlay_refuses_a_c_install_as_output: exit $st, or the copy changed"; fi
 st=0; "$OVERLAY" "$C" "$BC" > "$T/log" 2>&1 || st=$?
 [ "$st" = 2 ] && ok "overlay_refuses wrong usage (exit 2)" || bad "overlay_refuses wrong usage: exit $st, want 2"
 

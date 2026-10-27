@@ -366,6 +366,9 @@ jobs:
   # C (scripts/it/build-map2check.sh), gera os .bc e roda a matriz sem e com
   # --ref. Longo (a imagem compila KLEE, AFL++, crab/clam, dg); só em push e
   # sob demanda, não em pull_request.
+  # ATENÇÃO: este job ainda não rodou em nenhum runner do GitHub (escrito na
+  # Task 3.1 sem push); tempo de build da imagem e espaço em disco são
+  # estimativas (~6 min numa máquina local; 20-60 min previstos no runner).
   runtime_matrix:
     if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-24.04
@@ -377,10 +380,28 @@ jobs:
       - name: Instalar o rustc 1.72.1 (LLVM 16)
         run: rustup toolchain install 1.72.1 --profile minimal
 
+      # O fetch reescreve vendor/MAP2CHECK_VERSION com o HEAD do develop do
+      # dia; o commit fixado é o do arquivo como está no repositório.
       - name: Baixar o Map2Check (branch develop, sem .git)
         run: |
+          pinned="$(sed -n 's/^commit=//p' vendor/MAP2CHECK_VERSION)"
           scripts/fetch-map2check.sh
-          echo "MAP2CHECK_COMMIT12=$(sed -n 's/^commit=//p' vendor/MAP2CHECK_VERSION | cut -c1-12)" >> "$GITHUB_ENV"
+          fetched="$(sed -n 's/^commit=//p' vendor/MAP2CHECK_VERSION)"
+          echo "develop baixado: $fetched"
+          echo "develop fixado:  $pinned (vendor/MAP2CHECK_VERSION do repositório)"
+          if [ "$fetched" != "$pinned" ]; then
+            echo "::warning title=Map2Check develop mudou::o job testa $fetched, não o commit fixado $pinned (vendor/MAP2CHECK_VERSION)"
+          fi
+          echo "MAP2CHECK_COMMIT12=${fetched:0:12}" >> "$GITHUB_ENV"
+
+      # A imagem tem ~4,2 GB, mais o cache do buildx e a instalação do C: o
+      # runner padrão tem pouco espaço livre.
+      - name: Liberar espaço em disco
+        run: |
+          df -h /
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+          sudo docker image prune --all --force
+          df -h /
 
       - uses: docker/setup-buildx-action@v3
 

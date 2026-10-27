@@ -824,7 +824,11 @@ The `map2check_property_<prp>` files, `map2check_checked_error` and
 was there. Observable difference from the C under `symex`: a program that
 writes a violation and later `NONE` in the same path (only through direct
 `write_property` calls; instrumented programs abort at the violation)
-keeps the violation (`klee_symex_writes_result_files_atomically`).
+keeps the violation (`klee_symex_writes_result_files_atomically`). A
+stale violation that an earlier KLEE run left in the run directory is also
+kept against a later `NONE`, where the C overwrites it; the frontend makes
+this unreachable, because every phase starts in a fresh scratch directory
+(`rm -rf <hash> && mkdir <hash>`, `caller.cpp:94`).
 
 **Reproduce:** the program is any one where KLEE forks a state that
 reaches the target and states that do not. With the C runtime:
