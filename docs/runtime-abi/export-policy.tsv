@@ -75,4 +75,4 @@ write_property_memcleanup	c-only	C function of PropertyGenerator.bc used by only
 write_property_memtrack	c-only	C function of PropertyGenerator.bc used by only the C runtime itself; the Rust core keeps it private (D7 approval item 2)
 write_property_overflow	c-only	C function of PropertyGenerator.bc used by nobody outside its .c; the Rust core keeps it private (D7 approval item 2)
 write_property_unknown	c-only	C function of PropertyGenerator.bc used by only the C runtime itself; the Rust core keeps it private (D7 approval item 2)
-__m2c_rt_*	rust-only	Rust core entry points the IR forwarders call (D7 layout A-fwd)
+__m2c_rt_*	rust-only	Rust core entry points the IR forwarders call (D7 layout A-fwd), and __m2c_rt_witness_enable for host programs (Task 2.10); with the core names of inventory.tsv, the whole exported set (scripts/check-export-set.sh)

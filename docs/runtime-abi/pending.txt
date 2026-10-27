@@ -1,5 +1,0 @@
-map2check_assume
-map2check_assume_loop
-map2check_check_deref
-map2check_crab_assume
-map2check_wasm_free

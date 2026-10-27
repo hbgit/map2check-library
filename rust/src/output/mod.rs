@@ -79,18 +79,6 @@ pub fn to_json(state: &AnalysisState) -> Result<String, Map2CheckError> {
     serde_json::to_string_pretty(&log).map_err(Map2CheckError::from)
 }
 
-/// Makes the state safe to format, right before a report or a log file is
-/// written from it. Under KLEE (feature `klee`) values the program made
-/// symbolic are replaced by concrete values of the current path, so that
-/// formatting them does not fork KLEE (D1 condition 7); elsewhere it does
-/// nothing.
-pub(crate) fn prepare_for_output(state: &mut AnalysisState) {
-    #[cfg(feature = "klee")]
-    crate::nondet::klee::concretize(state);
-    #[cfg(not(feature = "klee"))]
-    let _ = state;
-}
-
 /// Print the JSON report to stdout, as the C library did. A failed write
 /// (closed stdout, EPIPE) is reported on stderr instead of panicking.
 pub fn print_json(state: &AnalysisState) -> Result<(), Map2CheckError> {
@@ -115,10 +103,7 @@ pub fn print_report_unless_mode_set() {
     if crate::state::config().mode.is_some() {
         return;
     }
-    match crate::state::with_state(|s| {
-        prepare_for_output(s);
-        to_json(s)
-    }) {
+    match crate::state::with_state(|s| to_json(s)) {
         Ok(json) => write_report(&json),
         Err(e) => eprintln!("[map2check] error: {e}"),
     }

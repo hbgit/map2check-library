@@ -8,7 +8,7 @@
 # map2check_wasm_* of AnalysisModeMemtrack are covered by
 # test-memtrack-link.sh (wasm-free, wasm-access, wasm-shared-log).
 # Also checks that libmap2check.a defines none of the C names of the module
-# but the legacy wasm_rt_* exports, which stay until Task 2.10.
+# (no exemption since Task 2.10, which removed the legacy wasm_rt_* exports).
 #
 # Usage: test-wasm-link.sh [<libmap2check.a>]
 #   default lib: target/release/libmap2check.a (cargo build --release --all-features)
@@ -39,20 +39,16 @@ NAMES="$(printf '%s\n' "$DEFS" | paste -sd'|')"
 [ "$(printf '%s\n' "$DEFS" | wc -l)" = 10 ] \
   || { echo "FAIL: WasmRuntimeStubs.ll does not define the 10 C names" >&2; exit 1; }
 
-# The legacy Rust exports (feature wasm) of the same names stay until Task 2.10
-# (ruling). They are the only names allowed to clash, listed exactly; the
-# linker keeps the first definition, the IR's (listed before the library).
-LEGACY='wasm_rt_(allocate_memory|grow_memory|free_memory|allocate_funcref_table|free_funcref_table|init|free|is_initialized|trap)|w2c_wasi__snapshot__preview1_proc_exit'
-defined="$(nm --defined-only --extern-only "$LIB" 2>/dev/null | awk 'NF==3 {print $3}' | grep -xE "$NAMES" || true)"
-leaks="$(printf '%s\n' "$defined" | grep -vxE "$LEGACY" | grep . || true)"
+# The staticlib must not define them (ruling: IR only). The legacy Rust
+# exports of the same names left the C ABI in Task 2.10; one that reappears
+# fails here.
+leaks="$(nm --defined-only --extern-only "$LIB" 2>/dev/null | awk 'NF==3 {print $3}' | grep -xE "$NAMES" || true)"
 if [ -n "$leaks" ]; then
   echo "FAIL: $LIB defines C names of WasmRuntimeStubs:" >&2; echo "$leaks" >&2; exit 1
 fi
-legacy="$(printf '%s\n' "$defined" | grep . | tr '\n' ' ' || true)"
-[ -z "$legacy" ] || echo "note: $LIB still defines the legacy $legacy(removed in Task 2.10)"
 
 T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
-"$CLANG" "${TARGET[@]}" -Wl,--allow-multiple-definition "$ROOT/tests/runtime-ir/wasm_link.c" "$LL" "$LIB" \
+"$CLANG" "${TARGET[@]}" "$ROOT/tests/runtime-ir/wasm_link.c" "$LL" "$LIB" \
   -ldl -lpthread -lm -o "$T/wasm_link"
 
 rc=0

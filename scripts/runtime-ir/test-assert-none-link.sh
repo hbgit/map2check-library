@@ -33,25 +33,18 @@ grep -qxF 'define void @__VERIFIER_assert(i32 %a0) {' "$OUT/AnalysisModeAssert.l
   && ! grep -q 'm2c-stub' "$OUT/AnalysisModeAssert.ll" \
   || { echo "FAIL: __VERIFIER_assert is not an unmarked empty define" >&2; exit 1; }
 
-# The staticlib must not define the C names of the modules (ruling: IR only).
+# The staticlib must not define the C names of the modules (ruling: IR only),
+# __VERIFIER_assert included: the legacy export of the libfuzzer and klee
+# features left the C ABI in Task 2.10, and one that reappears fails here.
 leaks="$(nm --defined-only --extern-only "$LIB" 2>/dev/null | awk 'NF==3 {print $3}' \
-  | grep -xE 'analysis_(init|destroy|is_program_correct|generate_aux_witness_files)|map2check_assert' || true)"
+  | grep -xE 'analysis_(init|destroy|is_program_correct|generate_aux_witness_files)|map2check_assert|__VERIFIER_assert' || true)"
 if [ -n "$leaks" ]; then
   echo "FAIL: $LIB defines C names of AnalysisModeAssert/None:" >&2; echo "$leaks" >&2; exit 1
 fi
 
-# The legacy __VERIFIER_assert export of the libfuzzer feature stays until
-# Task 2.10 (ruling), so the release staticlib still defines it next to the
-# IR. It is the only name allowed to clash; the linker keeps the first
-# definition, the IR's (listed before the library).
-LEGACY=(-Wl,--allow-multiple-definition)
-leaks="$(nm --defined-only --extern-only "$LIB" 2>/dev/null | awk 'NF==3 {print $3}' \
-  | grep -xE '__VERIFIER_assert' || true)"
-[ -z "$leaks" ] || echo "note: $LIB still defines the legacy __VERIFIER_assert (removed in Task 2.10)"
-
 T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
 "$CLANG" "${TARGET[@]}" -DMODE_ASSERT "$ROOT/tests/runtime-ir/assert_link.c" "$OUT/AnalysisModeAssert.ll" "$LIB" \
-  "${LEGACY[@]}" -ldl -lpthread -lm -o "$T/assert_link"
+  -ldl -lpthread -lm -o "$T/assert_link"
 "$CLANG" "${TARGET[@]}" -DMODE_NONE "$ROOT/tests/runtime-ir/assert_link.c" "$OUT/AnalysisModeNone.ll" "$LIB" \
   -ldl -lpthread -lm -o "$T/none_link"
 

@@ -9,14 +9,11 @@
 # pass, frontend ou external (consumidores unidos por "+", como em
 # "pass+frontend", ou por ","), menos os `c-only` de export-policy.tsv (SD-22).
 # Exports: símbolos externos definidos (nm --defined-only --extern-only) da
-# --lib (padrão target/release/libmap2check.a). A lib medida é a do núcleo do
-# drop-in: SEM as features legadas `libfuzzer` e `klee` (por exemplo
-# `CARGO_TARGET_DIR=target/coverage-lib cargo build --release --features wasm`),
-# cujos exports (`__VERIFIER_error`, `__VERIFIER_assert`...) o
-# Map2CheckFunctions.bc não tem e que a Task 2.10 remove; medida com
-# --all-features a guarda os contava como entregues (Task 2.7).
-# unidos aos dos artefatos extras (os módulos IR das tasks seguintes; .bc usa
-# llvm-nm, .ll é lido como texto; um define marcado `; m2c-stub` não conta).
+# --lib (padrão target/release/libmap2check.a; desde a Task 2.10 a lib só
+# exporta o ABI C do runtime, scripts/check-export-set.sh), unidos aos dos
+# artefatos extras (os módulos IR, a cola Map2CheckFunctions-glue.ll incluída;
+# .bc usa llvm-nm, .ll é lido como texto; um define marcado `; m2c-stub` não
+# conta).
 # Símbolos `rust-only` da política são
 # irrelevantes: só se intersecta com o conjunto de cobertura.
 #
@@ -83,11 +80,11 @@ if grep -qE '^\s*(#|$)|\s' "$PEND"; then
 fi
 rc=0
 if comm -23 "$T/expected" "$PEND" | grep -q .; then
-  echo "FAIL: pendências esquecidas (faltam em pending.txt; a lib deve ser a do núcleo, sem as features libfuzzer/klee):" >&2
+  echo "FAIL: pendências esquecidas (faltam em pending.txt; passe todos os módulos IR como extras):" >&2
   comm -23 "$T/expected" "$PEND" | sed 's/^/  /' >&2; rc=1
 fi
 if comm -13 "$T/expected" "$PEND" | grep -q .; then
-  echo "FAIL: entregues (ou fora da cobertura) ainda listados em pending.txt (a lib deve ser a do núcleo, sem as features libfuzzer/klee):" >&2
+  echo "FAIL: entregues (ou fora da cobertura) ainda listados em pending.txt:" >&2
   comm -13 "$T/expected" "$PEND" | sed 's/^/  /' >&2; rc=1
 fi
 [ "$rc" = 0 ] && echo "OK: $(wc -l < "$T/cov") símbolos na cobertura, $(wc -l < "$PEND") pendentes"

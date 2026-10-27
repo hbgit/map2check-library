@@ -2,6 +2,8 @@
 
 Data: 2026-10-16. Decisão de origem: D1, rota A′ (`docs/cutover/decisoes.md`), com a evidência do spike em `docs/cutover/spike-llvm16.md`.
 
+**2.0.0 (Task 2.10, D6):** registro histórico. A feature `klee`, `scripts/build-klee-runtime.sh`, `tests/klee_paths.sh` e os programas de `tests/klee/` saíram com a API núcleo 1.x; ficaram as fixtures dos autotestes do pós-processamento (`scripts/test-klee-postprocess.sh`). O gerador `symex` do runtime drop-in é o módulo IR `NonDetGeneratorKlee.bc` com o núcleo Rust da feature `dropin` (`scripts/runtime-ir/build-test-runtime-bc.sh`, `scripts/runtime-ir/test-klee-generator.sh`).
+
 **Decisão: GO.** O gerador `symex` do Map2Check usa o runtime Rust: as fontes de `rust/src`, compiladas por rustc 1.72.1 (LLVM 16.0.5) como um módulo de bitcode, ligado ao programa analisado com `llvm-link-16` e executado no KLEE 3.1. Nos seis programas de `tests/klee/`, o runtime Rust explora o mesmo número de caminhos que o runtime C de `develop`, ou menos, e chega aos mesmos veredictos. O vetor do KLEE, convertido em semente como o frontend faz, leva o leitor AFL++/libFuzzer do Rust ao mesmo ramo.
 
 ## O produto

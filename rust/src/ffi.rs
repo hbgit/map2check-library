@@ -3,6 +3,16 @@
 // FFI boundary: #[unsafe(no_mangle)] extern "C" functions that Map2Check's LLVM Pass calls.
 // This is the ONLY module that contains unsafe code.
 // Every unsafe block is annotated with a SAFETY comment.
+//
+// The C ABI (D6, 2.0.0): the `#[no_mangle]` functions here are exactly the
+// names of the C runtime of Map2Check `develop` that the core modules own
+// (`Map2CheckFunctions`, `TrackBBLog`, `NonDetLog`, `PropertyGenerator`)
+// and the `__m2c_rt_*` entry points the generated IR modules forward to
+// (scripts/check-export-set.sh). The `extern "C"` functions without
+// `#[no_mangle]` are the old core API (`map2check_set_mode`,
+// `map2check_map_malloc`, `print_all_containers_as_json`...): no longer
+// exported, kept as Rust functions because the Rust tests drive the core
+// through them.
 
 use std::ffi::CStr;
 
@@ -206,7 +216,6 @@ mod dropin {
 }
 
 /// Resets the global analysis state without aborting the caller.
-#[no_mangle]
 pub extern "C" fn map2check_reset() {
     ffi_guard(state::reset, ());
 }
@@ -237,7 +246,6 @@ pub extern "C" fn map2check_success() {
 ///
 /// # Safety
 /// `function_name` must be null or a valid null-terminated C string.
-#[no_mangle]
 pub unsafe extern "C" fn set_false_result(
     prp: i32,
     line_number: i32,
@@ -258,7 +266,6 @@ pub unsafe extern "C" fn set_false_result(
 }
 
 /// Returns the currently violated property.
-#[no_mangle]
 pub extern "C" fn get_current_property() -> ViolatedProperty {
     ffi_guard(
         || state::with_state(|s| Ok(s.result.property)).unwrap_or(ViolatedProperty::None),
@@ -267,7 +274,6 @@ pub extern "C" fn get_current_property() -> ViolatedProperty {
 }
 
 /// Returns the current step counter value.
-#[no_mangle]
 pub extern "C" fn get_current_step() -> u64 {
     ffi_guard(
         || state::with_state(|s| Ok(s.current_step())).unwrap_or(0),
@@ -278,7 +284,6 @@ pub extern "C" fn get_current_step() -> u64 {
 /// Advances and returns the step counter. Unlike `get_current_step`, this
 /// mutates the counter — analogous to `get_next_step`/`next_current_step` in
 /// the C library.
-#[no_mangle]
 pub extern "C" fn get_next_step() -> u64 {
     ffi_guard(|| state::with_state(|s| Ok(s.next_step())).unwrap_or(0), 0)
 }
@@ -286,7 +291,6 @@ pub extern "C" fn get_next_step() -> u64 {
 /// Prints the full JSON report to stdout when no analysis mode is set. With
 /// a mode set (a Map2Check run) it prints nothing: the result goes to the
 /// files, and the analysed program's stdout stays clean.
-#[no_mangle]
 pub extern "C" fn print_all_containers_as_json() {
     ffi_guard(output::print_report_unless_mode_set, ());
 }
@@ -294,7 +298,6 @@ pub extern "C" fn print_all_containers_as_json() {
 /// Resets violation metadata without clearing tracking containers.
 /// Host/test-only: the Map2Check passes never call it. It clears a recorded
 /// violation by design, bypassing the first-violation rule (#36, SD-03).
-#[no_mangle]
 pub extern "C" fn vcc_reset_meta_data() {
     ffi_guard(
         || {
@@ -318,7 +321,6 @@ pub extern "C" fn vcc_reset_meta_data() {
 /// Effect: `map2check_check_mem_endprog` reports a leak as
 /// `MemsafetyMemcleanup` instead of `MemsafetyMemtrack`. The option is
 /// configuration: `map2check_init()` and `map2check_reset()` keep it.
-#[no_mangle]
 pub extern "C" fn map2check_set_memcleanup() {
     ffi_guard(
         || {
@@ -332,7 +334,6 @@ pub extern "C" fn map2check_set_memcleanup() {
 /// Effect: `map2check_check_load` treats a NULL `ptr` as safe once this has
 /// been called, instead of flagging it as `MemsafetyDeref`. Kept across
 /// `map2check_init()` and `map2check_reset()`.
-#[no_mangle]
 pub extern "C" fn map2check_set_null_is_valid() {
     ffi_guard(
         || {
@@ -348,9 +349,7 @@ pub extern "C" fn map2check_set_null_is_valid() {
 /// writes `track_bb_log.st`, `heap_log.csv`, `allocation_log.csv` and
 /// `list_log.csv` (memory modes), and on a violation `klee_log.csv` and
 /// `map2check_checked_error`. Configuration: kept by `map2check_init()` and
-/// `map2check_reset()`. The Map2Check frontend links a constructor that
-/// calls it into the witness binary.
-#[no_mangle]
+/// `map2check_reset()`. Its C ABI is `__m2c_rt_witness_enable`.
 pub extern "C" fn map2check_enable_witness() {
     ffi_guard(
         || {
@@ -369,7 +368,6 @@ pub extern "C" fn map2check_enable_witness() {
 /// `map2check_reset()` keep it. Until a valid value is set the mode is unset
 /// and every check is active. Per-mode effects are in
 /// `rust/src/analysismode/mode.rs`.
-#[no_mangle]
 pub extern "C" fn map2check_set_mode(mode: i32) {
     ffi_guard(
         || {
@@ -419,7 +417,6 @@ pub(crate) unsafe fn mark_target_reached(
 ///
 /// # Safety
 /// `func` must be null or a valid null-terminated C string.
-#[no_mangle]
 pub unsafe extern "C" fn map2check_reach_target(
     func: *const std::os::raw::c_char,
     scope: i32,
@@ -499,16 +496,8 @@ pub unsafe extern "C" fn map2check_track_bb(
 /// `__VERIFIER_error` of the C core (`Map2CheckFunctions.c:57-59`): "DO
 /// NOTHING". The passes carry the checks (the target through
 /// `map2check_target_function`, asserts through `map2check_assert`), so a
-/// program's own call has no effect and the run goes on. Defined here only
-/// without the legacy features `libfuzzer` and `klee`, whose own
-/// `__VERIFIER_error` (SD-08) Task 2.10 removes; the drop-in core
-/// (`Map2CheckFunctions.bc`) has neither, so it defines this one.
-///
-/// Kept out of the header, which already declares the same prototype from
-/// `nondet/libfuzzer.rs`; drop the marker when Task 2.10 removes that one.
-///
-/// cbindgen:ignore
-#[cfg(not(any(feature = "libfuzzer", feature = "klee")))]
+/// program's own call has no effect and the run goes on, with a mode set
+/// and without (SD-08).
 #[no_mangle]
 pub extern "C" fn __VERIFIER_error() {
     ffi_guard(|| (), ());
@@ -634,6 +623,21 @@ pub unsafe extern "C" fn __m2c_rt_witness_generate_aux_files(
 #[no_mangle]
 pub extern "C" fn __m2c_rt_witness_generate_confirmation_file() {
     ffi_guard(termination::rt_generate_confirmation_file, ());
+}
+
+/// Turns on the witness files of a Map2Check run, the C ABI of the old
+/// `map2check_enable_witness` (not exported since 2.0.0, Task 2.10), with
+/// its behaviour: when a run with a mode ends, `map2check_exit` also writes
+/// `track_bb_log.st`, the logs of the memory modes and, on a violation,
+/// `klee_log.csv` and `map2check_checked_error`. Configuration, kept by
+/// `map2check_init`. In develop the frontend selects the witness by linking
+/// `WitnessGeneration.bc` instead of `WitnessGenerationNone.bc`
+/// (`caller.cpp:624-640`); the host programs that link the staticlib
+/// (`tests/ffi_harness.c`, the link tests of `scripts/runtime-ir/`) call
+/// this instead. No IR module calls it.
+#[no_mangle]
+pub extern "C" fn __m2c_rt_witness_enable() {
+    ffi_guard(|| state::update_config(|c| c.witness = true), ());
 }
 
 // ── C runtime ABI: AnalysisModeOverflow (core entry points, D7) ─────────────
@@ -2562,7 +2566,6 @@ macro_rules! nondet_ffi {
         // `c_long` and friends are `i64`/`u64` on LP64 only: the widening
         // conversions in `$to_value` are no-ops there and real elsewhere.
         #[allow(clippy::useless_conversion)]
-        #[no_mangle]
         pub unsafe extern "C" fn $fn_name(
             line: i32,
             scope: i32,
@@ -2750,7 +2753,6 @@ unsafe impl Send for bbtrack_log_t {}
 ///
 /// # Safety
 /// `function_name` must be null or a valid null-terminated C string.
-#[no_mangle]
 pub unsafe extern "C" fn map2check_save_basic_block_log(
     line: i32,
     function_name: *const std::os::raw::c_char,
@@ -2786,7 +2788,6 @@ pub unsafe extern "C" fn map2check_save_basic_block_log(
 }
 
 /// Returns 1 if `line` was recorded as executed, 0 otherwise.
-#[no_mangle]
 pub extern "C" fn map2check_is_in_trackbb_container(line: i32) -> i32 {
     ffi_guard(
         || {
@@ -2807,7 +2808,6 @@ pub extern "C" fn map2check_is_in_trackbb_container(line: i32) -> i32 {
 
 /// # Safety
 /// `var_name` must be null or a valid null-terminated C string; `ptr_address` may be null.
-#[no_mangle]
 pub unsafe extern "C" fn map2check_map_alloca(
     var_name: *const std::os::raw::c_char,
     ptr_address: *const std::os::raw::c_void,
@@ -2862,7 +2862,6 @@ pub unsafe extern "C" fn map2check_map_alloca(
 ///
 /// # Safety
 /// `var_name` must be null or a valid null-terminated C string; `ptr_address` may be null.
-#[no_mangle]
 pub unsafe extern "C" fn map2check_map_non_static_alloca(
     var_name: *const std::os::raw::c_char,
     ptr_address: *const std::os::raw::c_void,
@@ -2917,7 +2916,6 @@ pub unsafe extern "C" fn map2check_map_non_static_alloca(
 ///
 /// # Safety
 /// `var_name` must be null or a valid null-terminated C string; `ptr_address` may be null.
-#[no_mangle]
 pub unsafe extern "C" fn map2check_map_funct_address(
     var_name: *const std::os::raw::c_char,
     ptr_address: *const std::os::raw::c_void,
@@ -2979,7 +2977,6 @@ fn malloc_returned_null(ptr_address: *const std::os::raw::c_void) -> bool {
 ///
 /// # Safety
 /// `ptr_address` may be null (null malloc result is valid C).
-#[no_mangle]
 pub unsafe extern "C" fn map2check_map_malloc(ptr_address: *const std::os::raw::c_void, size: i32) {
     ffi_guard(
         || {
@@ -3023,7 +3020,6 @@ pub unsafe extern "C" fn map2check_map_malloc(ptr_address: *const std::os::raw::
 ///
 /// # Safety
 /// `ptr_address` may be null.
-#[no_mangle]
 pub unsafe extern "C" fn map2check_map_calloc(
     ptr_address: *const std::os::raw::c_void,
     quantity: i32,
@@ -3071,7 +3067,6 @@ pub unsafe extern "C" fn map2check_map_calloc(
 ///
 /// # Safety
 /// `ptr_address` must be null or point to a readable `void *`.
-#[no_mangle]
 pub unsafe extern "C" fn map2check_map_posix_memalign(
     ptr_address: *const std::os::raw::c_void,
     size: i32,
@@ -3119,7 +3114,6 @@ pub unsafe extern "C" fn map2check_map_posix_memalign(
 /// # Safety
 /// `var_name` and `function_name` must be null or valid null-terminated C strings.
 /// `var_address` is only stored, never dereferenced.
-#[no_mangle]
 pub unsafe extern "C" fn map2check_map_free(
     var_name: *const std::os::raw::c_char,
     var_address: *const std::os::raw::c_void,
@@ -3165,7 +3159,6 @@ pub unsafe extern "C" fn map2check_map_free(
 
 /// # Safety
 /// `var_name` and `funct_name` must be null or valid null-terminated C strings.
-#[no_mangle]
 pub unsafe extern "C" fn map2check_map_store_pointer(
     var_address: *const std::os::raw::c_void,
     value: *const std::os::raw::c_void,
@@ -3215,7 +3208,6 @@ pub unsafe extern "C" fn map2check_map_store_pointer(
 ///
 /// # Safety
 /// `function_name` must be null or a valid null-terminated C string.
-#[no_mangle]
 pub unsafe extern "C" fn map2check_is_valid_assert(
     line_number: i32,
     function_name: *const std::os::raw::c_char,
@@ -3251,7 +3243,6 @@ macro_rules! overflow_ffi_binop {
     ($fn_name:ident, $checker:ident, $ty:ty) => {
         /// # Safety
         /// `function_name` must be null or a valid null-terminated C string.
-        #[no_mangle]
         pub unsafe extern "C" fn $fn_name(
             param1: $ty,
             param2: $ty,
@@ -3287,7 +3278,6 @@ macro_rules! overflow_ffi_shift {
     ($fn_name:ident, $checker:ident, $ty:ty) => {
         /// # Safety
         /// `function_name` must be null or a valid null-terminated C string.
-        #[no_mangle]
         pub unsafe extern "C" fn $fn_name(
             param1: $ty,
             param2: u32,
@@ -3321,7 +3311,6 @@ macro_rules! overflow_ffi_shift {
 
 /// # Safety
 /// `function_name` must be null or a valid null-terminated C string.
-#[no_mangle]
 pub unsafe extern "C" fn map2check_binop_neg_int(
     param1: i32,
     _param2: i32,
@@ -3393,7 +3382,6 @@ unsafe fn signed_binop(
 ///
 /// # Safety
 /// `function_name` must be null or a valid null-terminated C string.
-#[no_mangle]
 pub unsafe extern "C" fn map2check_binop_add_signed(
     a: i64,
     b: i64,
@@ -3414,7 +3402,6 @@ pub unsafe extern "C" fn map2check_binop_add_signed(
 ///
 /// # Safety
 /// `function_name` must be null or a valid null-terminated C string.
-#[no_mangle]
 pub unsafe extern "C" fn map2check_binop_sub_signed(
     a: i64,
     b: i64,
@@ -3435,7 +3422,6 @@ pub unsafe extern "C" fn map2check_binop_sub_signed(
 ///
 /// # Safety
 /// `function_name` must be null or a valid null-terminated C string.
-#[no_mangle]
 pub unsafe extern "C" fn map2check_binop_mul_signed(
     a: i64,
     b: i64,
@@ -3456,7 +3442,6 @@ pub unsafe extern "C" fn map2check_binop_mul_signed(
 ///
 /// # Safety
 /// `function_name` must be null or a valid null-terminated C string.
-#[no_mangle]
 pub unsafe extern "C" fn map2check_binop_div_signed(
     a: i64,
     b: i64,
@@ -3477,7 +3462,6 @@ pub unsafe extern "C" fn map2check_binop_div_signed(
 ///
 /// # Safety
 /// `function_name` must be null or a valid null-terminated C string.
-#[no_mangle]
 pub unsafe extern "C" fn map2check_binop_rem_signed(
     a: i64,
     b: i64,
@@ -3498,7 +3482,6 @@ pub unsafe extern "C" fn map2check_binop_rem_signed(
 ///
 /// # Safety
 /// `function_name` must be null or a valid null-terminated C string; `ptr` may be null.
-#[no_mangle]
 pub unsafe extern "C" fn map2check_check_load(
     ptr: *const std::os::raw::c_void,
     line: i32,
@@ -3545,7 +3528,6 @@ pub unsafe extern "C" fn map2check_check_load(
 /// # Safety
 /// `name` and `function_name` must be null or valid null-terminated C strings;
 /// `ptr` and `var_address` may be null and are never dereferenced.
-#[no_mangle]
 pub unsafe extern "C" fn map2check_check_free(
     name: *const std::os::raw::c_char,
     var_address: *const std::os::raw::c_void,
@@ -3609,7 +3591,6 @@ pub unsafe extern "C" fn map2check_check_free(
 ///
 /// # Safety
 /// `function_name` must be null or a valid null-terminated C string; `ptr` may be null.
-#[no_mangle]
 pub unsafe extern "C" fn map2check_check_free_resolved_address(
     ptr: *const std::os::raw::c_void,
     line: u32,
@@ -3659,7 +3640,6 @@ pub unsafe extern "C" fn map2check_check_free_resolved_address(
 ///
 /// # Safety
 /// `function_name` must be null or a valid null-terminated C string; `ptr` may be null.
-#[no_mangle]
 pub unsafe extern "C" fn map2check_check_deref(
     ptr: *const std::os::raw::c_void,
     scope: u32,
@@ -3693,7 +3673,6 @@ pub unsafe extern "C" fn map2check_check_deref(
 /// `map2check_set_memcleanup()`; memcleanup mode reports it as
 /// `MemsafetyMemcleanup`; the other modes report nothing (SD-04). A violation
 /// recorded earlier stays final (SD-03).
-#[no_mangle]
 pub extern "C" fn map2check_check_mem_endprog() {
     ffi_guard(
         || {

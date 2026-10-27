@@ -38,8 +38,10 @@ condition checkers behind the `VccChecker` trait; a checker returns `Safe` or
 a violated property, and the FFI layer records violations in the shared state.
 `output` serializes that state as the JSON report written to stdout.
 
-The optional `libfuzzer` feature provides the LibFuzzer callback and
-nondeterministic input generators in `nondet/libfuzzer.rs`. Cargo features and
+Since 2.0.0 (D6) the C ABI is the Map2Check runtime ABI only
+(`scripts/check-export-set.sh`); the generated IR modules of
+`scripts/runtime-ir/gen_ll.py` define the other C names (modes, generators,
+wasm stubs) and forward to the `__m2c_rt_*` entry points. Cargo features and
 the native/bitcode build setup are declared in `Cargo.toml` and `Dockerfile`;
 consult those files before changing how analysis modes are linked.
 

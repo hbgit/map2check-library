@@ -44,7 +44,7 @@ void map2check_free(const char *name, void *ptr, unsigned scope, unsigned line,
 void map2check_init(int);
 void map2check_success(void);
 void map2check_exit(void);
-void map2check_enable_witness(void);
+void __m2c_rt_witness_enable(void);
 void map2check_track_bb(unsigned line, const char *function_name);
 void map2check_nondet_int(unsigned line, unsigned scope, int value, const char *function_name);
 void map2check_nondet_uint(unsigned line, unsigned scope, int value, const char *function_name);
@@ -98,7 +98,7 @@ int main(int argc, char **argv) {
   golden_arena();
   int golden = is(c, "FALSE-MEMCLEANUP") || is(c, "NONE") || is(c, "UNKNOWN");
   if (golden)
-    map2check_enable_witness(); /* the goldens are witness binaries */
+    __m2c_rt_witness_enable(); /* the goldens are witness binaries */
   /* In C, map2check_init calls analysis_init (Map2CheckFunctions.c:37); so does
    * the drop-in core (feature dropin, scripts/runtime-ir/test-init-wiring.sh).
    * This staticlib has no such feature, so the call is made by hand; a

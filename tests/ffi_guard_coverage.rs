@@ -7,12 +7,7 @@ mod common;
 
 use common::read;
 
-const SOURCES: &[&str] = &[
-    "rust/src/ffi.rs",
-    "rust/src/nondet/libfuzzer.rs",
-    "rust/src/nondet/klee.rs",
-    "rust/src/wasm.rs",
-];
+const SOURCES: &[&str] = &["rust/src/ffi.rs", "rust/src/wasm.rs"];
 
 /// Drops comments and string/char-literal contents so braces inside them do
 /// not confuse the body matcher.

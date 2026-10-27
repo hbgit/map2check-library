@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: GPL-3.0-only
 [package]
 name = "map2check-library"
-version = "1.1.0-rc1"
+version = "2.0.0-rc.1"
 edition = "2021"
 description = "Rust library to support Map2Check tool: tracks memory, basic blocks, and nondeterministic values, and checks safety properties"
 license = "GPL-3.0-only"
@@ -22,20 +22,16 @@ mockall = "0.13"
 tempfile = "3"
 
 [features]
-libfuzzer = []
-# The wasm2c runtime of Map2Check's `--wasm` mode (D2): the `wasm_rt_*` stubs,
-# `w2c_wasi__snapshot__preview1_proc_exit` and the `map2check_wasm_*` checks.
+# The wasm2c runtime of Map2Check's `--wasm` mode (D2): the `__m2c_rt_wasm_*`
+# core entry points that `WasmRuntimeStubs.bc` forwards to.
 wasm = []
-# The `klee` feature (the KLEE runtime) lives in klee/Cargo.toml, the
-# manifest of the rustc 1.72.1 bitcode build (D1, route A'). It is not a
-# feature here: `--all-features` would link it with `libfuzzer` (both define
-# `__VERIFIER_nondet_*`) and against KLEE intrinsics no host binary has.
-# The same holds for `dropin` (the drop-in core, also klee/Cargo.toml): its
+# The `dropin` feature (the drop-in core) lives in klee/Cargo.toml, the
+# manifest of the rustc 1.72.1 bitcode build (D1, route A'): its
 # map2check_init calls the analysis_init and nondet_init of the IR modules,
 # which no host build links.
 
 [lints.rust]
-unexpected_cfgs = { level = "warn", check-cfg = ['cfg(feature, values("klee", "dropin"))'] }
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(feature, values("dropin"))'] }
 
 [profile.release]
 opt-level = 3

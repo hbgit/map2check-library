@@ -47,7 +47,7 @@ void map2check_wasm_check_access(uint64_t offset, uint64_t access_size);
 /* Map2CheckFunctions.h and NonDetLog.h (Rust core). */
 void map2check_init(int);
 void map2check_success(void);
-void map2check_enable_witness(void);
+void __m2c_rt_witness_enable(void);
 void map2check_track_bb(unsigned line, const char *function_name);
 void map2check_nondet_int(unsigned line, unsigned scope, int value, const char *function_name);
 void map2check_nondet_uint(unsigned line, unsigned scope, int value, const char *function_name);
@@ -105,7 +105,7 @@ int main(int argc, char **argv) {
                is(c, "FALSE-MEMTRACK") || is(c, "NONE") || is(c, "UNKNOWN") ||
                is(c, "POSIX-MEMALIGN");
   if (golden)
-    map2check_enable_witness(); /* the goldens are witness binaries */
+    __m2c_rt_witness_enable(); /* the goldens are witness binaries */
   /* In C, map2check_init calls analysis_init (Map2CheckFunctions.c:37); so does
    * the drop-in core (feature dropin, scripts/runtime-ir/test-init-wiring.sh).
    * This staticlib has no such feature, so the call is made by hand; a
@@ -155,12 +155,11 @@ int main(int argc, char **argv) {
     map2check_wasm_check_access(0x40c, 4);
     map2check_wasm_check_access(0x40d, 4);
   } else if (is(c, "wasm-shared-log")) {
-    /* Tells the IR forwarders from the legacy map2check_wasm_* exports
-     * (feature wasm, own table), both defined under
-     * --allow-multiple-definition. The IR shares develop's allocation log
-     * with map2check_malloc (AnalysisModeMemtrack.c:403-436): the access and
-     * the free of BLOCK are valid and the wasm block leaks (FALSE-MEMTRACK).
-     * The legacy table never saw BLOCK: OVERFLOW at the access. */
+    /* The IR shares develop's allocation log with map2check_malloc
+     * (AnalysisModeMemtrack.c:403-436): the access and the free of BLOCK are
+     * valid and the wasm block leaks (FALSE-MEMTRACK). The 1.x
+     * map2check_wasm_* exports (own table, removed in Task 2.10) never saw
+     * BLOCK and would report OVERFLOW at the access. */
     map2check_malloc(BLOCK, 16);
     map2check_wasm_check_access((uint64_t)(uintptr_t)BLOCK, 4);
     map2check_wasm_free((uint64_t)(uintptr_t)BLOCK, 70);

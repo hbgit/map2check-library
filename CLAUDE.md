@@ -32,12 +32,16 @@ cargo fmt --check
 cargo clippy --all-targets --all-features -- -D warnings
 cargo deny check
 
-# Exercise the C ABI with ASan and UBSan (requires clang)
+# Exercise the C ABI with ASan and UBSan (requires clang): the harness links
+# the staticlib with the IR modules it needs, as Map2Check links a program
 cargo build --release --all-features
-clang -fsanitize=address,undefined -fno-omit-frame-pointer \
-  tests/ffi_harness.c target/release/libmap2check.a \
-  -ldl -lpthread -lm -o target/ffi_harness
+scripts/build-c-abi-program.sh -o target/ffi_harness \
+  -m Map2CheckFunctions-glue -m NonDetGeneratorAFL tests/ffi_harness.c \
+  -- -fsanitize=address,undefined -fno-omit-frame-pointer
 target/ffi_harness
+
+# The exported set is exactly the C runtime ABI (D6)
+scripts/check-export-set.sh
 ```
 
 ## Architecture
@@ -54,18 +58,18 @@ Each package lives in a subdirectory of `rust/src/`:
 | Package | Purpose |
 |---|---|
 | `caller/` | Result and violated-property types, global step counter. |
-| `nondet/` | Typed nondeterministic values and LibFuzzer generators. |
+| `nondet/` | Typed nondeterministic values and the C runtime's nondet log (`klee_log.csv`). |
 | `memtrack/` | Memory allocation tracking and memory-safety checks. |
 | `bbtrack/` | Basic-block entries and lookup. |
 | `analysismode/` | Verification condition checkers: `analysis_assert` (assert reachability), `analysis_overflow` (arithmetic overflow), `analysis_memory` (memory safety). |
 
 ### Container Pattern
 
-Analysis records are stored in vectors in the process-wide `AnalysisState`, protected by a mutex and reset by `map2check_reset()`.
+Analysis records are stored in vectors in the process-wide `AnalysisState`, protected by a mutex and reset by `map2check_init()`.
 
 ### Output Format
 
-At analysis end, `print_all_containers_as_json()` serializes the state to RFC 8259 JSON on stdout using `serde_json`.
+With an analysis mode selected (a Map2Check run), results go to the property files of the C runtime (`map2check_property`...). With no mode, `map2check_success()` serializes the state to RFC 8259 JSON on stdout using `serde_json`.
 
 ### Generated Header
 
@@ -107,7 +111,9 @@ At analysis end, `print_all_containers_as_json()` serializes the state to RFC 82
 
 ## Key Entry Points
 
+The C ABI is the C runtime ABI of Map2Check `develop` (D6, 2.0.0); `scripts/check-export-set.sh` checks it.
+
 - `map2check_init(int isSvComp)` — initializes the global analysis state (C runtime signature)
-- `map2check_success()` / `set_false_result(prp, line, func)` — set final verification result
-- `print_all_containers_as_json()` — emits the JSON result report
-- `map2check_is_valid_assert()`, `map2check_map_malloc()`, `map2check_map_free()` etc. — called by LLVM instrumentation passes in the Map2Check tool
+- `map2check_success()`, `map2check_error()`, `map2check_target_function()`, `write_property()` — end of run and result files
+- `map2check_track_bb()`, `map2check_nondet_<t>()` — basic-block and nondet logs, called by the Map2Check passes
+- `__m2c_rt_*` — core entry points; the generated IR modules (`scripts/runtime-ir/gen_ll.py`) define the other C names (`map2check_malloc`, `map2check_assert`, `analysis_init`...) and forward to them

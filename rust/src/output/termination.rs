@@ -67,7 +67,6 @@ pub(crate) fn generate_aux_files(
     s: &mut AnalysisState,
     violation: bool,
 ) {
-    super::prepare_for_output(s);
     report(
         legacy_files::TRACKBB_LOG_FILE,
         legacy_files::write_trackbb_log(dir, &s.bbtrack),
@@ -83,7 +82,7 @@ pub(crate) fn generate_aux_files(
         Some(AnalysisMode::Memtrack | AnalysisMode::Memcleanup)
     ) {
         // The drop-in entry points keep develop's logs themselves
-        // (`__m2c_rt_memtrack_*`, Task 2.5); the legacy exports are replayed.
+        // (`__m2c_rt_memtrack_*`, Task 2.5); the Rust-only 1.x API is replayed.
         if s.c_memory.has_rows() {
             write_c_memory_logs(dir, &s.c_memory);
         } else {

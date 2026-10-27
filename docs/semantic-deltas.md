@@ -31,6 +31,7 @@ entry and its tests in the same change.
 | `pending decision` | Waits on the cited issue. |
 | `fixed` | Was a regression; the Rust library now matches the C runtime of Map2Check `develop`. The entry cites the fixing issue and the `develop` source. |
 | `C behaviour preserved on purpose` | The C runtime of Map2Check `develop` does something odd and the Rust library does the same, because a consumer depends on the exact output. |
+| `removed` | The export the entry describes left the C ABI in 2.0.0 (D6, Task 2.10), and its tests with it. The entry stays so that its ID keeps its meaning; **Tests:** is `—`. |
 
 ### SD-01 — JSON report shape
 
@@ -236,8 +237,16 @@ map2check_check_free("p", (void *)0x5000, 0, 4, "main");             /* Memsafet
 
 ### SD-07 — `__VERIFIER_assume(0)` abandons the fuzzer input; outside one it exits with 0
 
-**Classification:** intentional
-**Tests:** `rust/src/nondet/libfuzzer.rs::failed_assume_abandons_only_the_current_iteration`, `rust/src/nondet/libfuzzer.rs::failed_fuzzer_assume_abandons_the_iteration_too`, `rust/src/nondet/libfuzzer.rs::verifier_assume_false_exits_with_zero`, `rust/src/nondet/libfuzzer.rs::map2check_fuzzer_assume_false_exits_with_zero`
+**Classification:** removed (2.0.0)
+**Tests:** —
+
+**2.0.0 (Task 2.10, D6):** `__VERIFIER_assume`, `map2check_fuzzer_assume`
+and `LLVMFuzzerTestOneInput` left the C ABI with the `libfuzzer` feature.
+The drop-in runtime has develop's mechanism: the program's
+`map2check_assume*` (glue IR of `Map2CheckFunctions.bc`) call the
+generator's `nondet_assume`, which in `NonDetGeneratorAFL.bc` `longjmp`s back
+to the `__AFL_LOOP` of its `main` (D7 item 5; `scripts/runtime-ir/test-assume-link.sh`,
+`tests/ffi_harness.c`). What follows describes 1.x.
 
 **Rust:** inside `LLVMFuzzerTestOneInput`, `__VERIFIER_assume(0)` and
 `map2check_fuzzer_assume(0)` abandon the current input: they unwind (a
@@ -276,7 +285,13 @@ int __map2check_main__(void) {
 ### SD-08 — `__VERIFIER_error()` / `__VERIFIER_assert(0)` without an analysis mode
 
 **Classification:** fixed (#20)
-**Tests:** `rust/src/nondet/libfuzzer.rs::verifier_error_is_a_no_op_with_a_mode_and_the_deref_is_reported`, `rust/src/nondet/libfuzzer.rs::target_mode_reaches_only_through_map2check_reach_target`, `rust/src/nondet/libfuzzer.rs::verifier_error_aborts_and_reports_reachability`, `rust/src/nondet/libfuzzer.rs::verifier_assert_false_aborts_and_reports_reachability`
+**Tests:** `rust/src/ffi_tests.rs::core_verifier_error_does_nothing_as_in_c`
+
+**2.0.0 (Task 2.10, D6):** the `libfuzzer` and `klee` exports left the C
+ABI, and with them the mode-unset path below. The `__VERIFIER_error` of the
+library is the C core's: it does nothing, with a mode set and without
+(`Map2CheckFunctions.c:57-59`), and `__VERIFIER_assert` is defined by the IR
+module `AnalysisModeAssert.bc`, empty as in C. What follows describes 1.x.
 
 **Legacy (develop):** both are empty. `__VERIFIER_error()` is
 `// DO NOTHING` (`Map2CheckFunctions.c:57-59`) and `__VERIFIER_assert` is
@@ -367,8 +382,13 @@ bbtrack_log_t *b = map2check_save_basic_block_log(2, "main");
 
 ### SD-11 — Each LibFuzzer iteration starts from an empty state
 
-**Classification:** intentional
-**Tests:** `rust/src/nondet/libfuzzer.rs::fuzzer_iteration_resets_analysis_state_and_input`
+**Classification:** removed (2.0.0)
+**Tests:** —
+
+**2.0.0 (Task 2.10, D6):** `LLVMFuzzerTestOneInput` left the C ABI with the
+`libfuzzer` feature. In the drop-in runtime each AFL++ iteration runs the
+program's `main`, whose `map2check_init` starts a fresh state, as in develop
+(SD-21 keeps the one difference). What follows describes 1.x.
 
 **Rust:** `LLVMFuzzerTestOneInput` resets the analysis state before it calls
 `__map2check_main__`. Records and results from one input never leak into
@@ -608,7 +628,15 @@ map2check_binop_add_signed(INT64_MAX, 1, 64, 1, "main");
 ### SD-18 — Nondet values: develop's AFL++ input layout and log format, with three differences
 
 **Classification:** intentional
-**Tests:** `rust/src/nondet/libfuzzer.rs::every_generator_reads_sizeof_type_bytes_and_wraps_like_develop`, `rust/src/nondet/libfuzzer.rs::seed_a_reads_0x41414141_like_develop`, `rust/src/nondet/libfuzzer.rs::bool_consumes_four_bytes_and_is_the_int_converted_to_bool`, `rust/src/nondet/libfuzzer.rs::empty_input_yields_zero`, `rust/src/nondet/libfuzzer.rs::without_an_iteration_every_generator_yields_zero`, `rust/src/nondet/libfuzzer.rs::pchar_reads_an_unsigned_length_then_length_minus_one_chars`, `rust/src/ffi_golden_tests.rs::nondet_types_match_c_runtime`
+**Tests:** `rust/src/ffi_golden_tests.rs::nondet_types_match_c_runtime`
+
+**2.0.0 (Task 2.10, D6):** the `__VERIFIER_nondet_<t>` reader of the
+`libfuzzer` feature and the `map2check_save_nondet_log_<t>` exports left the
+C ABI, with the tests of the reader. The generators of the drop-in runtime
+are the IR module `NonDetGeneratorAFL.bc` (Task 2.8), made from develop's
+`NonDetGeneratorAFL.c`, and the log is `map2check_nondet_<t>` (Task 2.2),
+whose format the golden test above pins. What follows describes the 1.x
+reader.
 
 **Rust:** the `__VERIFIER_nondet_<t>` generators read the fuzzer input as
 develop's `NonDetGeneratorAFL.c` does: `sizeof(type)` bytes per value, in
@@ -787,7 +815,14 @@ int main(void) {
 ### SD-21 — AFL++ iterations do not accumulate nondet records (gate ref `C-BUG-oom-afl-nondet`)
 
 **Classification:** intentional
-**Tests:** `rust/src/nondet/libfuzzer.rs::two_fuzzer_iterations_yield_independent_results`, `rust/src/nondet/libfuzzer.rs::fuzzer_iteration_resets_analysis_state_and_input`
+**Tests:** `rust/src/ffi_tests.rs::nondet_log_init_and_destroy_empty_the_log_and_keep_the_step`, `rust/src/ffi_tests.rs::map2check_init_takes_the_c_sv_comp_argument_and_starts_clean`
+
+**2.0.0 (Task 2.10, D6):** `LLVMFuzzerTestOneInput` left the C ABI. In the
+drop-in runtime the `map2check_init` the pass puts at the start of `main`
+runs once per `__AFL_LOOP` iteration and starts a fresh state, and its
+`nondet_init` → `nondet_log_init` replaces the nondet log, releasing the old
+one, where develop leaks it. The tests above pin both. The text below
+describes the 1.x mechanism.
 
 This entry covers a bug of the C runtime of Map2Check `develop` that the
 Rust library does not have. The cutover gate cites it as

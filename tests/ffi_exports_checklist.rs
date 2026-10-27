@@ -12,10 +12,7 @@ use common::read;
 
 /// Arquivos de teste e o marcador a partir do qual o conteúdo é código de teste.
 /// `None` = o arquivo inteiro é teste.
-const TEST_SOURCES: &[(&str, Option<&str>)] = &[
-    ("rust/src/ffi_tests.rs", None),
-    ("rust/src/nondet/libfuzzer.rs", Some("\nmod tests {")),
-];
+const TEST_SOURCES: &[(&str, Option<&str>)] = &[("rust/src/ffi_tests.rs", None)];
 
 fn is_ident(c: char) -> bool {
     c.is_ascii_alphanumeric() || c == '_'
@@ -205,12 +202,12 @@ fn todo_export_do_header_tem_teste_rust() {
 fn header_real_e_lido_por_completo() {
     let names = header_functions(&read("include/map2check.h"));
     for sentinel in [
-        "map2check_init",                 // void f(void);
-        "set_false_result",               // declaração em várias linhas
-        "get_current_property",           // retorno `enum ViolatedProperty`
-        "map2check_save_basic_block_log", // retorno ponteiro
-        "map2check_save_nondet_log_int",  // bloco legado do trailer
-        "__VERIFIER_nondet_bool",         // export do feature libfuzzer
+        "map2check_init",                                // void f(int);
+        "__m2c_rt_overflow_map2check_binop_add",         // declaração em várias linhas
+        "write_property",                                // parâmetro `enum ViolatedProperty`
+        "__m2c_rt_overflow_analysis_is_program_correct", // retorno `char`
+        "__m2c_rt_wasm_grow_memory",                     // feature `wasm`
+        "map2check_nondet_ulonglong",                    // último bloco do NonDetLog
     ] {
         assert!(names.contains(sentinel), "parser não achou `{sentinel}`");
     }
@@ -302,30 +299,14 @@ plain!(not_an_export);
     );
 }
 
-/// O runtime KLEE (`rust/src/nondet/klee.rs`, feature `klee` do
-/// `klee/Cargo.toml`) fica fora do header (`cbindgen:ignore`): é ligado como
-/// bitcode, não pelo header.
-const KLEE_RUNTIME: &str = "rust/src/nondet/klee.rs";
-
-/// Os `wasm_rt_*` e o `w2c_wasi__*` de `rust/src/wasm.rs` (feature `wasm`)
-/// implementam funções que o `wasm-rt.h` do wabt declara: ficam fora do
-/// header (`cbindgen:ignore`), e `core_api_coverage` os confere no staticlib.
-fn is_wasm_rt_export(name: &str) -> bool {
-    name.starts_with("wasm_rt_") || name.starts_with("w2c_wasi__")
-}
-
 #[test]
 fn todo_export_do_codigo_esta_no_header() {
     let rust_src: String = rust_sources()
         .iter()
-        .filter(|p| p.as_str() != KLEE_RUNTIME)
         .map(|p| read(p))
         .collect::<Vec<_>>()
         .join("\n");
-    let in_source: BTreeSet<String> = source_exports(&rust_src)
-        .into_iter()
-        .filter(|n| !is_wasm_rt_export(n))
-        .collect();
+    let in_source = source_exports(&rust_src);
     let in_header = header_functions(&read("include/map2check.h"));
     let not_in_header: Vec<_> = in_source.difference(&in_header).collect();
     let not_in_source: Vec<_> = in_header.difference(&in_source).collect();
@@ -333,28 +314,6 @@ fn todo_export_do_codigo_esta_no_header() {
         not_in_header.is_empty() && not_in_source.is_empty(),
         "exports fora do header: {not_in_header:?}; no header sem export no código: {not_in_source:?}"
     );
-}
-
-/// O runtime KLEE exporta os mesmos símbolos, com as mesmas assinaturas, que
-/// o gerador libFuzzer declara no header, mais o `main` que o KLEE executa
-/// (como `NonDetGeneratorKlee.c` de `develop`).
-#[test]
-fn exports_do_runtime_klee_sao_os_do_header_mais_main() {
-    let klee = source_exports(&read(KLEE_RUNTIME));
-    let header = common::header_declarations(&read("include/map2check.h"));
-    let fora: Vec<_> = klee
-        .iter()
-        .filter(|name| name.as_str() != "main" && !header.contains_key(name.as_str()))
-        .collect();
-    assert!(fora.is_empty(), "exports KLEE fora do header: {fora:?}");
-    for name in [
-        "main",
-        "__VERIFIER_nondet_int",
-        "__VERIFIER_assume",
-        "__VERIFIER_error",
-    ] {
-        assert!(klee.contains(name), "o runtime KLEE não exporta {name}");
-    }
 }
 
 /// Arquivos `.rs` de `rust/src/`, relativos à raiz do crate.

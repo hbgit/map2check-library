@@ -1,9 +1,10 @@
 # SPDX-License-Identifier: GPL-3.0-only
 #
-# Second manifest: the runtime of the Map2Check `symex` generator (D1, route
-# A', docs/cutover/decisoes.md). It compiles the same sources as the main
-# build (../rust/src) with rustc 1.72.1, whose LLVM 16 writes bitcode that
-# llvm-link-16 and KLEE 3.1 read. Build it with scripts/build-klee-runtime.sh.
+# Second manifest: the Rust core of the drop-in runtime as LLVM 16 bitcode
+# (D1, route A', docs/cutover/decisoes.md; D7). It compiles the same sources
+# as the main build (../rust/src) with rustc 1.72.1, whose LLVM 16 writes
+# bitcode that llvm-link-16 and KLEE 3.1 read. Built by
+# scripts/runtime-ir/build-test-runtime-bc.sh (feature `dropin`).
 #
 # Why a directory of its own and not a workspace member: a workspace shares
 # one Cargo.lock, and the main one is v4, which cargo 1.72 cannot parse; the
@@ -22,12 +23,12 @@
 #     sed -i 's/^version = 4/version = 3/' klee/Cargo.lock
 [package]
 name = "map2check-klee-runtime"
-version = "1.1.0-rc1"
+version = "2.0.0-rc.1"
 edition = "2021"
 rust-version = "1.72"
 build = false
 publish = false
-description = "Map2Check runtime for the KLEE (symex) generator: the map2check-library sources built as LLVM 16 bitcode"
+description = "Rust core of the Map2Check drop-in runtime (Map2CheckFunctions.bc): the map2check-library sources built as LLVM 16 bitcode"
 license = "GPL-3.0-only"
 authors = ["Herbert Rocha <herberthb12@gmail.com>"]
 
@@ -42,7 +43,6 @@ serde_json = ">=1.0, <=1.0.154"
 thiserror = ">=2.0, <=2.0.20"
 
 [features]
-klee = []
 wasm = []
 # The Rust core of the drop-in Map2CheckFunctions.bc (D7, layout A-fwd; test
 # build: scripts/runtime-ir/build-test-runtime-bc.sh). Its map2check_init
@@ -50,8 +50,7 @@ wasm = []
 # mode and generator modules define, in that order (Map2CheckFunctions.c:
 # 37-38). Not a feature of the main manifest: cargo test, the ffi harness,
 # the golden tests and the host link tests link the staticlib without those
-# modules and keep calling analysis_init by hand. Not with `klee`, whose
-# legacy exports (`main`, `__VERIFIER_*`) belong to the generator modules.
+# modules and keep calling analysis_init by hand.
 dropin = []
 
 # panic = "abort": nothing catches a panic under KLEE, and the unwind

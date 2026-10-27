@@ -30,12 +30,12 @@ pub enum ViolatedProperty {
     Reachability = 5,
     /// `FALSE_OVERFLOW`.
     Overflow = 6,
-    /// A failed `map2check_is_valid_assert` (`ASSERT` in `PropertyGenerator.c`).
+    /// A failed `map2check_assert` (`ASSERT` in `PropertyGenerator.c`).
     Assert = 7,
     /// `FALSE_MEMCLEANUP`.
     MemsafetyMemcleanup = 8,
     /// Signed division or remainder by zero (`FALSE_DIVBYZERO`), reported by
-    /// `map2check_binop_div_signed` and `map2check_binop_rem_signed`.
+    /// `map2check_binop_sdiv` and `map2check_binop_srem`.
     DivByZero = 9,
     /// No counterpart in the C runtime.
     Concurrency = 10,

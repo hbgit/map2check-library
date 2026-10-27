@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: GPL-3.0-only
-# Monta o arquivo de release (issue #5): header C, as três bibliotecas
-# estáticas (core, libfuzzer, runtime), guia de integração, docs de compatibilidade, CHANGELOG e LICENSE.
+# Monta o arquivo de release (issue #5): header C, as duas bibliotecas
+# estáticas (core, runtime), guia de integração, docs de compatibilidade, CHANGELOG e LICENSE.
+# Desde a 2.0.0 (D6) as bibliotecas exportam só o ABI C do runtime do
+# Map2Check; os módulos IR que o completam (.bc) entram no pacote na Task 3.2.
 # Uso: scripts/package-release.sh [DIR_SAIDA]   (padrão: dist/)
 # CHANGELOG_FILE sobrescreve o CHANGELOG verificado (usado pelo teste).
 set -euo pipefail
@@ -25,14 +27,10 @@ trap 'rm -rf "$STAGE"' EXIT
 mkdir -p "$STAGE/$NAME/include" "$STAGE/$NAME/lib" "$STAGE/$NAME/docs"
 
 cd "$ROOT"
-cargo build --release --features libfuzzer
-cp target/release/libmap2check.a "$STAGE/$NAME/lib/libmap2check_libfuzzer.a"
 cargo build --release
 cp target/release/libmap2check.a "$STAGE/$NAME/lib/libmap2check.a"
-# The build Map2Check links: runtime profile (panic = unwind), libfuzzer + wasm.
-# The KLEE bitcode needs rustc 1.72.1 and LLVM 16 (scripts/build-klee-runtime.sh)
-# and is built separately; it is not part of this archive.
-cargo build --profile runtime --features libfuzzer,wasm
+# Runtime profile (panic = unwind) with the wasm2c entry points.
+cargo build --profile runtime --features wasm
 cp target/runtime/libmap2check.a "$STAGE/$NAME/lib/libmap2check_runtime.a"
 cp include/map2check.h "$STAGE/$NAME/include/"
 

@@ -43,10 +43,8 @@ for m in ContainerRealloc ContainerBTree BTree AllocationLog ListLog HeapLog; do
 done
 
 # The staticlib must not define the C names of the module (ruling: IR only).
-# The legacy export map2check_check_deref stays until Task 2.10; it is the
-# only name allowed to clash, and the linker keeps the IR's (listed before
-# the library). The nm check below is what keeps the staticlib free of the
-# others.
+# Since Task 2.10 there is no exemption: the legacy map2check_check_deref
+# export left the C ABI, and one that reappears fails here, as any other.
 # Every name the module defines, plus its C-only globals and helpers from
 # the inventory (the logs, ERROR_DEREF, update_reference_list_log).
 NAMES="$( { sed -nE 's/^define[^@]*@([A-Za-z0-9_.]+)\(.*/\1/p' "$OUT/AnalysisModeMemcleanup.ll"
@@ -54,21 +52,16 @@ NAMES="$( { sed -nE 's/^define[^@]*@([A-Za-z0-9_.]+)\(.*/\1/p' "$OUT/AnalysisMod
   | sort -u | paste -sd'|')"
 [ "$(sed -nE 's/^define[^@]*@([A-Za-z0-9_.]+)\(.*/\1/p' "$OUT/AnalysisModeMemcleanup.ll" | wc -l)" = 16 ] \
   || { echo "FAIL: AnalysisModeMemcleanup.ll does not define the 16 C names" >&2; exit 1; }
-LEGACY='map2check_check_deref'
-defined="$(nm --defined-only --extern-only "$LIB" 2>/dev/null | awk 'NF==3 {print $3}' | grep -xE "$NAMES" || true)"
-leaks="$(printf '%s\n' "$defined" | grep -vxE "$LEGACY" | grep . || true)"
+leaks="$(nm --defined-only --extern-only "$LIB" 2>/dev/null | awk 'NF==3 {print $3}' | grep -xE "$NAMES" || true)"
 if [ -n "$leaks" ]; then
   echo "FAIL: $LIB defines C names of AnalysisModeMemcleanup:" >&2; echo "$leaks" >&2; exit 1
 fi
-legacy="$(printf '%s\n' "$defined" | grep . | tr '\n' ' ' || true)"
-[ -z "$legacy" ] || echo "note: $LIB still defines the legacy $legacy(removed in Task 2.10)"
 
 T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
-LINK=(-Wl,--allow-multiple-definition)
-"$CLANG" "${TARGET[@]}" "${LINK[@]}" "$ROOT/tests/runtime-ir/memcleanup_link.c" \
+"$CLANG" "${TARGET[@]}" "$ROOT/tests/runtime-ir/memcleanup_link.c" \
   "$OUT/AnalysisModeMemcleanup.ll" "$OUT/ContainerRealloc.ll" "$OUT/AllocationLog.ll" \
   "$OUT/ListLog.ll" "$OUT/HeapLog.ll" "$LIB" -ldl -lpthread -lm -o "$T/array"
-"$CLANG" "${TARGET[@]}" "${LINK[@]}" "$ROOT/tests/runtime-ir/memcleanup_link.c" \
+"$CLANG" "${TARGET[@]}" "$ROOT/tests/runtime-ir/memcleanup_link.c" \
   "$OUT/AnalysisModeMemcleanup.ll" "$OUT/ContainerBTree.ll" "$OUT/BTree.ll" "$OUT/AllocationLog.ll" \
   "$OUT/ListLog.ll" "$OUT/HeapLog.ll" "$LIB" -ldl -lpthread -lm -o "$T/btree"
 
@@ -137,8 +130,7 @@ for bin in array btree; do
   check "$bin" unreferenced-leak 0 'map2check_property=NONE\n'
   # :342 error = FALSE: the second free is no FALSE-FREE (memtrack: it is).
   check "$bin" double-free 0 'map2check_property=NONE\n'
-  # :158 and :294 are empty: no FALSE-DEREF (memtrack: FALSE-DEREF at 14). The
-  # (The legacy export also gives NONE here; this does not tell which won.)
+  # :158 and :294 are empty: no FALSE-DEREF (memtrack: FALSE-DEREF at 14).
   check "$bin" invalid-deref 0 'map2check_property=NONE\n'
   # :160 is empty: no FALSE-DEREF for a string with no terminator in the block.
   check "$bin" cstring-beyond 0 'map2check_property=NONE\n'

@@ -4,13 +4,13 @@
 
 # Map2Check-Library
 
-Biblioteca de suporte à ferramenta [Map2Check](https://github.com/hbgit/map2check), reescrita em **Rust** (rewrite completo do C original). Provê rastreamento dinâmico e verificação de propriedades de segurança para programas analisados por LibFuzzer:
+Biblioteca de suporte à ferramenta [Map2Check](https://github.com/hbgit/map2check), reescrita em **Rust** (rewrite completo do C original). Provê rastreamento dinâmico e verificação de propriedades de segurança para os programas que o Map2Check instrumenta:
 
 - Rastreamento de blocos básicos (`bbtrack`)
 - Rastreamento de endereços de memória e operações de gerenciamento de memória (`memtrack`)
-- Rastreamento de valores não-determinísticos gerados por LibFuzzer (`nondet`)
+- Log dos valores não-determinísticos (`nondet`), gerados pelos módulos de gerador do Map2Check (AFL++, KLEE)
 - Verificação de propriedades de segurança: overflow aritmético, memória inválida, assert definido pelo usuário (`analysismode`)
-- API C compatível via FFI (`ffi.rs`) para integração direta com a LLVM Pass do Map2Check
+- API C via FFI (`ffi.rs`): desde a 2.0.0 (D6), exatamente o ABI C do runtime do Map2Check (`develop`) que os módulos núcleo definem, mais os pontos de entrada `__m2c_rt_*` para os quais os módulos IR gerados (`scripts/runtime-ir/gen_ll.py`) encaminham o resto do ABI (`scripts/check-export-set.sh`)
 
 ## Requisitos
 
@@ -32,7 +32,9 @@ cargo install cargo-tarpaulin cargo-audit cargo-deny cbindgen
 
 As features configuradas no `Cargo.toml` são:
 
-- `libfuzzer`: habilita a integração com o LibFuzzer.
+- `wasm`: os pontos de entrada `__m2c_rt_wasm_*` do runtime wasm2c (modo `--wasm` do Map2Check).
+
+A feature `libfuzzer` saiu na 2.0.0, com a API núcleo 1.x (veja o `CHANGELOG.md`).
 
 ## Build e testes
 
@@ -110,7 +112,7 @@ rust/src/
 ├── caller/mod.rs              # ViolatedProperty, AnalysisResult, step counter
 ├── nondet/
 │   ├── mod.rs                 # NonDetValue (enum), NonDetEntry
-│   └── libfuzzer.rs           # LLVMFuzzerTestOneInput (feature = "libfuzzer")
+│   └── c_log.rs               # log nondet do runtime C (NonDetLog.c, klee_log.csv)
 ├── memtrack/mod.rs            # MemTrackEntry, VCC checks de memória
 ├── bbtrack/mod.rs             # BasicBlockEntry, busca por linha
 ├── analysismode/
@@ -156,7 +158,7 @@ Map2Check Tool (LLVM Pass / Instrumentação)
 
 ## Output JSON
 
-Ao final da análise, `print_all_containers_as_json()` emite no stdout um objeto `map2check_log` com o veredito (`result`: `"TRUE"`/`"FALSE"`), a propriedade violada e os containers `Container_TrackBBLog`, `Container_NonDetLog` e, só em violações de memória, `Container_AllocationLog`. O formato exato, com exemplos verificados contra o serializador, está em [`docs/integration-guide.md`](docs/integration-guide.md#json-report).
+Sem modo de análise selecionado, `map2check_success()` emite no stdout um objeto `map2check_log` (numa execução do Map2Check, com modo, o resultado vai para os arquivos de propriedade, como no runtime C) com o veredito (`result`: `"TRUE"`/`"FALSE"`), a propriedade violada e os containers `Container_TrackBBLog`, `Container_NonDetLog` e, só em violações de memória, `Container_AllocationLog`. O formato exato, com exemplos verificados contra o serializador, está em [`docs/integration-guide.md`](docs/integration-guide.md#json-report).
 
 ## Compatibilidade e releases
 

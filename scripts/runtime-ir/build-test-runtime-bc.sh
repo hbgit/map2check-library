@@ -58,7 +58,7 @@ postprocess() {
   # llvm-link-16 + KLEE.
   opt-16 --strip-debug "$w/core.bc" -o "$w/c0.bc"
   llvm-dis-16 "$w/c0.bc" -o "$w/c0.ll"
-  # 2-3. std's backtrace symbolizer stubbed (as scripts/build-klee-runtime.sh)
+  # 2-3. std's backtrace symbolizer stubbed (self-tests: scripts/test-klee-postprocess.sh)
   # and rust_eh_personality stubbed, so the unwinder (libgcc_s) is not needed.
   python3 -I "$repo/scripts/klee-stub-symbolizer.py" "$w/c0.ll" "$w/c1.ll" >/dev/null
   python3 -I "$repo/scripts/runtime-ir/stub_personality.py" "$w/c1.ll" "$w/c2.ll" >/dev/null
@@ -93,8 +93,8 @@ postprocess() {
 
   # 5. Only the C ABI the core owns and the __m2c_* entry points stay
   # external; std/core symbols (rust_panic, _ZN4core3fmt...) and the names a
-  # mode or generator module defines (the legacy exports of
-  # map2check_check_deref, map2check_wasm_*, ...) become internal.
+  # mode or generator module defines become internal (since Task 2.10 the
+  # staticlib exports none of the latter; scripts/check-export-set.sh).
   { sort -u "$w/abi.txt" | comm -23 - "$w/ir-defined.txt"
     llvm-nm-16 --defined-only "$w/c5.bc" | awk 'NF==3 {print $3}' | grep -E '^__m2c_' || true
   } > "$w/public.txt"

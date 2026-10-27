@@ -1,5 +1,5 @@
 ; SPDX-License-Identifier: GPL-3.0-only
-; scripts/build-klee-runtime.sh (and so the CI job klee_runtime) runs this
+; scripts/test-klee-postprocess.sh (and so the CI job klee_runtime) runs this
 ; with lli-16 before and after scripts/klee-lower-intrinsics.py: the outputs
 ; must be identical, or the build fails.
 declare i64 @llvm.vector.reduce.add.v4i64(<4 x i64>)

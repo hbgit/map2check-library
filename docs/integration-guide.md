@@ -6,6 +6,19 @@ order, the JSON report and the known gaps. Compatibility details are in
 [`api-deltas.md`](api-deltas.md) (symbols and signatures) and
 [`semantic-deltas.md`](semantic-deltas.md) (behaviour).
 
+**2.0.0 (D6, Task 2.10).** The library exports the C runtime ABI of
+Map2Check `develop` only: the names its core modules own and the
+`__m2c_rt_*` entry points that the generated IR modules
+(`scripts/runtime-ir/gen_ll.py`) forward to. A C program links the
+staticlib together with the IR modules that define the other C names, as
+Map2Check links a program (`scripts/build-c-abi-program.sh`). The 1.x core
+API this guide used to describe (`map2check_set_mode`, `map2check_map_*`,
+`print_all_containers_as_json`...) and the `libfuzzer` and `klee` features
+left the C ABI (`CHANGELOG.md`); the call order and examples below are
+the record of 1.x until the guide is rewritten for the drop-in runtime
+(plan Task 5.1). The JSON report is unchanged: `map2check_success()` prints
+it when no analysis mode is selected.
+
 ## Release contents
 
 A release archive `map2check-library-<version>-<target>.tar.gz` (see
@@ -14,9 +27,8 @@ A release archive `map2check-library-<version>-<target>.tar.gz` (see
 ```
 map2check-library-<version>-<target>/
 ├── include/map2check.h      # C header; MAP2CHECK_VERSION == <version>
-├── lib/libmap2check.a            # plain C programs (no features)
-├── lib/libmap2check_libfuzzer.a  # LibFuzzer targets (feature libfuzzer)
-├── lib/libmap2check_runtime.a    # runtime profile, features libfuzzer,wasm
+├── lib/libmap2check.a            # no features
+├── lib/libmap2check_runtime.a    # runtime profile, feature wasm
 ├── docs/integration-guide.md
 ├── docs/api-deltas.md
 ├── docs/semantic-deltas.md
@@ -31,24 +43,21 @@ A `SHA256SUMS` file next to the archive covers it.
 Without a release archive, run this from the repository root:
 
 ```sh
-cargo build --release                       # plain C programs
-cargo build --release --features libfuzzer  # LibFuzzer targets (overwrites the same .a)
+cargo build --release                       # no features
 ```
 
 The build Map2Check links is the `runtime` profile (release optimisations
 with `panic = "unwind"`, so the FFI guard can recover panics):
 
 ```sh
-cargo build --profile runtime --features libfuzzer,wasm   # target/runtime/libmap2check.a
+cargo build --profile runtime --features wasm   # target/runtime/libmap2check.a
 ```
 
-The runtime of Map2Check's KLEE (`symex`) generator is one LLVM 16 bitcode
-module built from `klee/Cargo.toml` with rustc 1.72.1 and the LLVM 16 tools
-(`opt-16`, `llvm-dis-16`, ...). It is not part of the release archive:
-
-```sh
-scripts/build-klee-runtime.sh out/map2check_klee.bc
-```
+The drop-in runtime as the 21 bitcode modules Map2Check links (the Rust core
+built from `klee/Cargo.toml` with rustc 1.72.1 and the LLVM 16 tools, and
+the IR modules) is a test build today
+(`scripts/runtime-ir/build-test-runtime-bc.sh <out-dir>`); plan Task 3.1
+productizes it.
 
 `build.rs` regenerates `include/map2check.h` on every build. The header is
 not committed (`.gitignore`), so always take it from the same build as the
@@ -62,14 +71,10 @@ cc -I include my_program.c lib/libmap2check.a -ldl -lpthread -lm -o my_program
 
 - `-ldl -lpthread -lm` are the system libraries that the Rust standard
   library needs.
-- Use `lib/libmap2check.a` for ordinary programs. It does not define the
-  `__VERIFIER_*` functions or `LLVMFuzzerTestOneInput`, even though the
-  header declares them.
-- Use `lib/libmap2check_libfuzzer.a` for LibFuzzer targets. It defines
-  `LLVMFuzzerTestOneInput`, which calls `int __map2check_main__(void)`. The
-  program must define that function and be built with
-  `clang -fsanitize=fuzzer`. Without that function, the link fails with
-  `undefined reference to '__map2check_main__'`.
+- The C names that an IR module defines (`map2check_malloc`,
+  `map2check_assert`, `analysis_init`, `map2check_non_det_<t>`, `main` of a
+  generator...) are not in the library: link the module's `.ll` (or `.bc`)
+  too, as `scripts/build-c-abi-program.sh -m <Module>` does.
 - The header and the library must come from the same build. The header
   carries the version as a string, `MAP2CHECK_VERSION` (for example
   `"1.1.0-rc1"`), so you can log it or check it in your build:

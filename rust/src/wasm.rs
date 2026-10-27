@@ -46,7 +46,6 @@ fn record(property: ViolatedProperty, line: u32) {
 /// pass emits the call right after the call to `w2c_*_malloc`, with the
 /// zero-extended result and size. Offsets 0 and `(uint64_t)-1` are ignored.
 /// Tracking happens in every mode.
-#[no_mangle]
 pub extern "C" fn map2check_wasm_malloc(offset: u64, size: u64) {
     ffi_guard(
         || {
@@ -66,7 +65,6 @@ pub extern "C" fn map2check_wasm_malloc(offset: u64, size: u64) {
 /// a `MEMSAFETY_FREE` violation at `line` (the pass sends the source line as
 /// an `i64`); an already freed block is found again and is not an error.
 /// The violation is reported only where the memory checks are active.
-#[no_mangle]
 pub extern "C" fn map2check_wasm_free(offset: u64, line: i64) {
     ffi_guard(
         || {
@@ -94,7 +92,6 @@ pub extern "C" fn map2check_wasm_free(offset: u64, line: i64) {
 /// store through the lifted memory. A bad access is reported as develop does,
 /// `FALSE_OVERFLOW` with line 0 and no function name: the report tag is
 /// `OVERFLOW`. Reported only where the memory checks are active.
-#[no_mangle]
 pub extern "C" fn map2check_wasm_check_access(offset: u64, access_size: u64) {
     ffi_guard(
         || {
@@ -329,28 +326,13 @@ pub mod rt {
         );
     }
 
-    /// WASI `proc_exit`: a no-op, so that the analysis, not the lifted
-    /// program, decides when the run ends.
-    ///
-    /// # Safety
-    /// `instance` is never dereferenced and may be null.
-    pub(super) unsafe fn proc_exit_impl(instance: *mut c_void, code: u32) {
-        ffi_guard(
-            || {
-                let _ = (instance, code);
-            },
-            (),
-        );
-    }
-
-    /// Legacy export of the old API, kept until Task 2.10: the IR module
-    /// `WasmRuntimeStubs.ll` defines this C name and wins the link; the body
-    /// is `wasm_rt_allocate_memory_impl`, which `__m2c_rt_wasm_*` also calls (never the
-    /// exported name, which the IR's definition would replace).
+    /// The old API's body of this C name, not exported since 2.0.0 (Task
+    /// 2.10): the C name belongs to the IR module `WasmRuntimeStubs.ll`.
+    /// Rust tests call it; the body is `wasm_rt_allocate_memory_impl`, which
+    /// `__m2c_rt_wasm_*` also calls.
     ///
     /// # Safety
     /// As `wasm_rt_allocate_memory_impl`.
-    #[no_mangle]
     pub unsafe extern "C" fn wasm_rt_allocate_memory(
         mem: *mut wasm_rt_memory_t,
         initial_pages: u64,
@@ -367,14 +349,13 @@ pub mod rt {
         )
     }
 
-    /// Legacy export of the old API, kept until Task 2.10: the IR module
-    /// `WasmRuntimeStubs.ll` defines this C name and wins the link; the body
-    /// is `wasm_rt_grow_memory_impl`, which `__m2c_rt_wasm_*` also calls (never the
-    /// exported name, which the IR's definition would replace).
+    /// The old API's body of this C name, not exported since 2.0.0 (Task
+    /// 2.10): the C name belongs to the IR module `WasmRuntimeStubs.ll`.
+    /// Rust tests call it; the body is `wasm_rt_grow_memory_impl`, which
+    /// `__m2c_rt_wasm_*` also calls.
     ///
     /// # Safety
     /// As `wasm_rt_grow_memory_impl`.
-    #[no_mangle]
     pub unsafe extern "C" fn wasm_rt_grow_memory(mem: *mut wasm_rt_memory_t, pages: u64) -> u64 {
         // SAFETY: forwarded caller contract.
         ffi_guard(
@@ -383,27 +364,25 @@ pub mod rt {
         )
     }
 
-    /// Legacy export of the old API, kept until Task 2.10: the IR module
-    /// `WasmRuntimeStubs.ll` defines this C name and wins the link; the body
-    /// is `wasm_rt_free_memory_impl`, which `__m2c_rt_wasm_*` also calls (never the
-    /// exported name, which the IR's definition would replace).
+    /// The old API's body of this C name, not exported since 2.0.0 (Task
+    /// 2.10): the C name belongs to the IR module `WasmRuntimeStubs.ll`.
+    /// Rust tests call it; the body is `wasm_rt_free_memory_impl`, which
+    /// `__m2c_rt_wasm_*` also calls.
     ///
     /// # Safety
     /// As `wasm_rt_free_memory_impl`.
-    #[no_mangle]
     pub unsafe extern "C" fn wasm_rt_free_memory(mem: *mut wasm_rt_memory_t) {
         // SAFETY: forwarded caller contract.
         ffi_guard(|| unsafe { wasm_rt_free_memory_impl(mem) }, ())
     }
 
-    /// Legacy export of the old API, kept until Task 2.10: the IR module
-    /// `WasmRuntimeStubs.ll` defines this C name and wins the link; the body
-    /// is `wasm_rt_allocate_funcref_table_impl`, which `__m2c_rt_wasm_*` also calls (never the
-    /// exported name, which the IR's definition would replace).
+    /// The old API's body of this C name, not exported since 2.0.0 (Task
+    /// 2.10): the C name belongs to the IR module `WasmRuntimeStubs.ll`.
+    /// Rust tests call it; the body is `wasm_rt_allocate_funcref_table_impl`, which
+    /// `__m2c_rt_wasm_*` also calls.
     ///
     /// # Safety
     /// As `wasm_rt_allocate_funcref_table_impl`.
-    #[no_mangle]
     pub unsafe extern "C" fn wasm_rt_allocate_funcref_table(
         table: *mut wasm_rt_funcref_table_t,
         elements: u32,
@@ -416,33 +395,16 @@ pub mod rt {
         )
     }
 
-    /// Legacy export of the old API, kept until Task 2.10: the IR module
-    /// `WasmRuntimeStubs.ll` defines this C name and wins the link; the body
-    /// is `wasm_rt_free_funcref_table_impl`, which `__m2c_rt_wasm_*` also calls (never the
-    /// exported name, which the IR's definition would replace).
+    /// The old API's body of this C name, not exported since 2.0.0 (Task
+    /// 2.10): the C name belongs to the IR module `WasmRuntimeStubs.ll`.
+    /// Rust tests call it; the body is `wasm_rt_free_funcref_table_impl`, which
+    /// `__m2c_rt_wasm_*` also calls.
     ///
     /// # Safety
     /// As `wasm_rt_free_funcref_table_impl`.
-    #[no_mangle]
     pub unsafe extern "C" fn wasm_rt_free_funcref_table(table: *mut wasm_rt_funcref_table_t) {
         // SAFETY: forwarded caller contract.
         ffi_guard(|| unsafe { wasm_rt_free_funcref_table_impl(table) }, ())
-    }
-
-    /// Legacy export of the old API, kept until Task 2.10: the IR module
-    /// `WasmRuntimeStubs.ll` defines this C name and wins the link; the body
-    /// is `proc_exit_impl`, which `__m2c_rt_wasm_*` also calls (never the
-    /// exported name, which the IR's definition would replace).
-    ///
-    /// # Safety
-    /// As `proc_exit_impl`.
-    #[no_mangle]
-    pub unsafe extern "C" fn w2c_wasi__snapshot__preview1_proc_exit(
-        instance: *mut c_void,
-        code: u32,
-    ) {
-        // SAFETY: forwarded caller contract.
-        ffi_guard(|| unsafe { proc_exit_impl(instance, code) }, ())
     }
 
     /// "Always initialised for KLEE": true from the start.
@@ -460,18 +422,15 @@ pub mod rt {
         ffi_guard(|| INITIALIZED.store(false, Ordering::Relaxed), ());
     }
 
-    /// Legacy exports of the old API, kept until Task 2.10 (see above).
-    #[no_mangle]
+    /// Not exported since 2.0.0 (Task 2.10), as above.
     pub extern "C" fn wasm_rt_is_initialized() -> bool {
         ffi_guard(wasm_rt_is_initialized_impl, true)
     }
 
-    #[no_mangle]
     pub extern "C" fn wasm_rt_init() {
         ffi_guard(wasm_rt_init_impl, ())
     }
 
-    #[no_mangle]
     pub extern "C" fn wasm_rt_free() {
         ffi_guard(wasm_rt_free_impl, ())
     }
@@ -492,8 +451,7 @@ pub mod rt {
         std::process::abort()
     }
 
-    /// Legacy export of the old API, kept until Task 2.10 (see above).
-    #[no_mangle]
+    /// Not exported since 2.0.0 (Task 2.10), as above.
     pub extern "C" fn wasm_rt_trap(code: u32) -> ! {
         ffi_guard(|| wasm_rt_trap_impl(code), ());
         std::process::abort()
@@ -510,9 +468,10 @@ pub use rt::*;
 // empty C body (`WasmRuntimeStubs.c:90-93`) and is an empty IR define. The
 // descriptors cross the C ABI as `void *` (the header does not know the wabt
 // structs). The behaviour is `rt`'s, one-to-one with `WasmRuntimeStubs.c`.
-// Task 2.10 removes the legacy `wasm_rt_*` exports of `rt`, which delegate to
-// the `*_impl` functions these call (a `__m2c` function must never call the
-// exported C name: the IR module defines it and forwards back here).
+// Since 2.0.0 (Task 2.10) the `wasm_rt_*` functions of `rt` are Rust only
+// (tests call them); they and these entry points share the `*_impl` bodies
+// (a `__m2c` function must never call the C name: the IR module defines it
+// and forwards back here).
 
 use std::os::raw::c_void;
 

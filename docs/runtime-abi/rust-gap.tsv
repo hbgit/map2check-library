@@ -15,7 +15,7 @@ DumpTreePage	missing	-	-
 DumpTreePageChildren	missing	-	-
 ERROR_DEREF	missing	-	-
 Map2CheckCurrentStep	missing	-	-
-__VERIFIER_assert	same	void (int32_t)	void (int)
+__VERIFIER_assert	missing	-	-
 __VERIFIER_error	same	void (void)	void (void)
 __afl_fuzz_alt	missing	-	-
 __afl_fuzz_alt_ptr	missing	-	-
@@ -70,7 +70,7 @@ map2check_binop_sub	missing	-	-
 map2check_binop_sub_uint	missing	-	-
 map2check_calloc	missing	-	-
 map2check_check_cstring	missing	-	-
-map2check_check_deref	different	void (const void *, uint32_t, uint32_t, const char *)	void (const void *, unsigned int, unsigned int, const char *)
+map2check_check_deref	missing	-	-
 map2check_crab_assume	missing	-	-
 map2check_destroy	same	void (void)	void (void)
 map2check_error	same	void (void)	void (void)
@@ -107,37 +107,37 @@ map2check_non_det_ulonglong	missing	-	-
 map2check_non_det_unsigned	missing	-	-
 map2check_non_det_ushort	missing	-	-
 map2check_non_static_alloca	missing	-	-
-map2check_nondet_bool	missing	-	-
-map2check_nondet_char	missing	-	-
-map2check_nondet_double	missing	-	-
-map2check_nondet_float	missing	-	-
+map2check_nondet_bool	same	void (unsigned int, unsigned int, int, const char *)	void (unsigned int, unsigned int, int, const char *)
+map2check_nondet_char	same	void (unsigned int, unsigned int, int, const char *)	void (unsigned int, unsigned int, int, const char *)
+map2check_nondet_double	same	void (unsigned int, unsigned int, double, const char *)	void (unsigned int, unsigned int, double, const char *)
+map2check_nondet_float	same	void (unsigned int, unsigned int, double, const char *)	void (unsigned int, unsigned int, double, const char *)
 map2check_nondet_get_log	missing	-	-
-map2check_nondet_int	missing	-	-
-map2check_nondet_loff_t	missing	-	-
-map2check_nondet_long	missing	-	-
-map2check_nondet_longlong	missing	-	-
-map2check_nondet_memory_byte	missing	-	-
-map2check_nondet_pchar	missing	-	-
-map2check_nondet_pointer	missing	-	-
-map2check_nondet_sector_t	missing	-	-
-map2check_nondet_short	missing	-	-
-map2check_nondet_size_t	missing	-	-
-map2check_nondet_u16	missing	-	-
-map2check_nondet_u32	missing	-	-
-map2check_nondet_u8	missing	-	-
-map2check_nondet_uchar	missing	-	-
-map2check_nondet_uint	missing	-	-
-map2check_nondet_ulong	missing	-	-
-map2check_nondet_ulonglong	missing	-	-
-map2check_nondet_unsigned	missing	-	-
-map2check_nondet_ushort	missing	-	-
+map2check_nondet_int	same	void (unsigned int, unsigned int, int, const char *)	void (unsigned int, unsigned int, int, const char *)
+map2check_nondet_loff_t	same	void (unsigned int, unsigned int, int, const char *)	void (unsigned int, unsigned int, int, const char *)
+map2check_nondet_long	same	void (unsigned int, unsigned int, int, const char *)	void (unsigned int, unsigned int, int, const char *)
+map2check_nondet_longlong	same	void (unsigned int, unsigned int, long long, const char *)	void (unsigned int, unsigned int, long long, const char *)
+map2check_nondet_memory_byte	same	void (unsigned int, unsigned int, int, const char *)	void (unsigned int, unsigned int, int, const char *)
+map2check_nondet_pchar	same	void (unsigned int, unsigned int, int, const char *)	void (unsigned int, unsigned int, int, const char *)
+map2check_nondet_pointer	same	void (unsigned int, unsigned int, int, const char *)	void (unsigned int, unsigned int, int, const char *)
+map2check_nondet_sector_t	same	void (unsigned int, unsigned int, int, const char *)	void (unsigned int, unsigned int, int, const char *)
+map2check_nondet_short	same	void (unsigned int, unsigned int, int, const char *)	void (unsigned int, unsigned int, int, const char *)
+map2check_nondet_size_t	same	void (unsigned int, unsigned int, int, const char *)	void (unsigned int, unsigned int, int, const char *)
+map2check_nondet_u16	same	void (unsigned int, unsigned int, int, const char *)	void (unsigned int, unsigned int, int, const char *)
+map2check_nondet_u32	same	void (unsigned int, unsigned int, int, const char *)	void (unsigned int, unsigned int, int, const char *)
+map2check_nondet_u8	same	void (unsigned int, unsigned int, int, const char *)	void (unsigned int, unsigned int, int, const char *)
+map2check_nondet_uchar	same	void (unsigned int, unsigned int, int, const char *)	void (unsigned int, unsigned int, int, const char *)
+map2check_nondet_uint	same	void (unsigned int, unsigned int, int, const char *)	void (unsigned int, unsigned int, int, const char *)
+map2check_nondet_ulong	same	void (unsigned int, unsigned int, int, const char *)	void (unsigned int, unsigned int, int, const char *)
+map2check_nondet_ulonglong	same	void (unsigned int, unsigned int, unsigned long long, const char *)	void (unsigned int, unsigned int, unsigned long long, const char *)
+map2check_nondet_unsigned	same	void (unsigned int, unsigned int, unsigned int, const char *)	void (unsigned int, unsigned int, unsigned int, const char *)
+map2check_nondet_ushort	same	void (unsigned int, unsigned int, int, const char *)	void (unsigned int, unsigned int, int, const char *)
 map2check_posix	missing	-	-
 map2check_success	same	void (void)	void (void)
 map2check_target_function	same	void (const char *, int, int)	void (const char *, int, int)
 map2check_track_bb	same	void (unsigned int, const char *)	void (unsigned int, const char *)
-map2check_wasm_check_access	same	void (uint64_t, uint64_t)	void (unsigned long, unsigned long)
-map2check_wasm_free	different	void (uint64_t, int64_t)	void (unsigned long, long)
-map2check_wasm_malloc	same	void (uint64_t, uint64_t)	void (unsigned long, unsigned long)
+map2check_wasm_check_access	missing	-	-
+map2check_wasm_free	missing	-	-
+map2check_wasm_malloc	missing	-	-
 mark_allocation_log	missing	-	-
 mark_deallocation_log	missing	-	-
 mark_heap_log	missing	-	-
@@ -152,8 +152,8 @@ nondet_destroy	missing	-	-
 nondet_generate_aux_witness_files	missing	-	-
 nondet_init	missing	-	-
 nondet_log	missing	-	-
-nondet_log_destroy	missing	-	-
-nondet_log_init	missing	-	-
+nondet_log_destroy	same	void (void)	void (void)
+nondet_log_init	same	void (void)	void (void)
 nondet_log_to_file	missing	-	-
 overflowError	missing	-	-
 release_unreleased_addresses	missing	-	-
@@ -173,16 +173,16 @@ violated_property_file_memcleanup	missing	-	-
 violated_property_file_memtrack	missing	-	-
 violated_property_file_overflow	missing	-	-
 violated_property_file_unknown	missing	-	-
-w2c_wasi__snapshot__preview1_proc_exit	undeclared	-	-
-wasm_rt_allocate_funcref_table	undeclared	-	-
-wasm_rt_allocate_memory	undeclared	-	-
-wasm_rt_free	undeclared	-	-
-wasm_rt_free_funcref_table	undeclared	-	-
-wasm_rt_free_memory	undeclared	-	-
-wasm_rt_grow_memory	undeclared	-	-
-wasm_rt_init	undeclared	-	-
-wasm_rt_is_initialized	undeclared	-	-
-wasm_rt_trap	undeclared	-	-
+w2c_wasi__snapshot__preview1_proc_exit	missing	-	-
+wasm_rt_allocate_funcref_table	missing	-	-
+wasm_rt_allocate_memory	missing	-	-
+wasm_rt_free	missing	-	-
+wasm_rt_free_funcref_table	missing	-	-
+wasm_rt_free_memory	missing	-	-
+wasm_rt_grow_memory	missing	-	-
+wasm_rt_init	missing	-	-
+wasm_rt_is_initialized	missing	-	-
+wasm_rt_trap	missing	-	-
 write_property	same	void (enum ViolatedProperty, int, const char *)	void (enum ViolatedProperty, int, const char *)
 write_property_assert	missing	-	-
 write_property_deref	missing	-	-

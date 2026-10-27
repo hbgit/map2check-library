@@ -56,7 +56,7 @@ void wasm_rt_free(void);
 void wasm_rt_trap(int code);
 /* Rust core. */
 void map2check_init(int);
-void map2check_set_mode(int);
+void __m2c_rt_memtrack_analysis_init(void);
 
 int __map2check_main__(void) { return 0; }
 
@@ -130,7 +130,7 @@ int main(int argc, char **argv) {
     return 99; /* not reached */
   } else if (!strcmp(c, "trap-mode")) {
     map2check_init(0);
-    map2check_set_mode(1); /* memtrack: the first violation writes the files */
+    __m2c_rt_memtrack_analysis_init(); /* memtrack: the first violation writes the files */
     wasm_rt_trap(3);
     return 99;
   } else {

@@ -42,9 +42,9 @@ for m in ContainerRealloc ContainerBTree BTree AllocationLog ListLog HeapLog; do
 done
 
 # The staticlib must not define the C names of the module (ruling: IR only).
-# The legacy exports map2check_check_deref and map2check_wasm_{malloc,free,
-# check_access} stay until Task 2.10; they are the only names allowed to
-# clash, and the linker keeps the IR's (listed before the library).
+# Since Task 2.10 there is no exemption: the legacy exports of the same names
+# (map2check_check_deref, map2check_wasm_*) left the C ABI, and one that
+# reappears fails here, as any other.
 # Every name the module defines, plus its C-only globals and helpers from
 # the inventory (the logs, ERROR_DEREF, update_reference_list_log).
 NAMES="$( { sed -nE 's/^define[^@]*@([A-Za-z0-9_.]+)\(.*/\1/p' "$OUT/AnalysisModeMemtrack.ll"
@@ -52,21 +52,16 @@ NAMES="$( { sed -nE 's/^define[^@]*@([A-Za-z0-9_.]+)\(.*/\1/p' "$OUT/AnalysisMod
   | sort -u | paste -sd'|')"
 [ "$(sed -nE 's/^define[^@]*@([A-Za-z0-9_.]+)\(.*/\1/p' "$OUT/AnalysisModeMemtrack.ll" | wc -l)" = 19 ] \
   || { echo "FAIL: AnalysisModeMemtrack.ll does not define the 19 C names" >&2; exit 1; }
-LEGACY='map2check_check_deref|map2check_wasm_(malloc|free|check_access)'
-defined="$(nm --defined-only --extern-only "$LIB" 2>/dev/null | awk 'NF==3 {print $3}' | grep -xE "$NAMES" || true)"
-leaks="$(printf '%s\n' "$defined" | grep -vxE "$LEGACY" | grep . || true)"
+leaks="$(nm --defined-only --extern-only "$LIB" 2>/dev/null | awk 'NF==3 {print $3}' | grep -xE "$NAMES" || true)"
 if [ -n "$leaks" ]; then
   echo "FAIL: $LIB defines C names of AnalysisModeMemtrack:" >&2; echo "$leaks" >&2; exit 1
 fi
-legacy="$(printf '%s\n' "$defined" | grep . | tr '\n' ' ' || true)"
-[ -z "$legacy" ] || echo "note: $LIB still defines the legacy $legacy(removed in Task 2.10)"
 
 T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
-LINK=(-Wl,--allow-multiple-definition)
-"$CLANG" "${TARGET[@]}" "${LINK[@]}" "$ROOT/tests/runtime-ir/memtrack_link.c" \
+"$CLANG" "${TARGET[@]}" "$ROOT/tests/runtime-ir/memtrack_link.c" \
   "$OUT/AnalysisModeMemtrack.ll" "$OUT/ContainerRealloc.ll" "$OUT/AllocationLog.ll" \
   "$OUT/ListLog.ll" "$OUT/HeapLog.ll" "$LIB" -ldl -lpthread -lm -o "$T/array"
-"$CLANG" "${TARGET[@]}" "${LINK[@]}" "$ROOT/tests/runtime-ir/memtrack_link.c" \
+"$CLANG" "${TARGET[@]}" "$ROOT/tests/runtime-ir/memtrack_link.c" \
   "$OUT/AnalysisModeMemtrack.ll" "$OUT/ContainerBTree.ll" "$OUT/BTree.ll" "$OUT/AllocationLog.ll" \
   "$OUT/ListLog.ll" "$OUT/HeapLog.ll" "$LIB" -ldl -lpthread -lm -o "$T/btree"
 
@@ -134,9 +129,9 @@ for bin in array btree; do
   # :430-436: FALSE_OVERFLOW, line 0, function "".
   check "$bin" wasm-access 134 "map2check_property=$(prop OVERFLOW 0 '')" \
     "map2check_property_overflow=$(prop OVERFLOW 0 '')"
-  # The IR map2check_wasm_* (not the legacy exports) won the link: they
-  # share the allocation log with map2check_malloc, so only the wasm leak is
-  # reported (the legacy table would report OVERFLOW at the access).
+  # The IR map2check_wasm_* share the allocation log with map2check_malloc,
+  # so only the wasm leak is reported (the 1.x exports, own table, would
+  # report OVERFLOW at the access).
   check "$bin" wasm-shared-log 134 'map2check_property=FALSE-MEMTRACK\n' \
     'map2check_property_memtrack=FALSE-MEMTRACK\n'
   # A correct run: the analysis_* hooks, then NONE.

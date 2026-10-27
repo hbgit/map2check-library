@@ -1882,6 +1882,20 @@ fn enable_witness_is_configuration_kept_by_init_and_reset() {
     assert_eq!(snapshot(|s| s.current_step()), 0);
 }
 
+/// `__m2c_rt_witness_enable` is the C ABI of the old
+/// `map2check_enable_witness` (Task 2.10): the same configuration.
+#[test]
+fn witness_enable_entry_point_turns_on_the_witness_and_init_keeps_it() {
+    let _guard = fresh();
+    assert!(!state::config().witness);
+    __m2c_rt_witness_enable();
+    assert!(state::config().witness);
+    map2check_init(0);
+    assert!(state::config().witness);
+    assert_ok();
+    assert_eq!(snapshot(|s| s.current_step()), 0);
+}
+
 #[test]
 fn malloc_null_reports_unknown_in_memory_modes_only() {
     // develop: map2check_malloc with a NULL block writes
@@ -2427,10 +2441,9 @@ mod wasm {
         __m2c_rt_wasm_free_funcref_table, __m2c_rt_wasm_free_memory, __m2c_rt_wasm_grow_memory,
         __m2c_rt_wasm_init, __m2c_rt_wasm_is_initialized, __m2c_rt_wasm_trap,
         map2check_wasm_check_access, map2check_wasm_free, map2check_wasm_malloc,
-        w2c_wasi__snapshot__preview1_proc_exit, wasm_rt_allocate_funcref_table,
-        wasm_rt_allocate_memory, wasm_rt_free, wasm_rt_free_funcref_table, wasm_rt_free_memory,
-        wasm_rt_funcref_table_t, wasm_rt_grow_memory, wasm_rt_init, wasm_rt_is_initialized,
-        wasm_rt_memory_t,
+        wasm_rt_allocate_funcref_table, wasm_rt_allocate_memory, wasm_rt_free,
+        wasm_rt_free_funcref_table, wasm_rt_free_memory, wasm_rt_funcref_table_t,
+        wasm_rt_grow_memory, wasm_rt_init, wasm_rt_is_initialized, wasm_rt_memory_t,
     };
 
     fn started(mode: Option<AnalysisMode>) {
@@ -2915,12 +2928,6 @@ mod wasm {
         __m2c_rt_wasm_init();
         __m2c_rt_wasm_init();
         assert!(__m2c_rt_wasm_is_initialized());
-    }
-
-    #[test]
-    fn rt_proc_exit_is_a_no_op() {
-        // SAFETY: the instance is unused.
-        unsafe { w2c_wasi__snapshot__preview1_proc_exit(std::ptr::null_mut(), 7) };
     }
 }
 
@@ -5095,10 +5102,8 @@ fn sd23_memcleanup_rt_release_without_allocation_row_goes_on() {
 }
 
 /// `__VERIFIER_error` of the C core does nothing (`Map2CheckFunctions.c:57-59`),
-/// with a mode set and without: no violation, no step, the process goes on.
-/// Built without the legacy features, as the drop-in core is (with them,
-/// `nondet/{libfuzzer,klee}.rs` define their own, SD-08).
-#[cfg(not(any(feature = "libfuzzer", feature = "klee")))]
+/// with a mode set and without: no violation, no step, the process goes on
+/// (SD-08).
 #[test]
 fn core_verifier_error_does_nothing_as_in_c() {
     for mode in [None, Some(crate::analysismode::mode::AnalysisMode::None)] {

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-#![cfg_attr(not(any(feature = "libfuzzer", feature = "klee")), deny(unsafe_code))]
+#![deny(unsafe_code)]
 
 use serde::Serialize;
 
@@ -98,52 +98,6 @@ impl NonDetEntry {
 
 /// The nondet log of the C runtime (`NonDetLog.c`) and its `klee_log.csv`.
 pub mod c_log;
-
-/// LibFuzzer nondeterministic value generator — feature-gated.
-#[cfg(feature = "libfuzzer")]
-pub mod libfuzzer;
-
-/// KLEE nondeterministic value generator (`symex`) — feature-gated, built
-/// only from `klee/Cargo.toml` with rustc 1.72.1 (D1, route A'). Not in the
-/// C header: the KLEE runtime is linked as bitcode, and its `main` and the
-/// KLEE intrinsics it imports are not library API.
-///
-/// cbindgen:ignore
-#[cfg(feature = "klee")]
-pub mod klee;
-
-/// Body of `__VERIFIER_error`, the same for every generator. Returns
-/// whether the export must abort.
-///
-/// With an analysis mode set (a Map2Check run) it does nothing, as develop's
-/// `__VERIFIER_error` (`Map2CheckFunctions.c:57-59`) and `__VERIFIER_assert`
-/// (`AnalysisModeAssert.c:25-27`): there the passes carry the checks, the
-/// target through `map2check_reach_target` and asserts through
-/// `map2check_is_valid_assert`. An abort here would end the run with no
-/// property recorded, and under KLEE's `--exit-on-error-type=Abort` stop the
-/// exploration before the real violation (SD-08).
-///
-/// With the mode unset (direct API users), records a `Reachability`
-/// violation, prints the JSON report and asks the export to abort.
-#[cfg(any(feature = "libfuzzer", feature = "klee"))]
-fn record_verifier_error() -> bool {
-    if crate::state::config().mode.is_some() {
-        return false;
-    }
-    if let Err(e) = crate::state::with_state(|s| {
-        s.set_false(
-            crate::caller::ViolatedProperty::Reachability,
-            0,
-            "__VERIFIER_error",
-        );
-        Ok(())
-    }) {
-        eprintln!("[map2check] error: {e}");
-    }
-    // Out of the lock (#19 ruling).
-    crate::output::print_report_unless_mode_set();
-    true
-}
 
 #[cfg(test)]
 mod tests {

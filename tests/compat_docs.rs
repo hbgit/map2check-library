@@ -15,17 +15,6 @@ use common::{header_declarations, normalize, read};
 /// Serializa os testes deste binário que tocam o estado global da biblioteca.
 static STATE_LOCK: Mutex<()> = Mutex::new(());
 
-/// Com `--features libfuzzer`, a biblioteca referencia `__map2check_main__`
-/// em `LLVMFuzzerTestOneInput`. O stub de `rust/src/nondet/libfuzzer.rs` só
-/// existe em `#[cfg(test)]` da própria crate, não quando ela é dependência
-/// deste teste; sem este stub o link falha quando o código morto é mantido
-/// (`cargo tarpaulin`, que usa `-C link-dead-code`).
-#[cfg(feature = "libfuzzer")]
-#[no_mangle]
-pub extern "C" fn __map2check_main__() -> i32 {
-    0
-}
-
 const CORE_HEADING: &str = "## Core C API matrix";
 const PASS_HEADING: &str = "## Map2Check pass matrix";
 const EXPORTED: &[&str] = &["same", "changed", "new"];
@@ -131,7 +120,8 @@ fn core_matrix_problems(doc: &str, header: &BTreeMap<String, String>) -> Vec<Str
     problems
 }
 
-/// Problemas da matriz dos passes: status conhecido e coerente com o header.
+/// Problemas da matriz dos passes: status conhecido e coerente com o header
+/// (`ir`: definido por um módulo IR gerado, nunca pelo header; D7).
 fn pass_matrix_problems(doc: &str, header: &BTreeMap<String, String>) -> Vec<String> {
     let mut problems = Vec::new();
     for row in table_rows(section(doc, PASS_HEADING)) {
@@ -148,10 +138,10 @@ fn pass_matrix_problems(doc: &str, header: &BTreeMap<String, String>) -> Vec<Str
             "same" | "changed" if !exported => problems.push(format!(
                 "`{symbol}` está como `{status}` mas não está no header"
             )),
-            "pending" | "out-of-scope" if exported => problems.push(format!(
+            "pending" | "out-of-scope" | "ir" if exported => problems.push(format!(
                 "`{symbol}` está como `{status}` mas está no header"
             )),
-            "same" | "changed" | "pending" | "out-of-scope" => {}
+            "same" | "changed" | "pending" | "out-of-scope" | "ir" => {}
             other => problems.push(format!("`{symbol}`: status desconhecido `{other}`")),
         }
     }
@@ -228,12 +218,15 @@ fn matriz_dos_passes_acusa_pendente_exportado_e_wildcard_sem_export() {
     let doc = format!(
         "\n{PASS_HEADING}\n| `__VERIFIER_nondet_*` | `int` | same | |\n\
          | `map2check_alloca` | `(ptr)` | pending | #21 |\n\
-         | `map2check_wasm_*` | — | same | |\n"
+         | `map2check_wasm_*` | — | same | |\n\
+         | `map2check_assume` | `(i32)` | ir | glue |\n\
+         | `__VERIFIER_nondet_int` | `int` | ir | |\n"
     );
     let problems = pass_matrix_problems(&doc, &header);
-    assert_eq!(problems.len(), 2, "{problems:?}");
+    assert_eq!(problems.len(), 3, "{problems:?}");
     assert!(problems[0].contains("`map2check_alloca` está como `pending` mas está no header"));
     assert!(problems[1].contains("`map2check_wasm_*` está como `same` mas não está no header"));
+    assert!(problems[2].contains("`__VERIFIER_nondet_int` está como `ir` mas está no header"));
 }
 
 /// Bloco ```json logo após `<!-- example: NAME -->` no guia.
@@ -330,6 +323,7 @@ const CLASSIFICATIONS: &[&str] = &[
     "pending decision",
     "fixed",
     "C behaviour preserved on purpose",
+    "removed",
 ];
 
 /// Problemas de uma entrada: classificação conhecida (com issue quando
@@ -359,7 +353,10 @@ fn sd_entry_problems(id: &str, body: &str, root: &Path) -> Vec<String> {
         return problems;
     };
     let refs: Vec<&str> = tests.split('`').skip(1).step_by(2).collect();
-    if refs.is_empty() {
+    // `removed`: the export the entry describes left the C ABI (2.0.0, D6);
+    // its tests went with it.
+    let removed = field("Classification").is_some_and(|c| c.starts_with("removed"));
+    if refs.is_empty() && !removed {
         problems.push(format!("{id}: **Tests:** sem `arquivo::função`"));
     }
     for r in refs {
@@ -405,6 +402,17 @@ fn semantic_deltas_acusa_teste_inexistente_e_classificacao_sem_issue() {
     assert!(problems[0].contains("precisa citar uma issue"));
     assert!(problems[1].contains("não tem `fn nao_existe(`"));
     assert!(problems[2].contains("arquivo `nao/existe.rs` não existe"));
+}
+
+#[test]
+fn semantic_deltas_aceita_removido_sem_teste_e_exige_teste_nos_outros() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let removed = "SD-01 — x\n\n**Classification:** removed (2.0.0)\n**Tests:** —\n";
+    assert!(sd_entry_problems("SD-01", removed, root).is_empty());
+    let other = "SD-01 — x\n\n**Classification:** intentional\n**Tests:** —\n";
+    let problems = sd_entry_problems("SD-01", other, root);
+    assert_eq!(problems.len(), 1, "{problems:?}");
+    assert!(problems[0].contains("sem `arquivo::função`"));
 }
 
 #[test]

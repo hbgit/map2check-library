@@ -4,11 +4,11 @@
 # reference, by name, a symbol that a generated IR module (gen_ll.py) defines.
 #
 # Why: the IR modules define the C names and forward to the Rust core's
-# __m2c_rt_* entry points. When the staticlib is linked next to an IR module
-# (and, until Task 2.10, with --allow-multiple-definition because the legacy
-# Rust exports of the same names remain), an intra-crate call to a
-# #[no_mangle] function relocates against that exported name, and the linker
-# binds it to the IR's definition, which forwards back to the core: infinite
+# __m2c_rt_* entry points. When the staticlib is linked next to an IR module,
+# an intra-crate call by name to a symbol the IR defines (an exported Rust
+# function of the same name, as the 1.x exports were until Task 2.10, or an
+# extern declaration) relocates against that name, and the linker binds it
+# to the IR's definition, which forwards back to the core: infinite
 # recursion. `nm -u` cannot see this (the symbol is defined in the same
 # object), so the guard reads the relocations: `objdump -dr` of every member
 # of the archive, with the function each relocation sits in.
@@ -16,8 +16,8 @@
 # Usage: check-no-ir-name-calls.sh [<libmap2check.a> [<ll-dir>]]
 #   default lib:    target/release/libmap2check.a
 #   default ll-dir: target/runtime-ir/all (every module, generated here)
-# Allow-list (exact "caller>target" pairs, Task 2.10 removes them): the legacy
-# Rust exports calling each other. See ALLOW below.
+# Allow-list: exact "caller>target" pairs in M2C_IR_CALL_ALLOW. Empty, and it
+# must stay empty (Task 2.10); the variable exists for the fixture test.
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(cd "$HERE/../.." && pwd)"

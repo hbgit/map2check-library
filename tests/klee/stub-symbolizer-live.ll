@@ -1,6 +1,6 @@
 ; SPDX-License-Identifier: GPL-3.0-only
 ; Self-test of the guard of scripts/klee-stub-symbolizer.py, run by
-; scripts/build-klee-runtime.sh: main (live code) calls a body named after
+; scripts/test-klee-postprocess.sh: main (live code) calls a body named after
 ; std's backtrace printer that is an abort stub. If rustc merged that drop
 ; with a `String` drop, every format! would abort under KLEE, so `--check`
 ; must reject this module.

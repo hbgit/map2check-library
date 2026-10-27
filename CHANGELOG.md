@@ -15,8 +15,61 @@ the C ABI or the JSON report must update them.
 
 ## [Unreleased]
 
+## [2.0.0-rc.1] - 2026-10-27
+
 ### Breaking changes
 
+- **The C ABI is the Map2Check runtime ABI only (D6, Task 2.10).**
+  `libmap2check.a` exports exactly the names of the C runtime of Map2Check
+  `develop` that its core modules own (`Map2CheckFunctions`, `TrackBBLog`,
+  `NonDetLog`, `PropertyGenerator`; `map2check_init`, `map2check_success`,
+  `map2check_track_bb`, `map2check_target_function`, `map2check_error`,
+  `map2check_exit`, `map2check_destroy`, `map2check_get_current_step`,
+  `map2check_next_current_step`, `__VERIFIER_error`, `write_property`,
+  `nondet_log_init`, `nondet_log_destroy` and the 23 `map2check_nondet_<t>`)
+  and the `__m2c_rt_*` core entry points the generated IR modules forward to;
+  `scripts/check-export-set.sh` fails on anything else. The rest of the C
+  runtime ABI is defined by the IR modules of `scripts/runtime-ir/gen_ll.py`
+  (D7). Left the C ABI and the header:
+  - the 1.x core API: `map2check_reset`, `set_false_result`,
+    `get_current_property`, `get_current_step`, `get_next_step`,
+    `print_all_containers_as_json`, `vcc_reset_meta_data`,
+    `map2check_set_memcleanup`, `map2check_set_null_is_valid`,
+    `map2check_enable_witness` (its C ABI is now `__m2c_rt_witness_enable`),
+    `map2check_set_mode` (and the `AnalysisMode` enum of the header),
+    `map2check_reach_target`, `map2check_save_basic_block_log`,
+    `map2check_is_in_trackbb_container`, `map2check_map_{alloca,
+    non_static_alloca,funct_address,malloc,calloc,posix_memalign,free,
+    store_pointer}`, `map2check_check_{load,free,free_resolved_address,
+    deref,mem_endprog}`, `map2check_is_valid_assert`, the 17
+    `map2check_save_nondet_log_<t>` (and `non_det_log_t`, `bbtrack_log_t`,
+    `enum var_type_t` of the header), `map2check_binop_{add,sub,mul,div}_int`,
+    `map2check_binop_{add,sub,mul,div}_unsigned`, `map2check_binop_neg_int`,
+    `map2check_binop_{shl,shr}_int`, `map2check_binop_shr_unsigned` and
+    `map2check_binop_{add,sub,mul,div,rem}_signed`. They stay Rust functions
+    of `map2check::ffi` that the Rust tests drive;
+  - the 1.x exports whose C names an IR module now defines with the C
+    signature: `map2check_check_deref`, `map2check_wasm_{malloc,free,
+    check_access}` (`AnalysisModeMemtrack.bc`), `wasm_rt_{allocate_memory,
+    grow_memory,free_memory,allocate_funcref_table,free_funcref_table,
+    is_initialized,init,free,trap}` and
+    `w2c_wasi__snapshot__preview1_proc_exit` (`WasmRuntimeStubs.bc`);
+  - the `libfuzzer` feature (`LLVMFuzzerTestOneInput`,
+    `__VERIFIER_nondet_<t>`, `__VERIFIER_assume`, `__VERIFIER_assert`,
+    `map2check_fuzzer_assume`, `lib/libmap2check_libfuzzer.a` of the release
+    archive) and the `klee` feature of `klee/Cargo.toml` with
+    `scripts/build-klee-runtime.sh`, `map2check-klee.bc` and
+    `tests/klee_paths.sh`: the generators are the IR modules
+    `NonDetGenerator{None,Klee,AFL}.bc` (SD-07, SD-08, SD-11 and SD-18 say
+    what changed). The self-tests of the bitcode post-processing moved to
+    `scripts/test-klee-postprocess.sh`.
+  `map2check_assume`, `map2check_assume_loop` and `map2check_crab_assume` are
+  delivered by the glue IR of `Map2CheckFunctions.bc`
+  (`scripts/runtime-ir/test-assume-link.sh`); `docs/runtime-abi/pending.txt`
+  is empty. `tests/ffi_harness.c` and the programs of `test/` link the
+  staticlib with the IR modules they need (`scripts/build-c-abi-program.sh`).
+  The D5 mapping (`docs/cutover/abi-mapping.tsv`, `scripts/symbol-matrix.sh`,
+  `tests/core_api_coverage.rs`) is gone with D5.
 - `map2check_init` takes the C runtime's `int isSvComp` (ignored), and
   `ViolatedProperty` has the values of the C runtime's `enum ViolatedProperty`
   (`NONE` 0 … `FALSE_DIVBYZERO` 9, `Concurrency` 10), which

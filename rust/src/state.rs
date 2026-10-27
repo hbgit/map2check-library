@@ -23,8 +23,10 @@ static CONFIG: Mutex<Config> = Mutex::new(Config::new());
 /// clear it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Config {
-    /// Set by `map2check_set_mode()`. `None` means unset: every check is
-    /// active and the leak tag follows `memcleanup`, as before Task 2.3.
+    /// Set by the `__m2c_rt_<mode>_analysis_init` of the linked mode module
+    /// (and by the Rust-only `map2check_set_mode()` of the tests). `None`
+    /// means unset: every check is active and the leak tag follows
+    /// `memcleanup`, as before Task 2.3.
     pub mode: Option<AnalysisMode>,
     /// Set by `map2check_set_memcleanup()`: a leak at exit is reported as
     /// `MemsafetyMemcleanup` instead of `MemsafetyMemtrack`.
@@ -178,10 +180,10 @@ fn with_state_recovering(f: impl FnOnce(&mut AnalysisState)) {
             let mut guard = poisoned.into_inner();
             f(&mut guard);
             // `Mutex::clear_poison` is unstable in rustc 1.72, which builds
-            // the KLEE runtime and the drop-in core (klee/Cargo.toml). Those
-            // builds have `panic = "abort"`, so no caught panic can poison
-            // the lock there (D1, "Custo do pin").
-            #[cfg(not(any(feature = "klee", feature = "dropin")))]
+            // the drop-in core (klee/Cargo.toml). That build has
+            // `panic = "abort"`, so no caught panic can poison the lock there
+            // (D1, "Custo do pin").
+            #[cfg(not(feature = "dropin"))]
             state.clear_poison();
         }
     }

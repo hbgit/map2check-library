@@ -29,7 +29,7 @@ expected="$(printf '%s\n' \
   "$NAME/" "$NAME/CHANGELOG.md" "$NAME/LICENSE" \
   "$NAME/docs/" "$NAME/docs/api-deltas.md" "$NAME/docs/integration-guide.md" "$NAME/docs/semantic-deltas.md" \
   "$NAME/include/" "$NAME/include/map2check.h" \
-  "$NAME/lib/" "$NAME/lib/libmap2check.a" "$NAME/lib/libmap2check_libfuzzer.a" "$NAME/lib/libmap2check_runtime.a" | LC_ALL=C sort)"
+  "$NAME/lib/" "$NAME/lib/libmap2check.a" "$NAME/lib/libmap2check_runtime.a" | LC_ALL=C sort)"
 actual="$(tar -tzf "$TMP/dist/$NAME.tar.gz" | LC_ALL=C sort)"
 if [ "$actual" = "$expected" ]; then ok "conteúdo exato"; else bad "conteúdo: $(diff <(echo "$expected") <(echo "$actual") || true)"; fi
 
@@ -37,20 +37,17 @@ mkdir -p "$TMP/x" && tar -xzf "$TMP/dist/$NAME.tar.gz" -C "$TMP/x"
 P="$TMP/x/$NAME"
 if grep -qxF "#define MAP2CHECK_VERSION \"$VERSION\"" "$P/include/map2check.h"; then ok "versão no header"; else bad "versão no header"; fi
 
-# Biblioteca sem features: sem LLVMFuzzerTestOneInput; a de libfuzzer o define.
+# As duas bibliotecas exportam exatamente o ABI C do runtime (D6, 2.0.0).
 # A saída do nm vai para variáveis: `nm | grep -q` com pipefail falha por SIGPIPE.
-core_syms="$(nm -g --defined-only "$P/lib/libmap2check.a" 2>/dev/null)"
-fuzz_syms="$(nm -g --defined-only "$P/lib/libmap2check_libfuzzer.a" 2>/dev/null)"
-if grep -q ' T map2check_init$' <<<"$core_syms" && ! grep -q ' T LLVMFuzzerTestOneInput$' <<<"$core_syms"; then ok "core sem LLVMFuzzerTestOneInput"; else bad "core: símbolos inesperados"; fi
-if grep -q ' T LLVMFuzzerTestOneInput$' <<<"$fuzz_syms"; then ok "libfuzzer define LLVMFuzzerTestOneInput"; else bad "libfuzzer sem LLVMFuzzerTestOneInput"; fi
-
+if "$ROOT/scripts/check-export-set.sh" --without-wasm --lib "$P/lib/libmap2check.a" >/dev/null; then ok "libmap2check.a exporta só o ABI C do runtime"; else bad "libmap2check.a: exports fora do ABI C"; fi
+if "$ROOT/scripts/check-export-set.sh" --lib "$P/lib/libmap2check_runtime.a" >/dev/null; then ok "libmap2check_runtime.a exporta só o ABI C do runtime"; else bad "libmap2check_runtime.a: exports fora do ABI C"; fi
 rt_syms="$(nm -g --defined-only "$P/lib/libmap2check_runtime.a" 2>/dev/null)"
-if grep -q ' T map2check_wasm_malloc$' <<<"$rt_syms" && grep -q ' T LLVMFuzzerTestOneInput$' <<<"$rt_syms"; then ok "runtime tem libfuzzer e wasm"; else bad "runtime sem libfuzzer/wasm"; fi
+if grep -q ' T __m2c_rt_wasm_allocate_memory$' <<<"$rt_syms"; then ok "runtime tem wasm"; else bad "runtime sem wasm"; fi
 
-# Um programa C comum linka e roda só com o conteúdo do pacote
-mkdir -p "$TMP/c/include" && cp "$P/include/map2check.h" "$TMP/c/include/"
-sed 's|"../include/map2check.h"|"map2check.h"|' "$ROOT/test/codeAPI_by_caller_test.c" > "$TMP/c/main.c"
-if clang -I "$TMP/c/include" "$TMP/c/main.c" "$P/lib/libmap2check.a" -ldl -lpthread -lm -o "$TMP/c/app" \
+# Um programa C linka e roda só com o header e a biblioteca do pacote, mais
+# o módulo IR que o Map2Check ligaria (gerado do repositório).
+if "$ROOT/scripts/build-c-abi-program.sh" -o "$TMP/c/app" -m AnalysisModeMemtrack \
+     --lib "$P/lib/libmap2check.a" -I "$P/include" "$ROOT/test/codeAPI_by_caller_test.c" \
    && "$TMP/c/app" >/dev/null; then ok "programa C linka e roda com o pacote"; else bad "programa C com o pacote"; fi
 
 exit "$fail"
