@@ -4921,3 +4921,21 @@ fn sd23_memcleanup_rt_release_without_allocation_row_goes_on() {
     assert!(c_list_log().ends_with(&format!("0;{p_addr:#x};{x_addr:#x};1;1;0;p;50;main;1\n")));
     assert_eq!(__m2c_rt_memcleanup_analysis_is_program_correct(), 1);
 }
+
+/// `__VERIFIER_error` of the C core does nothing (`Map2CheckFunctions.c:57-59`),
+/// with a mode set and without: no violation, no step, the process goes on.
+/// Built without the legacy features, as the drop-in core is (with them,
+/// `nondet/{libfuzzer,klee}.rs` define their own, SD-08).
+#[cfg(not(any(feature = "libfuzzer", feature = "klee")))]
+#[test]
+fn core_verifier_error_does_nothing_as_in_c() {
+    for mode in [None, Some(crate::analysismode::mode::AnalysisMode::None)] {
+        let _g = fresh();
+        state::update_config(|c| c.mode = mode);
+        let seen = || snapshot(|s| (s.result.ok, s.result.property, s.result.step, s.c_step));
+        let before = seen();
+        __VERIFIER_error();
+        assert_eq!(seen(), before, "mode {mode:?}");
+        assert_ok();
+    }
+}

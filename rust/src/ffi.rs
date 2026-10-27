@@ -496,6 +496,24 @@ pub unsafe extern "C" fn map2check_track_bb(
     );
 }
 
+/// `__VERIFIER_error` of the C core (`Map2CheckFunctions.c:57-59`): "DO
+/// NOTHING". The passes carry the checks (the target through
+/// `map2check_target_function`, asserts through `map2check_assert`), so a
+/// program's own call has no effect and the run goes on. Defined here only
+/// without the legacy features `libfuzzer` and `klee`, whose own
+/// `__VERIFIER_error` (SD-08) Task 2.10 removes; the drop-in core
+/// (`Map2CheckFunctions.bc`) has neither, so it defines this one.
+///
+/// Kept out of the header, which already declares the same prototype from
+/// `nondet/libfuzzer.rs`; drop the marker when Task 2.10 removes that one.
+///
+/// cbindgen:ignore
+#[cfg(not(any(feature = "libfuzzer", feature = "klee")))]
+#[no_mangle]
+pub extern "C" fn __VERIFIER_error() {
+    ffi_guard(|| (), ());
+}
+
 /// `map2check_target_function` (`Map2CheckFunctions.c:61-65`), which the
 /// target pass calls when the target function is reached: records
 /// `TARGET_REACHED` at `line` in `func_name`; `scope` is not used. With a

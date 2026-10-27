@@ -65,6 +65,14 @@ if run "$T/stub.ll" >"$T/out" 2>&1; then echo "FALHA: stub de .ll contado como e
 grep -q 'gamma' "$T/out"
 printf 'beta\neps\ngamma\nzeta\n' > "$T/pend.txt"
 run "$T/stub.ll" >"$T/out" 2>&1 || { cat "$T/out" >&2; echo "FALHA: stub deveria seguir pendente" >&2; exit 1; }
+# referenced_by com vários consumidores, unidos por "+" como no inventory.tsv
+# (pass+frontend): o símbolo está na cobertura e, sem export, fica pendente.
+printf 'theta\tfunc\tvoid (void)\tvoid (void)\tM.bc\tpass+frontend\n' >> "$T/inv.tsv"
+printf 'beta\neps\ngamma\nzeta\n' > "$T/pend.txt"
+if run >"$T/out" 2>&1; then echo "FALHA: consumidor pass+frontend fora da cobertura" >&2; exit 1; fi
+grep -q 'theta' "$T/out"
+printf 'beta\neps\ngamma\ntheta\nzeta\n' > "$T/pend.txt"
+run >"$T/out" 2>&1 || { cat "$T/out" >&2; echo "FALHA: theta pendente deveria passar" >&2; exit 1; }
 # tests/abi/check-signatures.sh com headers de fixture
 CS="$HERE/../tests/abi/check-signatures.sh"
 mkdir -p "$T/h"

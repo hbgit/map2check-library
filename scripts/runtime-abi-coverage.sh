@@ -6,9 +6,15 @@
 #                              [--gap F] [--pending F] [extra.bc|.ll|.o|.a ...]
 #
 # Conjunto de cobertura: símbolos de inventory.tsv cujo `referenced_by` contém
-# pass, frontend ou external, menos os `c-only` de export-policy.tsv (SD-22).
+# pass, frontend ou external (consumidores unidos por "+", como em
+# "pass+frontend", ou por ","), menos os `c-only` de export-policy.tsv (SD-22).
 # Exports: símbolos externos definidos (nm --defined-only --extern-only) da
-# --lib (padrão target/release/libmap2check.a, construída com --all-features)
+# --lib (padrão target/release/libmap2check.a). A lib medida é a do núcleo do
+# drop-in: SEM as features legadas `libfuzzer` e `klee` (por exemplo
+# `CARGO_TARGET_DIR=target/coverage-lib cargo build --release --features wasm`),
+# cujos exports (`__VERIFIER_error`, `__VERIFIER_assert`...) o
+# Map2CheckFunctions.bc não tem e que a Task 2.10 remove; medida com
+# --all-features a guarda os contava como entregues (Task 2.7).
 # unidos aos dos artefatos extras (os módulos IR das tasks seguintes; .bc usa
 # llvm-nm, .ll é lido como texto; um define marcado `; m2c-stub` não conta).
 # Símbolos `rust-only` da política são
@@ -63,7 +69,7 @@ nm_exports() {
 { nm_exports "$LIB"; for e in "${EXTRA[@]}"; do nm_exports "$e"; done; } | sort -u > "$T/exports"
 
 awk -F'\t' 'NR>1 && $2=="c-only" {print $1}' "$POL" | sort -u > "$T/conly"
-awk -F'\t' 'NR>1 { n=split($6, a, ","); for (i=1;i<=n;i++) if (a[i]=="pass"||a[i]=="frontend"||a[i]=="external") {print $1; break} }' "$INV" \
+awk -F'\t' 'NR>1 { n=split($6, a, /[,+]/); for (i=1;i<=n;i++) if (a[i]=="pass"||a[i]=="frontend"||a[i]=="external") {print $1; break} }' "$INV" \
   | sort -u | comm -23 - "$T/conly" > "$T/cov"
 awk -F'\t' 'NR>1 && $2=="different" {print $1}' "$GAP" | sort -u > "$T/conflict"
 comm -23 "$T/exports" "$T/conflict" > "$T/delivered"
@@ -77,11 +83,11 @@ if grep -qE '^\s*(#|$)|\s' "$PEND"; then
 fi
 rc=0
 if comm -23 "$T/expected" "$PEND" | grep -q .; then
-  echo "FAIL: pendências esquecidas (faltam em pending.txt; a lib deve ter sido construída com --all-features):" >&2
+  echo "FAIL: pendências esquecidas (faltam em pending.txt; a lib deve ser a do núcleo, sem as features libfuzzer/klee):" >&2
   comm -23 "$T/expected" "$PEND" | sed 's/^/  /' >&2; rc=1
 fi
 if comm -13 "$T/expected" "$PEND" | grep -q .; then
-  echo "FAIL: entregues (ou fora da cobertura) ainda listados em pending.txt (a lib deve ter sido construída com --all-features):" >&2
+  echo "FAIL: entregues (ou fora da cobertura) ainda listados em pending.txt (a lib deve ser a do núcleo, sem as features libfuzzer/klee):" >&2
   comm -13 "$T/expected" "$PEND" | sed 's/^/  /' >&2; rc=1
 fi
 [ "$rc" = 0 ] && echo "OK: $(wc -l < "$T/cov") símbolos na cobertura, $(wc -l < "$PEND") pendentes"
