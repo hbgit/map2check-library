@@ -227,7 +227,7 @@ pub extern "C" fn map2check_reset() {
 /// `map2check_success()`
 /// (`Map2CheckFunctions.c:67-70`, `:89-102`): writes `NONE` to
 /// `map2check_property`, runs the end-of-program verdict of the mode, writes
-/// the witness files when `map2check_enable_witness()` was called, and
+/// the witness files when the witness is on (`__m2c_rt_witness_enable`), and
 /// returns; when the verdict is a violation it writes that property instead
 /// and aborts.
 #[no_mangle]

@@ -310,8 +310,10 @@ and aborted with no property file. Under KLEE's
 `--exit-on-error-type=Abort` that stopped the exploration before the real
 violation of a memory or overflow task.
 
-Under KLEE the same is checked by `tests/klee_paths.sh` with
-`tests/klee/vererr_deref.c` and `tests/klee/vererr_target.c`. Fixed for the
+Under KLEE the same was checked by the legacy KLEE route (removed in
+2.0.0); the drop-in's `__VERIFIER_error` is pinned by the test above and
+the target path by `scripts/runtime-ir/test-klee-generator.sh`
+(`klee_unsafe_program_reports_same_line`, unsafe-reach.c). Fixed for the
 mode-set path in the Task 2.7 review; the mode-unset path below stays as
 an intentional delta.
 
@@ -627,16 +629,19 @@ map2check_binop_add_signed(INT64_MAX, 1, 64, 1, "main");
 
 ### SD-18 — Nondet values: develop's AFL++ input layout and log format, with three differences
 
-**Classification:** intentional
+**Classification:** removed (2.0.0)
 **Tests:** `rust/src/ffi_golden_tests.rs::nondet_types_match_c_runtime`
 
-**2.0.0 (Task 2.10, D6):** the `__VERIFIER_nondet_<t>` reader of the
-`libfuzzer` feature and the `map2check_save_nondet_log_<t>` exports left the
-C ABI, with the tests of the reader. The generators of the drop-in runtime
-are the IR module `NonDetGeneratorAFL.bc` (Task 2.8), made from develop's
-`NonDetGeneratorAFL.c`, and the log is `map2check_nondet_<t>` (Task 2.2),
-whose format the golden test above pins. What follows describes the 1.x
-reader.
+**2.0.0 (Task 2.10, D6):** no difference in the drop-in runtime. The three
+differences below belonged to the `__VERIFIER_nondet_<t>` reader of the 1.x
+`libfuzzer` feature, which left the C ABI with its tests. The drop-in
+generators are the IR module `NonDetGeneratorAFL.bc` (Task 2.8), which does
+what the vendored develop `NonDetGeneratorAFL.c` does: zero past the end of
+the input, no rewind (`:55-66`); `bool` returns the raw value of its four
+bytes, as develop's generator macro does (`:93`); `float` reads four bytes,
+develop's own `float` generator (`:104`). The log is
+`map2check_nondet_<t>` (Task 2.2), whose format the golden test above still
+pins. What follows is the record of the 1.x reader.
 
 **Rust:** the `__VERIFIER_nondet_<t>` generators read the fuzzer input as
 develop's `NonDetGeneratorAFL.c` does: `sizeof(type)` bytes per value, in
@@ -788,7 +793,7 @@ truncate and write in place), and `nondet_init` of
 does not apply there: nothing races (one process per input, no forked
 states sharing files), and the rename on every execution cost the AFL++
 generator 30% of its executions per second. Every build outside the drop-in
-core (the staticlib, the legacy KLEE runtime) stays atomic. Image tests:
+core (the staticlib) stays atomic. Image tests:
 `scripts/runtime-ir/test-klee-generator.sh`
 (`klee_symex_writes_result_files_atomically`) and
 `scripts/runtime-ir/test-afl-generator.sh`
@@ -799,8 +804,9 @@ reaches the target and states that do not. With the C runtime:
 `map2check --debug --nondet-generator symex --target-function ex01_false.c`
 (sv-benchmarks `map2check-assert`). The kept directory has `abort.err` in
 `klee-out-0`, a 12-byte `map2check_checked_error`, and a 0-byte
-`map2check_property`. Under the Rust runtime, `tests/klee/multistate.c`
-(`tests/klee_paths.sh`) checks the opposite.
+`map2check_property`. Under the drop-in runtime,
+`klee_symex_writes_result_files_atomically` and the unsafe cases of
+`scripts/runtime-ir/test-klee-generator.sh` check the opposite.
 
 ```c
 /* Under KLEE: one path reaches the target, the other finishes later. */

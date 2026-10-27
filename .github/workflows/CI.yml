@@ -333,11 +333,15 @@ jobs:
       # definitivo é da Task 3.1): núcleo Rust com o pós-processamento da D7
       # e os 20 módulos IR montados com llvm-as-16. Usa o LLVM 16 instalado
       # acima, sem a imagem; o script confere que o llvm-dis-16 lê os 21, que
-      # o núcleo não define nome de módulo IR e que não sobra nenhum `freeze`
-      # (o KLEE 3.1 não o executa). Rodar o KLEE sobre eles precisa da imagem
-      # e não é feito aqui.
+      # o núcleo não define nome de módulo IR, que não sobra nenhum `freeze`
+      # (o KLEE 3.1 não o executa) e, desde a Task 2.10, que o núcleo tem
+      # menos de 80 000 linhas de instrução e nenhum llvm.bitreverse
+      # (test-core-checks.sh é o teste dessas duas guardas). Rodar o KLEE
+      # sobre eles precisa da imagem e não é feito aqui.
       - name: Build de teste dos módulos .bc do runtime drop-in
-        run: scripts/runtime-ir/build-test-runtime-bc.sh target/runtime-ir/dropin-lib
+        run: |
+          scripts/runtime-ir/test-core-checks.sh
+          scripts/runtime-ir/build-test-runtime-bc.sh target/runtime-ir/dropin-lib
 
       - name: Checar dependências do lockfile KLEE (cargo-deny)
         uses: EmbarkStudios/cargo-deny-action@v2

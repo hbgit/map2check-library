@@ -443,7 +443,7 @@ static void run_valid_pass(void) {
     nondet_log_destroy();
     REQUIRE(__m2c_rt_nondet_log_len() == 0);
 
-    /* No mode: the checks record and return; the first violation is final. */
+    /* No mode: the checks return (none of these is a violation). */
     __m2c_rt_overflow_map2check_binop_add(1, 2, 32, 29, 0, "main");
     __m2c_rt_overflow_map2check_binop_mul_uint(2, 3, 8, 29, 0, "main");
     __m2c_rt_assert_map2check_assert(1, 28, "main");

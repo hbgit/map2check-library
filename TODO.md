@@ -136,10 +136,13 @@ e não repetem as tarefas já listadas.
   Falhas na geração ou no link de bitcode não devem ser mascaradas por `|| true`.
 
 - [x] **Executar o gate de viabilidade de KLEE e registrar a decisão.**
-  Feito na Task 2.7 (#20): feature `klee` em `klee/Cargo.toml` (rustc 1.72.1,
-  bitcode LLVM 16, `scripts/build-klee-runtime.sh`), teste
-  `tests/klee_paths.sh` com KLEE 3.1, decisão **go** em
-  [docs/klee-feasibility.md](docs/klee-feasibility.md).
+  Feito na Task 2.7 (#20), decisão **go** em
+  [docs/klee-feasibility.md](docs/klee-feasibility.md). Desde a 2.0.0 (Task
+  2.10) a rota legada (feature `klee`, `scripts/build-klee-runtime.sh`,
+  `tests/klee_paths.sh`) saiu: o núcleo é a feature `dropin` de
+  `klee/Cargo.toml` (rustc 1.72.1, bitcode LLVM 16,
+  `scripts/runtime-ir/build-test-runtime-bc.sh`), testado sob KLEE 3.1 por
+  `scripts/runtime-ir/test-klee-generator.sh`.
 
 - [ ] **Medir e controlar a regressão de desempenho.** Criar benchmarks
   reproduzíveis contra a biblioteca C, usando programas de referência e corpus

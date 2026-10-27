@@ -31,7 +31,22 @@
 #       (driver): under symex the drop-in writes map2check_property through a
 #       temporary file and a rename (SD-20; NonDetGeneratorKlee's nondet_init
 #       turns it on, user decision of 2026-10-27), seen through a descriptor
-#       held on the old file; the C writes in place ("plain"), recorded.
+#       held on the old file; the C writes in place ("plain"), recorded;
+#   klee_rust_panic_aborts_without_symbolizer  tests/runtime-ir/klee-extra/
+#       panic.c (driver) with a copy of the drop-in core given a panicking
+#       entry point (panic_shim.py), RUST_BACKTRACE=0 and full: the x == 7
+#       path ends with an abort (std's rust_panic_with_hook is an abort stub,
+#       D7 post-processing) whose stack is in the panic code and names no
+#       backtrace-symbolizer function, the other path completes, KLEE
+#       finishes. Drop-in only: the C runtime has no panic. KLEE runs with
+#       the Cover-Branches flags (no --exit-on-error-type), so both paths run;
+#   klee_wasm_overflow_matches_c           klee-extra/wasm.wat lifted by the
+#       image's wasm2c and klee-extra/wasm.c (driver), memtrack mode with
+#       WasmRuntimeStubs.bc, frontend flags: a write past the block is
+#       OVERFLOW at line 0 with no function (SD-19), the same property files
+#       and .ktest total as the C.
+# These two were checks of tests/klee_paths.sh (legacy KLEE route, removed
+# in Task 2.10), ported to the drop-in modules.
 #
 # Instrumented cases (ruling R2 of Task 1.1): the installed C Map2Check
 # (target/map2check-it/c) instruments the program in the mode and its
@@ -78,6 +93,7 @@ fi
 W="$ROOT/target/runtime-ir/klee-gen"
 rm -rf "$W"; mkdir -p "$W/src"
 cp "$ROOT"/tests/runtime-ir/klee/*.c "$ROOT/tests/runtime-ir/write-mode.c" "$W/src/"
+mkdir -p "$W/extra"; cp "$ROOT"/tests/runtime-ir/klee-extra/* "$W/extra/"
 
 # <program>:<mode>; mode "driver" = no instrumentation, linked in mode none.
 CASES="safe.c:memtrack safe.c:memcleanup safe.c:overflow safe.c:assert safe.c:none
@@ -183,6 +199,81 @@ for c in $cases; do
 done
 ' inner "$CASES" "$KLEE_MAX_TIME" || { echo "FAIL: the KLEE runs did not complete" >&2; exit 1; }
 
+# The ported checks (panic, wasm): their own runs and results.
+docker run --rm --network none --user "$(id -u):$(id -g)" -e HOME=/work \
+  -e MAP2CHECK_PATH=/opt/m2c -e KLEE_RUNTIME_LIBRARY_PATH=/opt/m2c/lib/klee/runtime \
+  -v "$M2C_INSTALL:/opt/m2c:ro" -v "$LIB:/rs:ro" -v "$W:/work" -w /work "$IMAGE" \
+  bash -c '
+set -uo pipefail
+max_time="$1"
+FRONT="--external-calls=all --exit-on-error-type=Abort --optimize --use-cex-cache --solver-backend=z3 --libc=uclibc"
+COVER="--external-calls=all --search=dfs --optimize --use-cex-cache --solver-backend=z3 --libc=uclibc"
+SYMBOLIZER="gimli|addr2line|miniz_oxide|rustc_demangle|backtrace_rs"
+base() { echo "$1/TrackBBLog.bc $1/NonDetLog.bc $1/PropertyGenerator.bc $1/ContainerRealloc.bc"; }
+run() { # <dir> <flags> [env...]: KLEE on <dir>/witness-result.bc
+  local d="$1" f="$2"; shift 2
+  # shellcheck disable=SC2086
+  ( cd "$d" && env "$@" timeout -k 5 $((max_time + 30)) /opt/m2c/bin/klee --max-time=${max_time}s \
+      $f ./witness-result.bc > ExecutionOutput.log 2> klee.stderr )
+}
+props() {
+  local d="$1" f out=""
+  for f in $(cd "$d" && ls map2check_property* 2>/dev/null | sort); do out+="[$f]$(tr "\n" "|" < "$d/$f")"; done
+  echo "${out:--}"
+}
+: > extra.tsv
+# panic: drop-in only.
+mkdir -p panic/rs-core
+clang-16 -O0 -c -emit-llvm extra/panic.c -o panic/output.bc || { echo "panic: clang-16 failed" >&2; exit 1; }
+llvm-dis-16 /rs/Map2CheckFunctions.bc -o panic/rs-core/core.ll
+python3 -I extra/panic_shim.py panic/rs-core/core.ll panic/rs-core/core-panic.ll || exit 1
+llvm-as-16 panic/rs-core/core-panic.ll -o panic/rs-core/Map2CheckFunctions.bc || exit 1
+for bt in 0 full; do
+  d="panic/rs-$bt"; mkdir -p "$d"
+  # shellcheck disable=SC2046
+  llvm-link-16 panic/output.bc panic/rs-core/Map2CheckFunctions.bc $(base /rs) /rs/AnalysisModeNone.bc \
+    /rs/NonDetGeneratorKlee.bc /rs/WitnessGeneration.bc -o "$d/witness-result.bc" 2> "$d/link.err" \
+    || { echo "panic: llvm-link-16 failed: $(head -3 "$d/link.err")" >&2; exit 1; }
+  run "$d" "$COVER" RUST_BACKTRACE="$bt"
+  k="$d/klee-last"
+  errs="$(ls "$k" 2>/dev/null | grep "\.err$" | tr "\n" "," | sed "s/,$//")"
+  err="$(ls "$k"/*.err 2>/dev/null | head -1)"
+  x=-; panic_frames=0; symbolizer=0
+  if [ -n "$err" ]; then
+    x="$(/opt/m2c/bin/ktest-tool "${err%.*.err}.ktest" | sed -n "s/^object *0: int *: //p" | head -1)"
+    grep -q "panicking" "$err" && panic_frames=1
+    grep -Eq "$SYMBOLIZER" "$err" && symbolizer=1
+  fi
+  printf "panic-%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n" "$bt" \
+    "$(grep -c "KLEE: done: completed paths" "$k/info" 2>/dev/null)" \
+    "$(sed -n "s/.*completed paths = //p" "$k/info" 2>/dev/null | head -1)" \
+    "${errs:--}" "$x" "$panic_frames" "$symbolizer" "$(head -1 "$err" 2>/dev/null | tr "\t" " ")" >> extra.tsv
+done
+# wasm: both runtimes, memtrack + WasmRuntimeStubs, frontend flags.
+mkdir -p wasm/lift
+wat2wasm extra/wasm.wat -o wasm/lift/t.wasm && wasm2c wasm/lift/t.wasm -o wasm/lift/t.c \
+  || { echo "wasm: wat2wasm/wasm2c failed" >&2; exit 1; }
+clang-16 -O0 -c -emit-llvm -I/opt/wabt-1.0.41/include -Iwasm/lift wasm/lift/t.c -o wasm/lifted.bc \
+  && clang-16 -O0 -c -emit-llvm -I/opt/wabt-1.0.41/include -Iwasm/lift extra/wasm.c -o wasm/driver.bc \
+  && llvm-link-16 wasm/driver.bc wasm/lifted.bc -o wasm/output.bc || { echo "wasm: clang-16 failed" >&2; exit 1; }
+for side in c rs; do
+  case "$side" in c) L=/opt/m2c/lib ;; rs) L=/rs ;; esac
+  d="wasm/$side"; mkdir -p "$d"
+  # shellcheck disable=SC2046
+  llvm-link-16 wasm/output.bc $L/Map2CheckFunctions.bc $(base $L) $L/AnalysisModeMemtrack.bc $L/AllocationLog.bc \
+    $L/ListLog.bc $L/HeapLog.bc $L/NonDetGeneratorKlee.bc $L/WasmRuntimeStubs.bc $L/WitnessGeneration.bc \
+    -o "$d/witness-result.bc" 2> "$d/link.err" || { echo "wasm/$side: llvm-link-16 failed: $(head -3 "$d/link.err")" >&2; exit 1; }
+  run "$d" "$FRONT"
+  k="$d/klee-last"
+  printf "wasm-%s\t%s\t%s\t%s\t%s\t%s\n" "$side" \
+    "$(grep -c "KLEE: done: completed paths" "$k/info" 2>/dev/null)" \
+    "$(ls "$k" 2>/dev/null | grep -c "\.ktest$")" \
+    "$(ls "$k" 2>/dev/null | grep "\.err$" | sed "s/^test[0-9]*\.//" | sort -u | tr "\n" "," | sed "s/,$//")" \
+    "$(grep -c "failed external call" "$d/klee.stderr" "$k/messages.txt" 2>/dev/null | awk -F: "{s+=\$NF} END{print s+0}")" \
+    "$(props "$d")" >> extra.tsv
+done
+' inner "$KLEE_MAX_TIME" || { echo "FAIL: the KLEE runs of the ported checks did not complete" >&2; exit 1; }
+
 cut -f1-8 "$W/results.tsv" | column -t -s $'\t'
 fail=0
 row() { awk -F'\t' -v c="$1" -v s="$2" -v f="$3" '$1==c && $2==s {print $f}' "$W/results.tsv"; }
@@ -236,5 +327,32 @@ for c in $CASES; do
   esac
   if [ -z "$why" ]; then echo "ok $t $name"; else echo "FAIL $t $name:$why" >&2; fail=1; fi
 done
+
+# The ported checks.
+column -t -s $'\t' "$W/extra.tsv"
+xrow() { awk -F'\t' -v c="$1" -v f="$2" '$1==c {print $f}' "$W/extra.tsv"; }
+for bt in 0 full; do
+  why=""
+  [ "$(xrow "panic-$bt" 2)" = 1 ] || why+=" KLEE did not finish;"
+  [ "$(xrow "panic-$bt" 3)" = 1 ] || why+=" completed paths '$(xrow "panic-$bt" 3)', want 1 (x != 7);"
+  case "$(xrow "panic-$bt" 4)" in *.abort.err) ;; *) why+=" error files '$(xrow "panic-$bt" 4)', want one .abort.err;" ;; esac
+  [ "$(xrow "panic-$bt" 5)" = 7 ] || why+=" the error path has x = '$(xrow "panic-$bt" 5)', want 7;"
+  [ "$(xrow "panic-$bt" 6)" = 1 ] || why+=" the error stack is not in the panic code;"
+  [ "$(xrow "panic-$bt" 7)" = 0 ] || why+=" the error stack names symbolizer code;"
+  if [ -z "$why" ]; then echo "ok klee_rust_panic_aborts_without_symbolizer RUST_BACKTRACE=$bt ($(xrow "panic-$bt" 8))"
+  else echo "FAIL klee_rust_panic_aborts_without_symbolizer RUST_BACKTRACE=$bt:$why" >&2; fail=1; fi
+done
+why=""
+for side in c rs; do
+  [ "$(xrow "wasm-$side" 2)" = 1 ] || why+=" $side: KLEE did not finish;"
+  [ "$(xrow "wasm-$side" 5)" = 0 ] || why+=" $side: failed external calls;"
+  case "$(xrow "wasm-$side" 6)" in "[map2check_property]OVERFLOW|Line: 0|Function: |"*) ;;
+    *) why+=" $side: properties '$(xrow "wasm-$side" 6)', want OVERFLOW at line 0;" ;; esac
+done
+[ "$(xrow wasm-c 6)" = "$(xrow wasm-rs 6)" ] || why+=" properties differ;"
+[ "$(xrow wasm-c 3)" = "$(xrow wasm-rs 3)" ] || why+=" ktest total: rust '$(xrow wasm-rs 3)' vs C '$(xrow wasm-c 3)';"
+[ "$(xrow wasm-c 4)" = "$(xrow wasm-rs 4)" ] || why+=" error kinds: rust '$(xrow wasm-rs 4)' vs C '$(xrow wasm-c 4)';"
+if [ -z "$why" ]; then echo "ok klee_wasm_overflow_matches_c wasm ($(xrow wasm-rs 6))"
+else echo "FAIL klee_wasm_overflow_matches_c wasm:$why" >&2; fail=1; fi
 [ "$fail" = 0 ] && echo "OK: the drop-in KLEE generator matches the C runtime under KLEE"
 exit $fail

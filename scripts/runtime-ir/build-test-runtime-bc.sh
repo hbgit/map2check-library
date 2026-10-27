@@ -34,9 +34,17 @@
 # references no longjmp path (longjmp/setjmp, nondet_assume/cancel,
 # map2check_assume*) and not the program (main, __map2check_main__), so the
 # AFL++ generator's longjmp never crosses a Rust frame (D7 item 5);
+# the final Map2CheckFunctions.bc has fewer than 80 000 instruction lines
+# (the IR KLEE loads and re-optimises: Task 4.3 criterion 9 of the cutover
+# plan; 125 829 with std's backtrace symbolizer, about 38 000 without) and no
+# `llvm.bitreverse` (only miniz_oxide, part of the symbolizer, used it);
+# both checks were in tests/klee_paths.sh until Task 2.10;
 # llvm-dis-16 reads all 21 modules.
 #
 # Usage: build-test-runtime-bc.sh <out-dir>
+#        build-test-runtime-bc.sh --check-core <final.ll>   (the two checks
+#          above on a disassembled core; scripts/runtime-ir/test-core-checks.sh)
+# Environment: M2C_CORE_MAX_LINES (default 80000), the line ceiling.
 # The Rust step runs on the host (rustup toolchain KLEE_RUSTC_TOOLCHAIN,
 # default 1.72.1). The LLVM 16 steps run on the host when opt-16, llvm-as-16,
 # llvm-dis-16, llvm-link-16 and llvm-nm-16 are on PATH, otherwise in the
@@ -48,6 +56,22 @@ ROOT="$(cd "$HERE/../.." && pwd)"
 die() { echo "build-test-runtime-bc: error: $*" >&2; exit 1; }
 
 MODULES="Map2CheckFunctions TrackBBLog NonDetLog PropertyGenerator ContainerRealloc ContainerBTree BTree AnalysisModeMemtrack AnalysisModeMemcleanup AnalysisModeOverflow AnalysisModeAssert AnalysisModeNone AllocationLog ListLog HeapLog NonDetGeneratorNone NonDetGeneratorKlee NonDetGeneratorAFL WasmRuntimeStubs WitnessGeneration WitnessGenerationNone"
+
+# ---------------------------------------------------------------------------
+# Instruction-line ceiling and no llvm.bitreverse, on the final core's .ll.
+check_core() {
+  local ll="$1" max="${M2C_CORE_MAX_LINES:-80000}" lines
+  lines="$(awk '/^define/{f=1; next} f&&/^}/{f=0; next} f{n++} END{print n+0}' "$ll")"
+  if [ "$lines" -ge "$max" ]; then
+    echo "the core has $lines instruction lines, expected < $max: is the backtrace symbolizer back?" >&2
+    return 1
+  fi
+  if grep -q 'llvm\.bitreverse' "$ll"; then
+    echo "the core still has llvm.bitreverse (miniz_oxide, part of the backtrace symbolizer)" >&2
+    return 1
+  fi
+  echo "core checks: $lines instruction lines (< $max), no llvm.bitreverse"
+}
 
 # ---------------------------------------------------------------------------
 # LLVM 16 part. Runs with <repo> <work> <out>; the work dir holds core.bc,
@@ -118,6 +142,7 @@ postprocess() {
   llvm-link-16 "$w/core-s.bc" "$w/irbc/Map2CheckFunctions-glue.bc" -o "$out/Map2CheckFunctions.bc"
   llvm-dis-16 "$out/Map2CheckFunctions.bc" -o "$w/final.ll"
   # Every function left is reachable from the exported API: no freeze.
+  check_core "$w/final.ll" || return 1
   python3 -I "$repo/scripts/runtime-ir/check_no_freeze.py" "$w/final.ll" >/dev/null \
     || { echo "the core has a freeze KLEE 3.1 cannot execute (fix the Rust source)" >&2; return 1; }
   for f in "$w"/irbc/*.bc; do
@@ -142,6 +167,12 @@ postprocess() {
   [ "$(ls "$out"/*.bc | wc -l)" = 21 ] || { echo "expected 21 modules in $out" >&2; return 1; }
   echo "build-test-runtime-bc: $n modules readable by llvm-dis-16"
 }
+
+if [ "${1:-}" = --check-core ]; then
+  [ $# -eq 2 ] || { echo "usage: $0 --check-core <final.ll>" >&2; exit 2; }
+  check_core "$2"
+  exit $?
+fi
 
 if [ "${1:-}" = --postprocess ]; then
   shift
