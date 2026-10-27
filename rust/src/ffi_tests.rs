@@ -4591,3 +4591,333 @@ fn memtrack_rt_check_deref_keeps_a_negative_c_line() {
     assert_violated(ViolatedProperty::MemsafetyDeref, u32::MAX, "main");
     assert_eq!(snapshot(|s| s.result.line as i32), -1);
 }
+
+// ── C runtime ABI: AnalysisModeMemcleanup (core entry points, Task 2.6) ─────
+//
+// `AnalysisModeMemcleanup.bc` forwards the C names to `__m2c_rt_memcleanup_*`,
+// which share the memory rules of the memtrack entry points (`MemMode`).
+// `diff AnalysisModeMemtrack.c AnalysisModeMemcleanup.c` shows five
+// differences, one test each below:
+//   :141-146  the verdict needs a pointer variable to the last leak
+//   :158      map2check_load is empty (no ERROR_DEREF)
+//   :159      map2check_check_cstring is empty
+//   :168/:342 `Bool error = FALSE` in both release functions (no FALSE-FREE)
+//   :294      map2check_check_deref is empty
+// Everything else (rows, formats, UNKNOWN, posix, calloc) is the same code.
+
+/// `map2check_init`, then the module's `analysis_init`, which selects the
+/// memcleanup mode.
+fn memcleanup_rt() -> MutexGuard<'static, ()> {
+    let guard = fresh();
+    map2check_init(0);
+    __m2c_rt_memcleanup_analysis_init();
+    guard
+}
+
+/// `golden_memory()` through the memcleanup entry points: `int *p` at 0x1000,
+/// `&main` at 0x1040, `p = malloc(16)` at 0x1100.
+fn memcleanup_prelude() {
+    // SAFETY: fake addresses are only stored and compared; names are C strings.
+    unsafe {
+        __m2c_rt_memcleanup_map2check_alloca(c"p".as_ptr(), addr(0x1000), 8, 8, 10, 1);
+        __m2c_rt_memcleanup_map2check_function(c"main".as_ptr(), addr(0x1040));
+        __m2c_rt_memcleanup_map2check_malloc(addr(0x1100), 16);
+        __m2c_rt_memcleanup_map2check_add_store_pointer(
+            addr(0x1000),
+            addr(0x1100),
+            1,
+            c"p".as_ptr(),
+            11,
+            c"main".as_ptr(),
+        );
+    }
+}
+
+#[test]
+fn memcleanup_rt_analysis_init_selects_the_mode_and_starts_empty_logs() {
+    let _guard = memcleanup_rt();
+    assert_eq!(state::config().mode, Some(AnalysisMode::Memcleanup));
+    memcleanup_prelude();
+    // AnalysisModeMemcleanup.c:125-130: new containers, ERROR_DEREF = FALSE.
+    __m2c_rt_memcleanup_analysis_init();
+    assert_eq!(c_list_log(), "");
+    assert_eq!(c_allocation_log(), "");
+    assert_eq!(c_heap_log(), "");
+    assert!(!c_error_deref());
+    // :132-136 frees the logs.
+    memcleanup_prelude();
+    __m2c_rt_memcleanup_analysis_destroy();
+    assert_eq!(c_allocation_log(), "");
+}
+
+#[test]
+fn memcleanup_rt_shares_the_row_formats_and_rules_of_memtrack() {
+    let _guard = memcleanup_rt();
+    memcleanup_prelude();
+    assert_eq!(c_heap_log(), "0x1000;p;8\n0x1040;main;1\n");
+    assert_eq!(c_allocation_log(), "0x1100;16;0\n");
+    assert_eq!(c_list_log(), "0;0x1000;0x1100;1;0;1;p;11;main;0\n");
+    // :326-328 calloc is malloc of quantity * size; :296-314 revives a row.
+    __m2c_rt_memcleanup_map2check_calloc(addr(0x2000), 3, 5);
+    __m2c_rt_memcleanup_map2check_malloc(addr(0x2000), 32);
+    // :359-363 non_static_alloca is alloca of size * primitive bytes.
+    // SAFETY: fake address; C-string literal.
+    unsafe {
+        __m2c_rt_memcleanup_map2check_non_static_alloca(c"vla".as_ptr(), addr(0x6000), 5, 4, 3, 1)
+    };
+    assert_eq!(c_allocation_log(), "0x1100;16;0\n0x2000;32;0\n");
+    assert_eq!(c_heap_log(), "0x1000;p;8\n0x1040;main;1\n0x6000;vla;20\n");
+    assert_ok();
+}
+
+#[test]
+fn memcleanup_rt_malloc_of_null_is_still_unknown() {
+    let _guard = memcleanup_rt();
+    // :296-302 is the memtrack code: write_property_unknown + map2check_error.
+    __m2c_rt_memcleanup_map2check_malloc(std::ptr::null(), 4);
+    assert_violated(ViolatedProperty::Unknown, 0, "");
+    assert_eq!(c_allocation_log(), "");
+}
+
+#[test]
+fn memcleanup_rt_posix_records_the_block_and_the_store() {
+    let _guard = memcleanup_rt();
+    let block = slot(0x3000);
+    let p_addr = &*block as *const usize as usize;
+    // SAFETY: `block` is live and holds the block address.
+    unsafe { __m2c_rt_memcleanup_map2check_posix(addr(p_addr), 32) };
+    // :319-324 map2check_malloc(*ptr, size) + the store of "pointer".
+    assert_eq!(c_allocation_log(), "0x3000;32;0\n");
+    assert_eq!(
+        c_list_log(),
+        format!("0;{p_addr:#x};0x3000;1;0;1;pointer;1;cocoiso;0\n")
+    );
+}
+
+#[test]
+fn memcleanup_rt_load_never_sets_error_deref() {
+    let _guard = memcleanup_rt();
+    memcleanup_prelude();
+    // :158 `void map2check_load(void *ptr, int size) {}`: the access that
+    // memtrack flags (memtrack_rt_load_and_check_deref_follow_error_deref)
+    // leaves no trace.
+    __m2c_rt_memcleanup_map2check_load(addr(0x9000), 4);
+    __m2c_rt_memcleanup_map2check_load(addr(0x110d), 4);
+    assert!(!c_error_deref());
+}
+
+#[test]
+fn memcleanup_rt_check_deref_is_empty() {
+    let _guard = memcleanup_rt();
+    // :294 `void map2check_check_deref(int line, const char *function_name) {}`
+    // even when the state would be an invalid dereference in memtrack mode.
+    __m2c_rt_memcleanup_map2check_load(addr(0x9000), 4);
+    // SAFETY: C-string literal.
+    unsafe { __m2c_rt_memcleanup_map2check_check_deref(14, c"main".as_ptr()) };
+    assert_ok();
+}
+
+#[test]
+fn memcleanup_rt_check_cstring_is_empty() {
+    let _guard = memcleanup_rt();
+    let beyond: [u8; 4] = *b"abcd";
+    // SAFETY: the buffer is live; names are C strings. Nothing is read.
+    unsafe {
+        __m2c_rt_memcleanup_map2check_alloca(
+            c"t".as_ptr(),
+            addr(beyond.as_ptr() as usize),
+            4,
+            1,
+            2,
+            1,
+        );
+        // :160 `void map2check_check_cstring(const char *string) {}`: memtrack
+        // (memtrack_rt_check_cstring_reads_up_to_the_terminator_inside_the_block)
+        // sets ERROR_DEREF at the fifth byte.
+        __m2c_rt_memcleanup_map2check_check_cstring(beyond.as_ptr().cast());
+        __m2c_rt_memcleanup_map2check_check_cstring(std::ptr::null());
+        __m2c_rt_memcleanup_map2check_check_deref(30, c"puts".as_ptr());
+    }
+    assert!(!c_error_deref());
+    assert_ok();
+}
+
+#[test]
+fn memcleanup_rt_free_resolved_never_reports_false_free() {
+    let _guard = memcleanup_rt();
+    memcleanup_prelude();
+    // SAFETY: fake addresses; C-string literals.
+    unsafe {
+        // :164-166 NULL with isNullValid returns.
+        __m2c_rt_memcleanup_map2check_free_resolved_address(
+            std::ptr::null(),
+            11,
+            c"main".as_ptr(),
+            1,
+        );
+        // :168 `Bool error = FALSE`: the block is released ...
+        __m2c_rt_memcleanup_map2check_free_resolved_address(addr(0x1100), 12, c"main".as_ptr(), 0);
+        // ... and a second release is not FALSE-FREE (memtrack:
+        // memtrack_rt_double_free_is_a_false_free_after_its_row_is_logged).
+        __m2c_rt_memcleanup_map2check_free_resolved_address(addr(0x1100), 13, c"main".as_ptr(), 0);
+    }
+    assert_ok();
+    assert_eq!(c_allocation_log(), "0x1100;0;1\n");
+    // :179 update_reference_list_log: p gets a FREE row (line 12).
+    assert_eq!(
+        c_list_log(),
+        "0;0x1000;0x1100;1;0;1;p;11;main;0\n0;0x1000;0x1100;1;1;0;p;12;main;1\n"
+    );
+}
+
+#[test]
+fn memcleanup_rt_free_never_reports_false_free() {
+    let _guard = memcleanup_rt();
+    let p = slot(0x1100);
+    let p_addr = &*p as *const usize as usize;
+    // SAFETY: `p` is live; the rest are fake addresses and C strings.
+    unsafe {
+        __m2c_rt_memcleanup_map2check_malloc(addr(0x1100), 16);
+        __m2c_rt_memcleanup_map2check_add_store_pointer(
+            addr(p_addr),
+            addr(0x1100),
+            1,
+            c"p".as_ptr(),
+            11,
+            c"main".as_ptr(),
+        );
+        __m2c_rt_memcleanup_map2check_free(c"p".as_ptr(), addr(p_addr), 1, 12, c"main".as_ptr());
+        // :342 `Bool error = FALSE`: the double free that memtrack reports
+        // is a no-op here (the row is found again).
+        __m2c_rt_memcleanup_map2check_free(c"p".as_ptr(), addr(p_addr), 1, 13, c"main".as_ptr());
+    }
+    assert_ok();
+    assert_eq!(c_allocation_log(), "0x1100;0;1\n");
+    assert_eq!(c_list_log().lines().count(), 3);
+    assert!(c_list_log().ends_with("0;p;13;main;2\n"));
+}
+
+#[test]
+fn memcleanup_rt_free_of_a_null_block_does_nothing() {
+    let _guard = memcleanup_rt();
+    let p = slot(0);
+    let p_addr = &*p as *const usize as usize;
+    // SAFETY: `p` is live; C-string literal.
+    unsafe {
+        __m2c_rt_memcleanup_map2check_free(c"p".as_ptr(), addr(p_addr), 1, 12, c"main".as_ptr())
+    };
+    // :334-336
+    assert_eq!(c_list_log(), "");
+    assert_ok();
+}
+
+#[test]
+fn memcleanup_rt_verdict_needs_a_pointer_to_the_last_leak() {
+    let _guard = memcleanup_rt();
+    memcleanup_prelude();
+    // :138-148: the block 0x1100 is leaked and p (0x1000) still points to it.
+    assert_eq!(__m2c_rt_memcleanup_analysis_is_program_correct(), 0);
+    // valid_allocation_log appended the freed row (AllocationLog.c:69-101),
+    // so the verdict is TRUE the second time.
+    assert_eq!(c_allocation_log(), "0x1100;16;0\n0x1100;0;1\n");
+    assert_eq!(__m2c_rt_memcleanup_analysis_is_program_correct(), 1);
+    // memtrack reports the same leak whatever points to it.
+    state::reset();
+    state::reset_config();
+    map2check_init(0);
+    __m2c_rt_memcleanup_analysis_init();
+    __m2c_rt_memcleanup_map2check_malloc(addr(0x1100), 16);
+    // :141: no pointer variable refers to it: TRUE (memtrack would be FALSE).
+    assert_eq!(__m2c_rt_memcleanup_analysis_is_program_correct(), 1);
+    assert_ok();
+}
+
+#[test]
+fn memcleanup_rt_verdict_is_true_once_the_pointer_moves_away() {
+    let _guard = memcleanup_rt();
+    memcleanup_prelude();
+    // SAFETY: fake addresses; C strings. p = NULL after the malloc.
+    unsafe {
+        __m2c_rt_memcleanup_map2check_add_store_pointer(
+            addr(0x1000),
+            std::ptr::null(),
+            1,
+            c"p".as_ptr(),
+            12,
+            c"main".as_ptr(),
+        )
+    };
+    // ListLog.c:40-65: the newest row of p no longer points to the block.
+    assert_eq!(__m2c_rt_memcleanup_analysis_is_program_correct(), 1);
+}
+
+#[test]
+fn memcleanup_rt_verdict_writes_the_memcleanup_property_files() {
+    let _guard = memcleanup_rt();
+    let dir = tempfile::tempdir().unwrap();
+    // The verdict writes into the output directory of the test build.
+    std::env::set_var(crate::output::termination::OUTPUT_DIR_ENV, dir.path());
+    memcleanup_prelude();
+    assert_eq!(__m2c_rt_memcleanup_analysis_is_program_correct(), 0);
+    std::env::remove_var(crate::output::termination::OUTPUT_DIR_ENV);
+    // PropertyGenerator.c:36-40 and :77-80.
+    assert_eq!(
+        std::fs::read_to_string(dir.path().join("map2check_property")).unwrap(),
+        "FALSE-MEMCLEANUP\n"
+    );
+    assert_eq!(
+        std::fs::read_to_string(dir.path().join("map2check_property_memcleanup")).unwrap(),
+        "FALSE-MEMCLEANUP\n"
+    );
+}
+
+#[test]
+fn memcleanup_rt_generate_aux_witness_files_writes_the_three_logs() {
+    let _guard = memcleanup_rt();
+    let dir = tempfile::tempdir().unwrap();
+    std::env::set_var(crate::output::termination::OUTPUT_DIR_ENV, dir.path());
+    memcleanup_prelude();
+    __m2c_rt_memcleanup_analysis_generate_aux_witness_files();
+    std::env::remove_var(crate::output::termination::OUTPUT_DIR_ENV);
+    // :150-154 heap, allocation and list logs, in the C formats.
+    let read = |n: &str| std::fs::read_to_string(dir.path().join(n)).unwrap();
+    assert_eq!(read("heap_log.csv"), "0x1000;p;8\n0x1040;main;1\n");
+    assert_eq!(read("allocation_log.csv"), "0x1100;16;0\n");
+    assert_eq!(read("list_log.csv"), "0;0x1000;0x1100;1;0;1;p;11;main;0\n");
+}
+
+/// SD-23 in memcleanup mode: `error = FALSE` lets a release of an untracked
+/// or stack address through (`AnalysisModeMemcleanup.c:168`, `:342`); develop
+/// then writes `row->size` through the NULL row of `find_row_with_address`
+/// (`:176-177`, `:353-354`) and gets SIGSEGV. The core goes on.
+#[test]
+fn sd23_memcleanup_rt_release_without_allocation_row_goes_on() {
+    let _guard = memcleanup_rt();
+    let x = 7u64;
+    let x_addr = &x as *const u64 as usize;
+    let p = slot(x_addr);
+    let p_addr = &*p as *const usize as usize;
+    // SAFETY: `p` is live; fake addresses; C strings. `int x; int *p = &x;
+    // free(p);` by both release functions.
+    unsafe {
+        __m2c_rt_memcleanup_map2check_alloca(c"x".as_ptr(), addr(x_addr), 8, 8, 3, 1);
+        __m2c_rt_memcleanup_map2check_add_store_pointer(
+            addr(p_addr),
+            addr(x_addr),
+            1,
+            c"p".as_ptr(),
+            4,
+            c"main".as_ptr(),
+        );
+        __m2c_rt_memcleanup_map2check_free(c"p".as_ptr(), addr(p_addr), 1, 50, c"main".as_ptr());
+        __m2c_rt_memcleanup_map2check_free_resolved_address(addr(x_addr), 51, c"main".as_ptr(), 0);
+        __m2c_rt_memcleanup_map2check_free_resolved_address(addr(0x7777), 52, c"main".as_ptr(), 0);
+    }
+    // No verdict, no allocation row; only the FREE row of the store that
+    // map2check_free appends before it looks the block up (:337-345).
+    assert_ok();
+    assert_eq!(c_allocation_log(), "");
+    assert_eq!(c_list_log().lines().count(), 2);
+    assert!(c_list_log().ends_with(&format!("0;{p_addr:#x};{x_addr:#x};1;1;0;p;50;main;1\n")));
+    assert_eq!(__m2c_rt_memcleanup_analysis_is_program_correct(), 1);
+}

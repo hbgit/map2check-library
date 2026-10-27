@@ -94,13 +94,21 @@ jobs:
           cargo build --release --all-features
           scripts/runtime-ir/test-memtrack-link.sh
 
+      # Idem para AnalysisModeMemcleanup.ll (Task 2.6), nos dois conjuntos de
+      # container; sem map2check_wasm_*. Cenários: vazamento no exit(0), os
+      # caminhos vazios do .c e o SD-23.
+      - name: Gerar, conferir e ligar o módulo IR AnalysisModeMemcleanup
+        run: |
+          cargo build --release --all-features
+          scripts/runtime-ir/test-memcleanup-link.sh
+
       # Os símbolos C dos modos são definidos só pelos módulos IR: o .ll
       # entra como artefato extra da cobertura.
       # Usa a staticlib e o .ll do passo anterior.
       - name: Conferir cobertura da ABI do runtime C (pending.txt)
         run: scripts/runtime-abi-coverage.sh target/runtime-ir/AnalysisModeOverflow.ll \
             target/runtime-ir/AnalysisModeAssert.ll target/runtime-ir/AnalysisModeNone.ll \
-            target/runtime-ir/AnalysisModeMemtrack.ll
+            target/runtime-ir/AnalysisModeMemtrack.ll target/runtime-ir/AnalysisModeMemcleanup.ll
 
       - name: Instalar cargo-tarpaulin
         uses: taiki-e/install-action@v2

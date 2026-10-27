@@ -1723,6 +1723,323 @@ fn sd19_wasm_leak_is_false_memtrack_without_freeing_the_offset() {
     );
 }
 
+// ── AnalysisModeMemcleanup through __m2c_rt_memcleanup_* (Task 2.6) ─────────
+
+/// `golden_memory()` through `__m2c_rt_memcleanup_*`, as `rt_memory` does for
+/// memtrack.
+fn rt_memcleanup_memory() {
+    map_arena();
+    // SAFETY: SLOT_P lies in the mapped arena; the other addresses are only
+    // stored; names are C strings.
+    unsafe {
+        __m2c_rt_memcleanup_map2check_alloca(c"p".as_ptr(), addr(SLOT_P), 8, 8, 10, 1);
+        __m2c_rt_memcleanup_map2check_function(c"main".as_ptr(), addr(FN_MAIN));
+        __m2c_rt_memcleanup_map2check_malloc(addr(BLOCK), 16);
+        (SLOT_P as *mut usize).write(BLOCK);
+        __m2c_rt_memcleanup_map2check_add_store_pointer(
+            addr(SLOT_P),
+            addr(BLOCK),
+            1,
+            c"p".as_ptr(),
+            11,
+            c"main".as_ptr(),
+        );
+    }
+}
+
+fn start_memcleanup_rt() {
+    start_rt(__m2c_rt_memcleanup_analysis_init, true);
+    c_tracking();
+    rt_memcleanup_memory();
+}
+
+/// `exit(0)` of a program with a reachable block still allocated: the pass
+/// ends the program with `map2check_success`, whose `map2check_exit` runs
+/// `analysis_is_program_correct` (`AnalysisModeMemcleanup.c:138-148`;
+/// `Map2CheckFunctions.c:89-102`). `p` still points to the block.
+#[test]
+fn memcleanup_reports_leak_at_exit_child() {
+    if is_child() {
+        start_memcleanup_rt();
+        map2check_success();
+    }
+}
+
+#[test]
+fn memcleanup_reports_leak_at_exit() {
+    assert_matches_golden_except(
+        "FALSE-MEMCLEANUP",
+        "memcleanup_reports_leak_at_exit_child",
+        KLEE_LOG,
+    );
+    // The golden's property text, from PropertyGenerator.c:36-40 and :77-80.
+    let dir = tempfile::tempdir().unwrap();
+    let output = run_child("memcleanup_reports_leak_at_exit_child", dir.path());
+    assert_eq!(output.status.signal(), Some(6));
+    assert_eq!(
+        std::fs::read_to_string(dir.path().join("map2check_property")).unwrap(),
+        "FALSE-MEMCLEANUP\n"
+    );
+    assert_eq!(
+        std::fs::read_to_string(dir.path().join("map2check_property_memcleanup")).unwrap(),
+        "FALSE-MEMCLEANUP\n"
+    );
+}
+
+/// Memtrack reports the leak of an unreferenced block; memcleanup does not
+/// (`AnalysisModeMemcleanup.c:141`, `ListLog.c:40-65`): `p` is reassigned to
+/// NULL, the run ends `NONE`.
+#[test]
+fn memcleanup_unreferenced_leak_is_none_child() {
+    if is_child() {
+        start_memcleanup_rt();
+        // SAFETY: C strings.
+        unsafe {
+            __m2c_rt_memcleanup_map2check_add_store_pointer(
+                addr(SLOT_P),
+                std::ptr::null(),
+                1,
+                c"p".as_ptr(),
+                12,
+                c"main".as_ptr(),
+            );
+        }
+        map2check_success();
+        println!("{RETURNED}");
+    }
+}
+
+#[test]
+fn memcleanup_unreferenced_leak_is_none() {
+    let dir = tempfile::tempdir().unwrap();
+    let output = run_child("memcleanup_unreferenced_leak_is_none_child", dir.path());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert_eq!(output.status.code(), Some(0), "{stdout}");
+    assert!(stdout.contains(RETURNED));
+    assert_eq!(
+        std::fs::read_to_string(dir.path().join("map2check_property")).unwrap(),
+        "NONE\n"
+    );
+    assert!(!dir.path().join("map2check_property_memcleanup").exists());
+}
+
+/// A freed block ends the run `NONE` (`tests/legacy_golden/NONE`).
+#[test]
+fn memcleanup_valid_run_child() {
+    if is_child() {
+        start_memcleanup_rt();
+        // SAFETY: SLOT_P holds BLOCK; C strings.
+        unsafe {
+            __m2c_rt_memcleanup_map2check_free(c"p".as_ptr(), addr(SLOT_P), 1, 12, c"main".as_ptr())
+        };
+        map2check_success();
+        println!("{RETURNED}");
+    }
+}
+
+#[test]
+fn memcleanup_valid_run_matches_c_runtime() {
+    assert_matches_golden("NONE", "memcleanup_valid_run_child");
+}
+
+/// Memtrack's FALSE-FREE cases are not violations here (`:168`, `:342`): a
+/// double free runs to the end, `NONE`.
+#[test]
+fn memcleanup_double_free_child() {
+    if is_child() {
+        start_memcleanup_rt();
+        // SAFETY: SLOT_P holds BLOCK; C strings.
+        unsafe {
+            __m2c_rt_memcleanup_map2check_free(
+                c"p".as_ptr(),
+                addr(SLOT_P),
+                1,
+                12,
+                c"main".as_ptr(),
+            );
+            __m2c_rt_memcleanup_map2check_free(
+                c"p".as_ptr(),
+                addr(SLOT_P),
+                1,
+                13,
+                c"main".as_ptr(),
+            );
+        }
+        map2check_success();
+        println!("{RETURNED}");
+    }
+}
+
+#[test]
+fn memcleanup_double_free_is_not_false_free() {
+    let dir = tempfile::tempdir().unwrap();
+    let output = run_child("memcleanup_double_free_child", dir.path());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert_eq!(output.status.code(), Some(0), "{stdout}");
+    assert!(stdout.contains(RETURNED));
+    assert_eq!(
+        std::fs::read_to_string(dir.path().join("map2check_property")).unwrap(),
+        "NONE\n"
+    );
+    assert!(!dir.path().join("map2check_property_free").exists());
+}
+
+/// `map2check_malloc(NULL)` is UNKNOWN in both modes (`:296-302`).
+#[test]
+fn memcleanup_unknown_child() {
+    if is_child() {
+        start_memcleanup_rt();
+        __m2c_rt_memcleanup_map2check_malloc(std::ptr::null(), 4);
+        map2check_success();
+    }
+}
+
+#[test]
+fn memcleanup_unknown_matches_c_runtime() {
+    assert_matches_golden_except("UNKNOWN", "memcleanup_unknown_child", KLEE_LOG);
+}
+
+/// `drivers/POSIX-MEMALIGN.c` in memcleanup mode: the block is stored in
+/// `q`, which still points to it: the same files, ending FALSE-MEMCLEANUP
+/// rather than the memtrack golden's FALSE-MEMTRACK.
+#[test]
+fn memcleanup_posix_child() {
+    if is_child() {
+        start_memcleanup_rt();
+        // SAFETY: SLOT_Q lies in the mapped arena; names are C strings.
+        unsafe {
+            __m2c_rt_memcleanup_map2check_alloca(c"q".as_ptr(), addr(SLOT_Q), 8, 8, 15, 1);
+            (SLOT_Q as *mut usize).write(BLOCK2);
+            __m2c_rt_memcleanup_map2check_posix(addr(SLOT_Q), 32);
+        }
+        map2check_success();
+    }
+}
+
+#[test]
+fn memcleanup_posix_leaves_the_memtrack_golden_logs() {
+    let golden =
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/legacy_golden/POSIX-MEMALIGN");
+    let dir = tempfile::tempdir().unwrap();
+    let output = run_child("memcleanup_posix_child", dir.path());
+    assert_eq!(output.status.signal(), Some(6));
+    for f in ["allocation_log.csv", "list_log.csv", "heap_log.csv"] {
+        assert_eq!(
+            std::fs::read(dir.path().join(f)).unwrap(),
+            std::fs::read(golden.join(f)).unwrap(),
+            "{f}"
+        );
+    }
+    assert_eq!(
+        std::fs::read_to_string(dir.path().join("map2check_property")).unwrap(),
+        "FALSE-MEMCLEANUP\n"
+    );
+}
+
+/// One case per child, without witness: `MEMCLEANUP_RT_CASE` selects it.
+#[test]
+fn memcleanup_rt_boundary_child() {
+    if is_child() {
+        start_rt(__m2c_rt_memcleanup_analysis_init, false);
+        map_arena();
+        let case = std::env::var("MEMCLEANUP_RT_CASE").unwrap();
+        let main = c"main".as_ptr();
+        // SAFETY: every address read lies in the mapped arena; the others
+        // are only compared; names are C strings.
+        unsafe {
+            match case.as_str() {
+                "stack free" => {
+                    // int x; int *p = &x; free(p);
+                    __m2c_rt_memcleanup_map2check_alloca(c"x".as_ptr(), addr(BLOCK), 4, 4, 3, 1);
+                    (SLOT_P as *mut usize).write(BLOCK);
+                    __m2c_rt_memcleanup_map2check_add_store_pointer(
+                        addr(SLOT_P),
+                        addr(BLOCK),
+                        1,
+                        c"p".as_ptr(),
+                        4,
+                        main,
+                    );
+                    __m2c_rt_memcleanup_map2check_free(c"p".as_ptr(), addr(SLOT_P), 1, 50, main);
+                }
+                "untracked resolved free" => {
+                    // free(q) of an address no allocation ever recorded.
+                    __m2c_rt_memcleanup_map2check_free_resolved_address(addr(WILD), 51, main, 0);
+                }
+                "free of a literal NULL" => {
+                    __m2c_rt_memcleanup_map2check_free_resolved_address(
+                        std::ptr::null(),
+                        54,
+                        main,
+                        0,
+                    );
+                }
+                "invalid deref" => {
+                    __m2c_rt_memcleanup_map2check_load(addr(WILD), 4);
+                    __m2c_rt_memcleanup_map2check_check_deref(14, main);
+                }
+                other => panic!("caso desconhecido {other}"),
+            }
+        }
+        println!("map2check-golden-child-survived");
+        map2check_success();
+        println!("{RETURNED}");
+    }
+}
+
+fn memcleanup_rt_case(case: &str) -> (std::process::Output, BTreeMap<String, String>) {
+    let dir = tempfile::tempdir().unwrap();
+    let output = run_child_with(
+        "memcleanup_rt_boundary_child",
+        dir.path(),
+        &[("MEMCLEANUP_RT_CASE", case)],
+    );
+    let files = files_in(dir.path())
+        .into_iter()
+        .map(|name| {
+            let text = std::fs::read_to_string(dir.path().join(&name)).unwrap();
+            (name, text)
+        })
+        .collect();
+    (output, files)
+}
+
+/// SD-23: develop's `AnalysisModeMemcleanup.c` lets every free through
+/// (`error = FALSE`, `:168`, `:342`) and writes through the NULL row of
+/// `find_row_with_address` (`:176-177`, `:353-354`): SIGSEGV, no property
+/// file. The core goes on and the run ends `NONE`.
+#[test]
+fn sd23_memcleanup_release_without_allocation_row_goes_on_where_develop_crashes() {
+    for case in [
+        "stack free",
+        "untracked resolved free",
+        "free of a literal NULL",
+    ] {
+        let (output, files) = memcleanup_rt_case(case);
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        assert_eq!(output.status.code(), Some(0), "{case}: {stdout}");
+        assert!(stdout.contains(RETURNED), "{case}");
+        assert_eq!(
+            files,
+            BTreeMap::from([("map2check_property".to_owned(), "NONE\n".to_owned())]),
+            "{case}"
+        );
+    }
+}
+
+/// `map2check_load` and `map2check_check_deref` are empty (`:158`, `:294`):
+/// the access memtrack reports as FALSE-DEREF goes unnoticed.
+#[test]
+fn memcleanup_invalid_deref_is_not_reported() {
+    let (output, files) = memcleanup_rt_case("invalid deref");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert_eq!(output.status.code(), Some(0), "{stdout}");
+    assert_eq!(
+        files,
+        BTreeMap::from([("map2check_property".to_owned(), "NONE\n".to_owned())])
+    );
+}
+
 /// The files `memtrack_rt_boundary_child` leaves for `case`.
 fn memtrack_rt_case(case: &str) -> (std::process::Output, BTreeMap<String, String>) {
     let dir = tempfile::tempdir().unwrap();

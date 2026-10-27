@@ -25,6 +25,18 @@ the C ABI or the JSON report must update them.
 
 ### Added
 
+- The memcleanup analysis mode of the Map2Check C runtime ABI (Task 2.6 of
+  the drop-in plan): core entry points `__m2c_rt_memcleanup_analysis_{init,
+  destroy,is_program_correct,generate_aux_witness_files}` and
+  `__m2c_rt_memcleanup_map2check_{load,check_cstring,check_deref,malloc,
+  calloc,posix,free,free_resolved_address,add_store_pointer,alloca,
+  non_static_alloca,function}`. They share the memory rules of the memtrack
+  entry points (`MemMode`); what differs is `AnalysisModeMemcleanup.c`'s: the
+  leak is FALSE-MEMCLEANUP only while a pointer variable still refers to it,
+  `map2check_load`, `map2check_check_cstring` and `map2check_check_deref` are
+  empty, and no free is a FALSE-FREE. A release with no allocation row goes on
+  where develop crashes (SD-23). The C names are defined only by the generated
+  IR module `AnalysisModeMemcleanup.ll` (no `map2check_wasm_*`).
 - The memtrack analysis mode of the Map2Check C runtime ABI (Task 2.5 of the
   drop-in plan): core entry points `__m2c_rt_memtrack_analysis_{init,destroy,
   is_program_correct,generate_aux_witness_files}` and

@@ -155,6 +155,17 @@ for sym in ("analysis_init", "analysis_destroy", "analysis_is_program_correct",
                                          "wasm_malloc", "wasm_free", "wasm_check_access"))):
     IMPLEMENTED[("AnalysisModeMemtrack", sym)] = f"__m2c_rt_memtrack_{sym}"
 
+# AnalysisModeMemcleanup.c (Task 2.6): the same names as the memtrack module
+# without map2check_wasm_* (the module has none), forwarded to
+# __m2c_rt_memcleanup_<name>, which share the memtrack rules (MemMode).
+# update_reference_list_log, the logs and ERROR_DEREF are c-only (SD-22).
+for sym in ("analysis_init", "analysis_destroy", "analysis_is_program_correct",
+            "analysis_generate_aux_witness_files",
+            *(f"map2check_{f}" for f in ("add_store_pointer", "alloca", "calloc", "check_cstring",
+                                         "check_deref", "free", "free_resolved_address", "function",
+                                         "load", "malloc", "non_static_alloca", "posix"))):
+    IMPLEMENTED[("AnalysisModeMemcleanup", sym)] = f"__m2c_rt_memcleanup_{sym}"
+
 # Functions whose C body is empty, so the unmarked empty define is the C
 # behaviour, not a stub: WitnessGenerationNone.c ("DO NOTHING").
 # AnalysisModeAssert.c:25-27 __VERIFIER_assert ("DO NOTHING").

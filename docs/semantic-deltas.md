@@ -851,7 +851,7 @@ only.
 ### SD-23 — A release with no allocation row goes on where develop crashes
 
 **Classification:** intentional
-**Tests:** `rust/src/ffi_golden_tests.rs::sd23_free_of_a_literal_null_goes_on_where_develop_crashes`, `rust/src/ffi_tests.rs::sd23_memtrack_rt_release_without_allocation_row_goes_on`, `rust/src/memtrack/c_mode.rs::a_release_without_allocation_row_stops_where_develop_crashes`
+**Tests:** `rust/src/ffi_golden_tests.rs::sd23_free_of_a_literal_null_goes_on_where_develop_crashes`, `rust/src/ffi_tests.rs::sd23_memtrack_rt_release_without_allocation_row_goes_on`, `rust/src/memtrack/c_mode.rs::a_release_without_allocation_row_stops_where_develop_crashes`, `rust/src/ffi_tests.rs::sd23_memcleanup_rt_release_without_allocation_row_goes_on`, `rust/src/ffi_golden_tests.rs::sd23_memcleanup_release_without_allocation_row_goes_on_where_develop_crashes`
 
 The user approved this on 2026-10-26.
 
@@ -875,7 +875,8 @@ for a free whose argument is not a `LoadInst` (`MemoryTrackPass.cpp:428-436`).
   row.
 - In memcleanup mode, `error = FALSE` (`AnalysisModeMemcleanup.c:168`, `:342`)
   lets every free through, so a free of an untracked or stack address has no
-  row either.
+  row either. `scripts/runtime-ir/test-memcleanup-link.sh` (scenarios
+  `stack-free` and `untracked-free`) pins this through the linked IR module.
 
 **Reproduce:**
 

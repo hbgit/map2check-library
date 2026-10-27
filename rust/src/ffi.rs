@@ -995,7 +995,7 @@ pub extern "C" fn __m2c_rt_none_analysis_generate_aux_witness_files() {
 // one Rust container serves the Array and `--btree` builds (D3).
 //
 // The rules take a `MemMode`, and so do the `rt_mem_*` helpers below: the
-// memcleanup module (Task 2.6) shares them. No mode gate: linking the module
+// memcleanup module (Task 2.6, below) shares them. No mode gate: linking the module
 // is the mode. On a violation the C writes the property files and calls
 // `map2check_error()`; here the violation is recorded and, with a mode set,
 // the files are written and the run aborts (`record_violation`). The rows
@@ -1562,6 +1562,267 @@ pub extern "C" fn __m2c_rt_memtrack_map2check_wasm_check_access(offset: u64, acc
         },
         (),
     );
+}
+
+// ── C runtime ABI: AnalysisModeMemcleanup (core entry points, D7) ───────────
+//
+// `AnalysisModeMemcleanup.c` of Map2Check `develop`. The module
+// `AnalysisModeMemcleanup.bc` (`scripts/runtime-ir/gen_ll.py`) defines the
+// four `analysis_*` functions and the 12 memory `map2check_*` the pass calls
+// and forwards each one to `__m2c_rt_memcleanup_<name>` below. It has no
+// `map2check_wasm_*`. Linking the module picks the mode (`MemMode`); the
+// rules and the logs are the memtrack ones (`rt_mem_*`, `memtrack::c_mode`).
+// What differs in C is in `MemMode::Memcleanup`: the verdict needs a pointer
+// variable to the last leak (`:138-148`), `map2check_load`,
+// `map2check_check_cstring` and `map2check_check_deref` are empty (`:158`,
+// `:159`, `:294`), and `error = FALSE` in both release functions (`:168`,
+// `:342`). A release with no allocation row is SD-23.
+
+/// `analysis_init` of the memcleanup mode (`AnalysisModeMemcleanup.c:125-130`):
+/// selects `AnalysisMode_Memcleanup` and starts new logs.
+#[no_mangle]
+pub extern "C" fn __m2c_rt_memcleanup_analysis_init() {
+    ffi_guard(|| rt_mem_analysis_init(AnalysisMode::Memcleanup), ());
+}
+
+/// `analysis_destroy` of the memcleanup mode (`AnalysisModeMemcleanup.c:132-136`):
+/// frees the three logs.
+#[no_mangle]
+pub extern "C" fn __m2c_rt_memcleanup_analysis_destroy() {
+    ffi_guard(|| with_c_memory((), |m, _| m.clear()), ());
+}
+
+/// `analysis_is_program_correct` of the memcleanup mode
+/// (`AnalysisModeMemcleanup.c:138-148`): when `valid_allocation_log` finds a
+/// leaked block and a pointer variable still refers to it
+/// (`is_memcleanup_error`, `ListLog.c:40-65`), writes FALSE-MEMCLEANUP to
+/// `map2check_property` and `map2check_property_memcleanup` and returns 0;
+/// otherwise 1.
+#[no_mangle]
+pub extern "C" fn __m2c_rt_memcleanup_analysis_is_program_correct() -> std::os::raw::c_char {
+    ffi_guard(|| rt_mem_is_program_correct(MemMode::Memcleanup), 1)
+}
+
+/// `analysis_generate_aux_witness_files` of the memcleanup mode
+/// (`AnalysisModeMemcleanup.c:150-154`): the same three logs as memtrack.
+#[no_mangle]
+pub extern "C" fn __m2c_rt_memcleanup_analysis_generate_aux_witness_files() {
+    ffi_guard(rt_mem_generate_aux_witness_files, ());
+}
+
+/// `map2check_check_cstring` (`AnalysisModeMemcleanup.c:160`): empty.
+///
+/// # Safety
+/// `string` is never read.
+#[no_mangle]
+pub unsafe extern "C" fn __m2c_rt_memcleanup_map2check_check_cstring(
+    string: *const std::os::raw::c_char,
+) {
+    // SAFETY: forwarded caller contract.
+    ffi_guard(
+        || unsafe { rt_mem_check_cstring(MemMode::Memcleanup, string) },
+        (),
+    );
+}
+
+/// `map2check_load` (`AnalysisModeMemcleanup.c:158`): empty.
+#[no_mangle]
+pub extern "C" fn __m2c_rt_memcleanup_map2check_load(
+    ptr: *const std::os::raw::c_void,
+    size: std::os::raw::c_int,
+) {
+    ffi_guard(
+        || with_c_memory((), |m, _| m.load(MemMode::Memcleanup, ptr as u64, size)),
+        (),
+    );
+}
+
+/// `map2check_free_resolved_address` (`AnalysisModeMemcleanup.c:161-180`):
+/// NULL with `is_null_valid` returns; no free is invalid (`error = FALSE`,
+/// `:168`); the block's row is freed and every pointer to it gets a FREE row.
+/// A block with no row is SD-23.
+///
+/// # Safety
+/// `function_name` must be null or a valid null-terminated C string; `ptr`
+/// is never dereferenced.
+#[no_mangle]
+pub unsafe extern "C" fn __m2c_rt_memcleanup_map2check_free_resolved_address(
+    ptr: *const std::os::raw::c_void,
+    line: std::os::raw::c_uint,
+    function_name: *const std::os::raw::c_char,
+    is_null_valid: std::os::raw::c_short,
+) {
+    ffi_guard(
+        || {
+            // SAFETY: forwarded caller contract.
+            unsafe {
+                rt_mem_free_resolved_address(
+                    MemMode::Memcleanup,
+                    ptr,
+                    line,
+                    function_name,
+                    is_null_valid,
+                )
+            }
+        },
+        (),
+    );
+}
+
+/// `map2check_add_store_pointer` (`AnalysisModeMemcleanup.c:243-292`): as
+/// memtrack's.
+///
+/// # Safety
+/// `name` and `function_name` must be null or valid null-terminated C
+/// strings; `var` and `value` are never dereferenced.
+#[no_mangle]
+pub unsafe extern "C" fn __m2c_rt_memcleanup_map2check_add_store_pointer(
+    var: *const std::os::raw::c_void,
+    value: *const std::os::raw::c_void,
+    scope: std::os::raw::c_uint,
+    name: *const std::os::raw::c_char,
+    line: std::os::raw::c_int,
+    function_name: *const std::os::raw::c_char,
+) {
+    ffi_guard(
+        || {
+            // SAFETY: forwarded caller contract.
+            unsafe { rt_mem_add_store_pointer(var, value, scope, name, line, function_name) }
+        },
+        (),
+    );
+}
+
+/// `map2check_check_deref` (`AnalysisModeMemcleanup.c:294`): empty.
+///
+/// # Safety
+/// `function_name` is never read.
+#[no_mangle]
+pub unsafe extern "C" fn __m2c_rt_memcleanup_map2check_check_deref(
+    line: std::os::raw::c_int,
+    function_name: *const std::os::raw::c_char,
+) {
+    ffi_guard(
+        || {
+            // SAFETY: forwarded caller contract.
+            unsafe { rt_mem_check_deref(MemMode::Memcleanup, line, function_name) }
+        },
+        (),
+    );
+}
+
+/// `map2check_malloc` (`AnalysisModeMemcleanup.c:296-314`): as memtrack's.
+#[no_mangle]
+pub extern "C" fn __m2c_rt_memcleanup_map2check_malloc(
+    ptr: *const std::os::raw::c_void,
+    size: std::os::raw::c_int,
+) {
+    ffi_guard(|| rt_mem_malloc(ptr, size), ());
+}
+
+/// `map2check_posix` (`AnalysisModeMemcleanup.c:319-324`): as memtrack's.
+///
+/// # Safety
+/// `ptr` must be null or point to a readable `void *`.
+#[no_mangle]
+pub unsafe extern "C" fn __m2c_rt_memcleanup_map2check_posix(
+    ptr: *const std::os::raw::c_void,
+    size: std::os::raw::c_int,
+) {
+    // SAFETY: forwarded caller contract.
+    ffi_guard(|| unsafe { rt_mem_posix(ptr, size) }, ());
+}
+
+/// `map2check_calloc` (`AnalysisModeMemcleanup.c:326-328`): as memtrack's.
+#[no_mangle]
+pub extern "C" fn __m2c_rt_memcleanup_map2check_calloc(
+    ptr: *const std::os::raw::c_void,
+    quantity: std::os::raw::c_int,
+    size: std::os::raw::c_int,
+) {
+    ffi_guard(|| rt_mem_calloc(ptr, quantity, size), ());
+}
+
+/// `map2check_free` (`AnalysisModeMemcleanup.c:330-357`): `ptr` is the slot of
+/// the pointer variable `name`. A NULL block does nothing; otherwise a FREE
+/// row for the variable is appended and the block is released (never
+/// FALSE-FREE, `error = FALSE`, `:342`). A block with no row is SD-23.
+///
+/// # Safety
+/// `name` and `function_name` must be null or valid null-terminated C
+/// strings; `ptr` must be null or point to a readable `long`.
+#[no_mangle]
+pub unsafe extern "C" fn __m2c_rt_memcleanup_map2check_free(
+    name: *const std::os::raw::c_char,
+    ptr: *const std::os::raw::c_void,
+    scope: std::os::raw::c_uint,
+    line: std::os::raw::c_uint,
+    function_name: *const std::os::raw::c_char,
+) {
+    ffi_guard(
+        || {
+            // SAFETY: forwarded caller contract.
+            unsafe { rt_mem_free(MemMode::Memcleanup, name, ptr, scope, line, function_name) }
+        },
+        (),
+    );
+}
+
+/// `map2check_non_static_alloca` (`AnalysisModeMemcleanup.c:359-363`): as
+/// memtrack's.
+///
+/// # Safety
+/// `name` must be null or a valid null-terminated C string; `ptr` is never
+/// dereferenced.
+#[no_mangle]
+pub unsafe extern "C" fn __m2c_rt_memcleanup_map2check_non_static_alloca(
+    name: *const std::os::raw::c_char,
+    ptr: *const std::os::raw::c_void,
+    size: std::os::raw::c_int,
+    size_of_primitive: std::os::raw::c_int,
+    line: std::os::raw::c_int,
+    scope: std::os::raw::c_int,
+) {
+    // SAFETY: forwarded caller contract.
+    ffi_guard(
+        || unsafe { rt_mem_non_static_alloca(name, ptr, size, size_of_primitive, line, scope) },
+        (),
+    );
+}
+
+/// `map2check_alloca` (`AnalysisModeMemcleanup.c:365-370`): as memtrack's.
+///
+/// # Safety
+/// `name` must be null or a valid null-terminated C string; `ptr` is never
+/// dereferenced.
+#[no_mangle]
+pub unsafe extern "C" fn __m2c_rt_memcleanup_map2check_alloca(
+    name: *const std::os::raw::c_char,
+    ptr: *const std::os::raw::c_void,
+    size: std::os::raw::c_int,
+    size_of_primitive: std::os::raw::c_int,
+    line: std::os::raw::c_int,
+    scope: std::os::raw::c_int,
+) {
+    // SAFETY: forwarded caller contract.
+    ffi_guard(
+        || unsafe { rt_mem_alloca(name, ptr, size, size_of_primitive, line, scope) },
+        (),
+    );
+}
+
+/// `map2check_function` (`AnalysisModeMemcleanup.c:372-376`): as memtrack's.
+///
+/// # Safety
+/// `name` must be null or a valid null-terminated C string; `ptr` is never
+/// dereferenced.
+#[no_mangle]
+pub unsafe extern "C" fn __m2c_rt_memcleanup_map2check_function(
+    name: *const std::os::raw::c_char,
+    ptr: *const std::os::raw::c_void,
+) {
+    // SAFETY: forwarded caller contract.
+    ffi_guard(|| unsafe { rt_mem_function(name, ptr) }, ());
 }
 
 // ── C runtime ABI: NonDetLog ────────────────────────────────────────────────

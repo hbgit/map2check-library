@@ -266,15 +266,6 @@ class Generated(unittest.TestCase):
         self.assertIn("define void @map2check_binop_add(i64 %a0, i64 %a1, i32 %a2, i32 %a3, i32 %a4, ptr %a5)",
                       text)
 
-    def test_other_modes_keep_their_analysis_stubs(self):
-        out = run_gen()
-        for m in ("AnalysisModeMemcleanup",):
-            text = read(os.path.join(out, m + ".ll"))
-            self.assertNotIn("__m2c_rt_overflow", text, m)
-            self.assertNotIn("__m2c_rt_assert", text, m)
-            self.assertNotIn("__m2c_rt_none", text, m)
-            self.assertIn("define signext i8 @analysis_is_program_correct() { ; m2c-stub\n  ret i8 1\n}", text, m)
-
     def test_assert_module_forwards_to_the_core_and_verifier_assert_is_empty(self):
         """AnalysisModeAssert.bc (Task 2.4): map2check_assert and analysis_*
         forward to __m2c_rt_assert_*; __VERIFIER_assert is an unmarked empty
@@ -344,6 +335,36 @@ class Generated(unittest.TestCase):
                      "define signext i8 @analysis_is_program_correct() {"):
             self.assertIn(line, text)
 
+    def test_memcleanup_module_forwards_every_c_function_to_the_core(self):
+        """AnalysisModeMemcleanup.bc (Task 2.6): the 12 memory map2check_* and
+        analysis_*, each a forwarder to __m2c_rt_memcleanup_<name> with the
+        signature of the C definition. Unlike memtrack it has no
+        map2check_wasm_*, and the c-only names are not defined."""
+        text = read(os.path.join(run_gen("--module", "AnalysisModeMemcleanup"), "AnalysisModeMemcleanup.ll"))
+        want = {r["symbol"] for r in inventory_rows()
+                if "AnalysisModeMemcleanup.bc" in r["module"].split("+") and r["kind"] == "func"
+                and r["referenced_by"] != "-"}
+        memory = {"map2check_add_store_pointer", "map2check_alloca", "map2check_calloc",
+                  "map2check_check_cstring", "map2check_check_deref", "map2check_free",
+                  "map2check_free_resolved_address", "map2check_function", "map2check_load",
+                  "map2check_malloc", "map2check_non_static_alloca", "map2check_posix"}
+        analysis = {"analysis_init", "analysis_destroy", "analysis_is_program_correct",
+                    "analysis_generate_aux_witness_files"}
+        self.assertEqual(want, memory | analysis)
+        self.assertEqual(defined(text), want)
+        self.assertNotIn("wasm", text)
+        for sym in want:
+            self.assertEqual(gen_ll.IMPLEMENTED[("AnalysisModeMemcleanup", sym)], f"__m2c_rt_memcleanup_{sym}")
+            self.assertRegex(text, rf"tail call [^@]*@__m2c_rt_memcleanup_{sym}\(", sym)
+        self.assertNotIn("m2c-stub", text)
+        self.assertNotIn("__m2c_rt_memtrack", text)
+        for c_only in ("update_reference_list_log", "@heap_log", "@list_log", "@allocation_log", "ERROR_DEREF"):
+            self.assertNotIn(c_only, text)
+        for line in ("define void @map2check_load(ptr %a0, i32 %a1) {",
+                     "define void @map2check_free_resolved_address(ptr %a0, i32 %a1, ptr %a2, i16 signext %a3) {",
+                     "define signext i8 @analysis_is_program_correct() {"):
+            self.assertIn(line, text)
+
     def test_container_and_log_modules_are_empty_without_stub_marks(self):
         """D3: one Rust container serves the Array (ContainerRealloc.bc) and
         --btree (ContainerBTree.bc + BTree.bc) builds, and the log modules
@@ -376,8 +397,8 @@ class Generated(unittest.TestCase):
                     self.assertEqual(line.endswith("; m2c-stub"), not real, f"{module}.{sym}")
                 else:
                     self.assertNotIn("m2c-stub", line, f"{module}.{sym}")
-        # Still a stub: AnalysisModeMemcleanup's map2check_load (Task 2.6).
-        text = read(os.path.join(out, "AnalysisModeMemcleanup.ll"))
+        # Still stubs: the generator and wasm modules (Phase 3 / Task 2.7).
+        text = read(os.path.join(out, "WasmRuntimeStubs.ll"))
         self.assertIn("{ ; m2c-stub", text)
         # The empty C bodies: WitnessGenerationNone.c, AnalysisModeAssert.c:25-27
         # (__VERIFIER_assert); all "DO NOTHING".
