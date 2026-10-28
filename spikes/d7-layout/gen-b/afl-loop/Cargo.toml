@@ -1,0 +1,23 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# D7 spike (Task 1.1), strategy B: the afl-loop nondet generator as a no_std crate
+# of its own, emitted as LLVM 16 bitcode and linked next to the core.
+[package]
+name = "d7-gen-afl-loop"
+version = "0.0.0"
+edition = "2021"
+rust-version = "1.72"
+publish = false
+
+[lib]
+name = "d7gen_afl_loop"
+crate-type = ["staticlib"]
+path = "src/lib.rs"
+
+[profile.release]
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+panic = "abort"
+debug = false
+
+[workspace]

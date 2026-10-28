@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Map2Check-Library is a Rust library with a C ABI for the Map2Check program verification tool. It tracks memory, basic blocks, and nondeterministic values, and checks safety properties (overflow, memory safety, assert reachability) in programs analyzed by LibFuzzer. The build produces the static library (`libmap2check.a`) and generates `include/map2check.h`. Remaining parity work with the legacy C implementation is tracked in [TODO.md](TODO.md).
+Map2Check-Library is a Rust library with a C ABI for the Map2Check program verification tool. It tracks memory, basic blocks, and nondeterministic values, and checks safety properties (overflow, memory safety, assert reachability) in programs instrumented by Map2Check. Since 2.0.0 (D6) it is a drop-in runtime: the C ABI is the C runtime ABI of Map2Check `develop`, and the interface with Map2Check is the 21 bitcode modules (`lib/*.bc`, `scripts/build-runtime-bc.sh`) that replace the C runtime's. The build also produces the static library (`libmap2check.a`) and generates `include/map2check.h`. Version 2.0.0-rc.1 was validated against Map2Check `develop` `0bca42eb89d116178e6b52f52acaf73f7c305088` (`docs/cutover/gate-2026-10-27.md`, `docs/cutover/gate-2026-10-28.md`; install and handoff in `docs/integration-guide.md` and `docs/cutover/handoff-map2check.md`). Remaining parity work with the legacy C implementation is tracked in [TODO.md](TODO.md).
 
 ## Build Commands
 
@@ -32,12 +32,16 @@ cargo fmt --check
 cargo clippy --all-targets --all-features -- -D warnings
 cargo deny check
 
-# Exercise the C ABI with ASan and UBSan (requires clang)
+# Exercise the C ABI with ASan and UBSan (requires clang): the harness links
+# the staticlib with the IR modules it needs, as Map2Check links a program
 cargo build --release --all-features
-clang -fsanitize=address,undefined -fno-omit-frame-pointer \
-  tests/ffi_harness.c target/release/libmap2check.a \
-  -ldl -lpthread -lm -o target/ffi_harness
+scripts/build-c-abi-program.sh -o target/ffi_harness \
+  -m Map2CheckFunctions-glue -m NonDetGeneratorAFL tests/ffi_harness.c \
+  -- -fsanitize=address,undefined -fno-omit-frame-pointer
 target/ffi_harness
+
+# The exported set is exactly the C runtime ABI (D6)
+scripts/check-export-set.sh
 ```
 
 ## Architecture
@@ -54,18 +58,20 @@ Each package lives in a subdirectory of `rust/src/`:
 | Package | Purpose |
 |---|---|
 | `caller/` | Result and violated-property types, global step counter. |
-| `nondet/` | Typed nondeterministic values and LibFuzzer generators. |
+| `nondet/` | Typed nondeterministic values and the C runtime's nondet log (`klee_log.csv`). |
 | `memtrack/` | Memory allocation tracking and memory-safety checks. |
 | `bbtrack/` | Basic-block entries and lookup. |
 | `analysismode/` | Verification condition checkers: `analysis_assert` (assert reachability), `analysis_overflow` (arithmetic overflow), `analysis_memory` (memory safety). |
 
 ### Container Pattern
 
-Analysis records are stored in vectors in the process-wide `AnalysisState`, protected by a mutex and reset by `map2check_reset()`.
+The 1.x core API below (`ffi.rs` functions such as `map2check_set_mode` and `map2check_map_*`) is no longer the interface with Map2Check; it remains as Rust functions that the Rust tests drive.
+
+Analysis records are stored in vectors in the process-wide `AnalysisState`, protected by a mutex and reset by `map2check_init()`.
 
 ### Output Format
 
-At analysis end, `print_all_containers_as_json()` serializes the state to RFC 8259 JSON on stdout using `serde_json`.
+With an analysis mode selected (a Map2Check run), results go to the property files of the C runtime (`map2check_property`...). With no mode, `map2check_success()` serializes the state to RFC 8259 JSON on stdout using `serde_json`.
 
 ### Generated Header
 
@@ -77,9 +83,40 @@ At analysis end, `print_all_containers_as_json()` serializes the state to RFC 82
 - Never add AI attributions (e.g. "Co-authored-by", "Generated with ...") to commits or PR descriptions.
 - See [.github/copilot-instructions.md](.github/copilot-instructions.md) for the same conventions in more detail.
 
+## Regras obrigatórias
+
+1. **GitHub CLI e ações remotas somente sob solicitação explícita.**
+   Não execute, sem um pedido explícito do usuário na mensagem atual, comandos `gh` que
+   criem, alterem ou encerrem algo no GitHub: `gh pr create/merge/close/comment/review`,
+   `gh issue create/close/comment/edit`, `gh release`, `gh repo` e similares. O mesmo vale
+   para `git push`, criação de tags remotas e alteração de branches remotos. Comandos apenas
+   de leitura (`gh pr view`, `gh issue list`) são permitidos. Na dúvida, pergunte antes.
+
+2. **Escopo restrito a este repositório.**
+   Todas as modificações de código, testes, configurações e documentação devem ser feitas
+   somente neste repositório. Nunca altere, faça commit ou abra PR/issue no repositório do
+   Map2Check, nem em qualquer outro repositório.
+
+3. **Map2Check para testes de integração: cópia local e sem versionamento.**
+   - Baixe o Map2Check sempre do branch `develop`, para o diretório `vendor/map2check/` (ou
+     outro que o usuário indicar), por meio de
+     `git clone --depth 1 --branch develop <url> vendor/map2check`. Não use tags nem tarballs
+     de release.
+   - Logo após o download, remova o versionamento com `rm -rf vendor/map2check/.git`, para
+     que nenhum comando git atue sobre o repositório original.
+   - Garanta que `vendor/map2check/` esteja no `.gitignore` deste repositório, para que a
+     cópia não seja commitada aqui.
+   - Registre o commit do `develop` baixado (por exemplo, em `vendor/MAP2CHECK_VERSION`) para
+     tornar os testes reproduzíveis.
+   - Não edite os fontes baixados. Se um teste exigir mudanças no Map2Check, pare e informe
+     o usuário.
+
 ## Key Entry Points
 
-- `map2check_init()` — initializes the global analysis state
-- `map2check_success()` / `set_false_result(prp, line, func)` — set final verification result
-- `print_all_containers_as_json()` — emits the JSON result report
-- `map2check_is_valid_assert()`, `map2check_map_malloc()`, `map2check_map_free()` etc. — called by LLVM instrumentation passes in the Map2Check tool
+The C ABI is the C runtime ABI of Map2Check `develop` (D6, 2.0.0); `scripts/check-export-set.sh` checks it.
+
+- `map2check_init(int isSvComp)` — initializes the global analysis state (C runtime signature)
+- `map2check_success()`, `map2check_error()`, `map2check_target_function()`, `write_property()` — end of run and result files
+- `map2check_track_bb()`, `map2check_nondet_<t>()` — basic-block and nondet logs, called by the Map2Check passes
+- `__m2c_rt_*` — core entry points; the generated IR modules (`scripts/runtime-ir/gen_ll.py`) define the other C names (`map2check_malloc`, `map2check_assert`, `analysis_init`...) and forward to them
+- `lib/*.bc` (21 modules, `scripts/runtime-modules.txt`) — what Map2Check links; install with `scripts/it/overlay-install.sh` or copy to `${MAP2CHECK_PATH}/lib`

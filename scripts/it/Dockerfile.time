@@ -1,0 +1,10 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# Imagem do Map2Check develop acrescida de /usr/bin/time (GNU time), usada pelas
+# medições de tempo e pico de RSS dos testes de integração.
+ARG BASE
+FROM ${BASE}
+USER root
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends time \
+ && rm -rf /var/lib/apt/lists/*
+USER map2check

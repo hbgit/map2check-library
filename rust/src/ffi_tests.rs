@@ -48,7 +48,7 @@ fn assert_violated(property: ViolatedProperty, line: u32, function_name: &str) {
 #[test]
 fn init_leaves_state_empty_and_ok() {
     let _guard = fresh();
-    map2check_init();
+    map2check_init(0);
     assert_ok();
     assert_eq!(snapshot(|s| s.current_step()), 0);
     assert!(snapshot(|s| s.memtrack.is_empty()
@@ -59,11 +59,11 @@ fn init_leaves_state_empty_and_ok() {
 #[test]
 fn second_init_starts_from_clean_state() {
     let _guard = fresh();
-    map2check_init();
+    map2check_init(0);
     // SAFETY: fake addresses are only stored, never dereferenced.
     unsafe { map2check_map_malloc(addr(0x1000), 8) };
     // SAFETY: C-string literal is valid and null-terminated.
-    unsafe { set_false_result(5, 7, c"main".as_ptr()) };
+    unsafe { set_false_result(ViolatedProperty::Reachability as i32, 7, c"main".as_ptr()) };
     map2check_set_memcleanup();
     map2check_set_null_is_valid();
     let mut value: i32 = 3;
@@ -72,7 +72,7 @@ fn second_init_starts_from_clean_state() {
     let _ = get_next_step();
     assert!(snapshot(|s| s.current_step() > 0 && !s.nondets.is_empty()));
 
-    map2check_init();
+    map2check_init(0);
 
     assert_ok();
     snapshot(|s| {
@@ -92,7 +92,7 @@ fn reset_clears_records_result_step_and_flags() {
     // SAFETY: null pointer is a valid malloc result.
     unsafe { map2check_map_malloc(addr(0x1000), 16) };
     // SAFETY: C-string literal is valid and null-terminated.
-    unsafe { set_false_result(5, 7, c"main".as_ptr()) };
+    unsafe { set_false_result(ViolatedProperty::Reachability as i32, 7, c"main".as_ptr()) };
     map2check_set_memcleanup();
     map2check_set_null_is_valid();
 
@@ -121,7 +121,7 @@ fn success_does_not_change_state() {
 fn set_false_result_records_property_line_and_function() {
     let _guard = fresh();
     // SAFETY: C-string literal is valid and null-terminated.
-    unsafe { set_false_result(5, 42, c"main".as_ptr()) };
+    unsafe { set_false_result(ViolatedProperty::Reachability as i32, 42, c"main".as_ptr()) };
     assert_violated(ViolatedProperty::Reachability, 42, "main");
 }
 
@@ -137,7 +137,7 @@ fn set_false_result_ignores_unknown_property() {
 fn set_false_result_accepts_null_function_name() {
     let _guard = fresh();
     // SAFETY: null is an accepted function_name.
-    unsafe { set_false_result(0, 3, std::ptr::null()) };
+    unsafe { set_false_result(ViolatedProperty::Overflow as i32, 3, std::ptr::null()) };
     assert_violated(ViolatedProperty::Overflow, 3, "");
 }
 
@@ -146,7 +146,7 @@ fn get_current_property_reflects_last_violation() {
     let _guard = fresh();
     assert_eq!(get_current_property(), ViolatedProperty::None);
     // SAFETY: C-string literal is valid and null-terminated.
-    unsafe { set_false_result(2, 1, c"f".as_ptr()) };
+    unsafe { set_false_result(ViolatedProperty::MemsafetyDeref as i32, 1, c"f".as_ptr()) };
     assert_eq!(get_current_property(), ViolatedProperty::MemsafetyDeref);
 }
 
@@ -184,7 +184,7 @@ fn vcc_reset_meta_data_clears_result_but_keeps_records() {
     // SAFETY: fake address is never dereferenced.
     unsafe { map2check_map_malloc(addr(0x1000), 8) };
     // SAFETY: C-string literal is valid and null-terminated.
-    unsafe { set_false_result(1, 9, c"main".as_ptr()) };
+    unsafe { set_false_result(ViolatedProperty::MemsafetyFree as i32, 9, c"main".as_ptr()) };
 
     vcc_reset_meta_data();
 
@@ -528,7 +528,7 @@ fn posix_memalign_null_block_is_unknown_in_memory_modes() {
     // UNKNOWN, and no store follows.
     let _guard = fresh();
     map2check_set_mode(AnalysisMode::Memtrack as i32);
-    map2check_init();
+    map2check_init(0);
     let mut slot: *const c_void = std::ptr::null();
     // SAFETY: `slot` is a live `void *` for the whole call.
     unsafe { map2check_map_posix_memalign(std::ptr::addr_of_mut!(slot).cast(), 64) };
@@ -1119,7 +1119,7 @@ fn signed_binops_are_gated_like_the_other_binops() {
         for (op, a, b) in calls {
             state::reset();
             map2check_set_mode(mode as i32);
-            map2check_init();
+            map2check_init(0);
             // SAFETY: C-string literal is valid and null-terminated.
             unsafe { op(a, b, 32, 4, c"f".as_ptr()) };
             let reported = !snapshot(|s| s.result.ok);
@@ -1171,7 +1171,7 @@ fn signed_binops_called_as_c_does() {
 fn set_false_result_accepts_div_by_zero() {
     let _guard = fresh();
     // SAFETY: C-string literal is valid and null-terminated.
-    unsafe { set_false_result(10, 3, c"main".as_ptr()) };
+    unsafe { set_false_result(ViolatedProperty::DivByZero as i32, 3, c"main".as_ptr()) };
     assert_violated(ViolatedProperty::DivByZero, 3, "main");
 }
 
@@ -1233,7 +1233,7 @@ fn sd03_safe_check_keeps_earlier_violation() {
     // SAFETY: C-string literals are valid; fake addresses are never dereferenced.
     unsafe {
         map2check_map_malloc(addr(0x1000), 16);
-        set_false_result(5, 1, c"main".as_ptr());
+        set_false_result(ViolatedProperty::Reachability as i32, 1, c"main".as_ptr());
         map2check_check_load(addr(0x1000), 2, 0, 4, c"main".as_ptr());
     }
     assert_violated(ViolatedProperty::Reachability, 1, "main");
@@ -1283,7 +1283,7 @@ fn sd03_later_violation_does_not_overwrite_first() {
             c"main".as_ptr(),
         );
         map2check_check_deref(std::ptr::null(), 0, 9, c"main".as_ptr());
-        set_false_result(5, 10, c"main".as_ptr());
+        set_false_result(ViolatedProperty::Reachability as i32, 10, c"main".as_ptr());
         map2check_binop_add_int(i32::MAX, 1, 11, 0, c"main".as_ptr());
     }
     assert_violated(ViolatedProperty::MemsafetyDeref, 7, "first");
@@ -1294,7 +1294,7 @@ fn sd03_later_violation_does_not_overwrite_first() {
 #[test]
 fn deref_after_free_is_invalid() {
     let _guard = fresh();
-    map2check_init();
+    map2check_init(0);
     // SAFETY: C-string literals are valid; fake addresses are never dereferenced.
     unsafe {
         map2check_map_malloc(addr(0x2000), 16);
@@ -1781,7 +1781,7 @@ fn macro_generated_exports_match_the_hand_written_header_declarations() {
 #[test]
 fn memcleanup_reports_leak_as_memcleanup_at_exit() {
     let _guard = fresh();
-    map2check_init();
+    map2check_init(0);
     map2check_set_memcleanup();
     // SAFETY: fake address is never dereferenced.
     unsafe { map2check_map_malloc(addr(0x3000), 32) };
@@ -1794,7 +1794,7 @@ fn without_memcleanup_leak_is_reported_as_memtrack_at_exit() {
     // develop: analysis_is_program_correct() of AnalysisModeMemtrack.c writes
     // FALSE_MEMTRACK; the leak check runs at exit in both modes.
     let _guard = fresh();
-    map2check_init();
+    map2check_init(0);
     // SAFETY: fake address is never dereferenced.
     unsafe { map2check_map_malloc(addr(0x3000), 32) };
     map2check_check_mem_endprog();
@@ -1830,7 +1830,7 @@ fn endprog_keeps_an_earlier_violation() {
 #[test]
 fn null_is_valid_accepts_null_load() {
     let _guard = fresh();
-    map2check_init();
+    map2check_init(0);
     map2check_set_null_is_valid();
     // SAFETY: null is never dereferenced.
     unsafe { map2check_check_load(std::ptr::null(), 3, 0, 4, c"main".as_ptr()) };
@@ -1861,7 +1861,7 @@ fn options_survive_init_and_reset() {
     let expected = (ViolatedProperty::MemsafetyMemcleanup, true);
     assert_eq!(observed_options(), expected);
 
-    map2check_init();
+    map2check_init(0);
     assert_eq!(observed_options(), expected);
 
     map2check_reset();
@@ -1874,10 +1874,24 @@ fn enable_witness_is_configuration_kept_by_init_and_reset() {
     assert!(!state::config().witness);
     map2check_enable_witness();
     assert!(state::config().witness);
-    map2check_init();
+    map2check_init(0);
     map2check_reset();
     assert!(state::config().witness);
     // Configuration only: it records nothing.
+    assert_ok();
+    assert_eq!(snapshot(|s| s.current_step()), 0);
+}
+
+/// `__m2c_rt_witness_enable` is the C ABI of the old
+/// `map2check_enable_witness` (Task 2.10): the same configuration.
+#[test]
+fn witness_enable_entry_point_turns_on_the_witness_and_init_keeps_it() {
+    let _guard = fresh();
+    assert!(!state::config().witness);
+    __m2c_rt_witness_enable();
+    assert!(state::config().witness);
+    map2check_init(0);
+    assert!(state::config().witness);
     assert_ok();
     assert_eq!(snapshot(|s| s.current_step()), 0);
 }
@@ -1958,7 +1972,7 @@ const MODES: [AnalysisMode; 6] = [
 fn start(mode: AnalysisMode) {
     state::reset();
     map2check_set_mode(mode as i32);
-    map2check_init();
+    map2check_init(0);
 }
 
 /// Runs one violating call of each check family on a fresh analysis in
@@ -2014,7 +2028,7 @@ use ViolatedProperty as P;
 fn mode_none_never_reports_memory_errors() {
     let _guard = fresh();
     map2check_set_mode(AnalysisMode::None as i32);
-    map2check_init();
+    map2check_init(0);
     // SAFETY: C-string literal is valid; fake address is never dereferenced.
     unsafe { map2check_check_deref(addr(0xdead), 0, 1, c"main".as_ptr()) };
     assert_ok();
@@ -2024,7 +2038,7 @@ fn mode_none_never_reports_memory_errors() {
 fn mode_memtrack_reports_invalid_deref() {
     let _guard = fresh();
     map2check_set_mode(AnalysisMode::Memtrack as i32);
-    map2check_init();
+    map2check_init(0);
     // SAFETY: C-string literal is valid; fake address is never dereferenced.
     unsafe { map2check_check_deref(addr(0xdead), 0, 1, c"main".as_ptr()) };
     assert_violated(ViolatedProperty::MemsafetyDeref, 1, "main");
@@ -2124,7 +2138,7 @@ fn unset_mode_keeps_every_check_active() {
     ];
     for (slot, run) in out.iter_mut().zip(runs) {
         state::reset();
-        map2check_init();
+        map2check_init(0);
         run();
         *slot = snapshot(|s| s.result.property);
     }
@@ -2174,7 +2188,7 @@ fn set_mode_is_configuration_kept_by_init_and_reset() {
     let _guard = fresh();
     for mode in MODES {
         map2check_set_mode(mode as i32);
-        map2check_init();
+        map2check_init(0);
         assert_eq!(state::config().mode, Some(mode));
         map2check_reset();
         assert_eq!(state::config().mode, Some(mode));
@@ -2185,7 +2199,7 @@ fn set_mode_is_configuration_kept_by_init_and_reset() {
 fn reset_keeps_selected_mode() {
     let _guard = fresh();
     map2check_set_mode(AnalysisMode::Overflow as i32);
-    map2check_init();
+    map2check_init(0);
     map2check_reset();
     assert_eq!(state::config().mode, Some(AnalysisMode::Overflow));
 }
@@ -2194,7 +2208,7 @@ fn reset_keeps_selected_mode() {
 fn reach_target_sets_target_reached() {
     let _guard = fresh();
     map2check_set_mode(AnalysisMode::Target as i32);
-    map2check_init();
+    map2check_init(0);
     // SAFETY: C-string literal is valid and null-terminated.
     unsafe { mark_target_reached(c"reach_error".as_ptr(), 0, 12) };
     assert_violated(ViolatedProperty::Reachability, 12, "reach_error");
@@ -2219,7 +2233,7 @@ fn reach_target_keeps_the_first_violation() {
     start(AnalysisMode::Target);
     // SAFETY: C-string literals are valid and null-terminated.
     unsafe {
-        set_false_result(0, 3, c"f".as_ptr());
+        set_false_result(ViolatedProperty::Overflow as i32, 3, c"f".as_ptr());
         map2check_reach_target(c"reach_error".as_ptr(), 0, 12);
     }
     assert_violated(ViolatedProperty::Overflow, 3, "f");
@@ -2242,11 +2256,11 @@ fn reach_target_works_in_every_mode_and_accepts_null_name() {
 fn set_false_result_accepts_the_appended_properties() {
     let _guard = fresh();
     // SAFETY: C-string literal is valid and null-terminated.
-    unsafe { set_false_result(8, 4, c"main".as_ptr()) };
+    unsafe { set_false_result(ViolatedProperty::Assert as i32, 4, c"main".as_ptr()) };
     assert_violated(ViolatedProperty::Assert, 4, "main");
     state::reset();
     // SAFETY: as above.
-    unsafe { set_false_result(9, 0, c"main".as_ptr()) };
+    unsafe { set_false_result(ViolatedProperty::Unknown as i32, 0, c"main".as_ptr()) };
     assert_violated(ViolatedProperty::Unknown, 0, "main");
 }
 
@@ -2423,11 +2437,13 @@ fn memtrack_mode_reports_any_leak_reachable_or_not() {
 mod wasm {
     use super::*;
     use crate::wasm::{
+        __m2c_rt_wasm_allocate_funcref_table, __m2c_rt_wasm_allocate_memory, __m2c_rt_wasm_free,
+        __m2c_rt_wasm_free_funcref_table, __m2c_rt_wasm_free_memory, __m2c_rt_wasm_grow_memory,
+        __m2c_rt_wasm_init, __m2c_rt_wasm_is_initialized, __m2c_rt_wasm_trap,
         map2check_wasm_check_access, map2check_wasm_free, map2check_wasm_malloc,
-        w2c_wasi__snapshot__preview1_proc_exit, wasm_rt_allocate_funcref_table,
-        wasm_rt_allocate_memory, wasm_rt_free, wasm_rt_free_funcref_table, wasm_rt_free_memory,
-        wasm_rt_funcref_table_t, wasm_rt_grow_memory, wasm_rt_init, wasm_rt_is_initialized,
-        wasm_rt_memory_t,
+        wasm_rt_allocate_funcref_table, wasm_rt_allocate_memory, wasm_rt_free,
+        wasm_rt_free_funcref_table, wasm_rt_free_memory, wasm_rt_funcref_table_t,
+        wasm_rt_grow_memory, wasm_rt_init, wasm_rt_is_initialized, wasm_rt_memory_t,
     };
 
     fn started(mode: Option<AnalysisMode>) {
@@ -2436,7 +2452,7 @@ mod wasm {
         if let Some(m) = mode {
             map2check_set_mode(m as i32);
         }
-        map2check_init();
+        map2check_init(0);
     }
 
     fn mem() -> wasm_rt_memory_t {
@@ -2639,7 +2655,7 @@ mod wasm {
         let _guard = fresh();
         started(Some(AnalysisMode::Memtrack));
         map2check_wasm_malloc(0x1000, 16);
-        map2check_init();
+        map2check_init(0);
         assert!(snapshot(|s| s.wasm_allocs.is_empty()));
         map2check_wasm_malloc(0x1000, 16);
         map2check_reset();
@@ -2738,6 +2754,8 @@ mod wasm {
     fn rt_init_free_and_is_initialized_follow_the_stub() {
         // The stub is "always initialised for KLEE": true from the start,
         // false after wasm_rt_free, true again after wasm_rt_init.
+        let _g = INIT_FLAG.lock().unwrap_or_else(|e| e.into_inner());
+        wasm_rt_init();
         assert!(wasm_rt_is_initialized());
         wasm_rt_free();
         assert!(!wasm_rt_is_initialized());
@@ -2745,10 +2763,171 @@ mod wasm {
         assert!(wasm_rt_is_initialized());
     }
 
+    // ── __m2c_rt_wasm_* (the core entry points of WasmRuntimeStubs.ll) ─────
+    //
+    // The IR module defines the C names `wasm_rt_*` and forwards each one to
+    // `__m2c_rt_wasm_*`; the expectations are those of WasmRuntimeStubs.c
+    // (line numbers of the develop copy cited per test). The descriptors
+    // cross the C ABI as `void *`.
+
+    fn p(m: &mut wasm_rt_memory_t) -> *mut std::os::raw::c_void {
+        (m as *mut wasm_rt_memory_t).cast()
+    }
+
     #[test]
-    fn rt_proc_exit_is_a_no_op() {
-        // SAFETY: the instance is unused.
-        unsafe { w2c_wasi__snapshot__preview1_proc_exit(std::ptr::null_mut(), 7) };
+    fn m2c_rt_wasm_allocate_memory_zeroes_and_sets_every_field() {
+        // WasmRuntimeStubs.c:22-35: calloc(1, page_size * initial_pages); data_end,
+        // page_size, size, pages and max_pages set; is64 untouched.
+        let mut m = mem();
+        m.is64 = true;
+        // SAFETY: `m` is a valid descriptor; freed below.
+        unsafe { __m2c_rt_wasm_allocate_memory(p(&mut m), 2, 5, false, 65536) };
+        assert!(!m.data.is_null());
+        assert_eq!(
+            (m.size, m.pages, m.max_pages, m.page_size),
+            (2 * 65536, 2, 5, 65536)
+        );
+        assert!(m.is64, "is64 is not written (WasmRuntimeStubs.c:34)");
+        // SAFETY: data_end is one past the block that data starts.
+        assert_eq!(unsafe { m.data.add(m.size as usize) }, m.data_end);
+        // SAFETY: the block is `size` bytes long and calloc'd.
+        assert!((0..m.size as usize).all(|i| unsafe { *m.data.add(i) } == 0));
+        // SAFETY: allocated above.
+        unsafe { __m2c_rt_wasm_free_memory(p(&mut m)) };
+    }
+
+    #[test]
+    fn m2c_rt_wasm_grow_memory_returns_old_pages_zero_fills_and_fails_with_uint32_max() {
+        // WasmRuntimeStubs.c:41-63.
+        let mut m = mem();
+        // SAFETY: valid descriptor, freed below.
+        unsafe {
+            __m2c_rt_wasm_allocate_memory(p(&mut m), 1, 3, false, 65536);
+            *m.data = 0xAA;
+            assert_eq!(__m2c_rt_wasm_grow_memory(p(&mut m), 0), 1, ":47-49");
+            assert_eq!(__m2c_rt_wasm_grow_memory(p(&mut m), 1), 1, ":62");
+            assert_eq!((m.pages, m.size), (2, 2 * 65536));
+            assert_eq!(*m.data, 0xAA, "old contents kept (realloc)");
+            assert_eq!(*m.data.add(65536), 0, "new pages zeroed (:57)");
+            assert_eq!(m.data.add(m.size as usize), m.data_end, ":59");
+            let fail = u64::from(u32::MAX);
+            assert_eq!(
+                __m2c_rt_wasm_grow_memory(p(&mut m), 2),
+                fail,
+                "past max_pages (:44-46)"
+            );
+            assert_eq!(
+                __m2c_rt_wasm_grow_memory(p(&mut m), u64::MAX),
+                fail,
+                "wrap (:44)"
+            );
+            assert_eq!(m.pages, 2, "a failed grow changes nothing");
+            m.page_size = 0;
+            assert_eq!(__m2c_rt_wasm_grow_memory(p(&mut m), 1), 2);
+            assert_eq!(m.size, 3 * 65536, "zero page_size defaults to 64 KiB (:50)");
+            __m2c_rt_wasm_free_memory(p(&mut m));
+        }
+    }
+
+    #[test]
+    fn m2c_rt_wasm_free_memory_nulls_the_data_and_zeroes_the_size() {
+        // WasmRuntimeStubs.c:66-70: pages and max_pages are left as they were.
+        let mut m = mem();
+        // SAFETY: valid descriptor.
+        unsafe {
+            __m2c_rt_wasm_allocate_memory(p(&mut m), 1, 3, false, 65536);
+            __m2c_rt_wasm_free_memory(p(&mut m));
+        }
+        assert!(m.data.is_null());
+        assert_eq!((m.size, m.pages, m.max_pages), (0, 1, 3));
+    }
+
+    #[test]
+    fn m2c_rt_wasm_funcref_table_allocates_and_frees() {
+        // WasmRuntimeStubs.c:73-84 (element size: SD-19).
+        // SAFETY: an all-zero table descriptor is valid.
+        let mut t: wasm_rt_funcref_table_t = unsafe { std::mem::zeroed() };
+        let tp: *mut std::os::raw::c_void = (&mut t as *mut wasm_rt_funcref_table_t).cast();
+        // SAFETY: valid descriptor, freed below.
+        unsafe { __m2c_rt_wasm_allocate_funcref_table(tp, 4, 10) };
+        assert!(!t.data.is_null());
+        assert_eq!(
+            (t.size, t.max_size),
+            (4, 0),
+            "max_size is not written (:77)"
+        );
+        // SAFETY: 4 calloc'd elements.
+        unsafe {
+            assert!((*t.data.add(3)).module_instance.is_null());
+            __m2c_rt_wasm_free_funcref_table(tp);
+        }
+        assert!(t.data.is_null(), ":83");
+        assert_eq!(t.size, 4, "size is not reset (:81-84)");
+    }
+
+    const TRAP_CHILD_ENV: &str = "M2C_WASM_TRAP_CHILD";
+
+    /// Runs this test in a child process (the trap aborts) and returns its
+    /// end signal and the files it wrote.
+    fn trap_child(case: &str) -> (Option<i32>, Vec<String>, String) {
+        use std::os::unix::process::ExitStatusExt;
+        let dir = tempfile::tempdir().unwrap();
+        let out = std::process::Command::new(std::env::current_exe().unwrap())
+            .args(["--exact", "ffi::tests::wasm::m2c_rt_wasm_trap_aborts"])
+            .args(["--nocapture", "--test-threads=1"])
+            .env(TRAP_CHILD_ENV, case)
+            .env(crate::output::termination::OUTPUT_DIR_ENV, dir.path())
+            .output()
+            .unwrap();
+        let mut files: Vec<String> = std::fs::read_dir(dir.path())
+            .unwrap()
+            .map(|e| e.unwrap().file_name().into_string().unwrap())
+            .collect();
+        files.sort();
+        let unknown = std::fs::read_to_string(dir.path().join("map2check_property__unknown"))
+            .unwrap_or_default();
+        (out.status.signal(), files, unknown)
+    }
+
+    #[test]
+    fn m2c_rt_wasm_trap_aborts() {
+        // WasmRuntimeStubs.c:110-116: map2check_error() aborts; it never
+        // returns. SD-19: with a mode set the verdict is UNKNOWN (the file
+        // develop's map2check_error leaves for the frontend).
+        if let Some(case) = std::env::var_os(TRAP_CHILD_ENV) {
+            started((case == "mode").then_some(AnalysisMode::Memtrack));
+            __m2c_rt_wasm_trap(3);
+            println!("returned");
+            return;
+        }
+        let (signal, files, unknown) = trap_child("mode");
+        assert_eq!(signal, Some(6));
+        assert_eq!(files, ["map2check_property__unknown"]);
+        assert_eq!(unknown, "UNKNOWN\n");
+        let (signal, files, _) = trap_child("no-mode");
+        assert_eq!(signal, Some(6), "aborts with no mode too");
+        assert!(
+            files.is_empty(),
+            "nothing is written without a mode: {files:?}"
+        );
+    }
+
+    /// The initialised flag is one process-wide static: the tests that flip it
+    /// take this lock.
+    static INIT_FLAG: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+    #[test]
+    fn m2c_rt_wasm_init_free_and_is_initialized_follow_the_stub() {
+        // WasmRuntimeStubs.c:96-108: initialised from the start, false after
+        // wasm_rt_free, true after wasm_rt_init, and init/free repeat freely.
+        let _g = INIT_FLAG.lock().unwrap_or_else(|e| e.into_inner());
+        __m2c_rt_wasm_init();
+        __m2c_rt_wasm_free();
+        __m2c_rt_wasm_free();
+        assert!(!__m2c_rt_wasm_is_initialized());
+        __m2c_rt_wasm_init();
+        __m2c_rt_wasm_init();
+        assert!(__m2c_rt_wasm_is_initialized());
     }
 }
 
@@ -2785,14 +2964,14 @@ fn alloca_of(address: usize, size: i32, primitive: i32) {
 #[test]
 fn container_is_empty_initially() {
     let _guard = fresh();
-    map2check_init();
+    map2check_init(0);
     assert_eq!(snapshot(|s| s.memtrack.len()), 0);
 }
 
 #[test]
 fn container_add_item_increases_size() {
     let _guard = fresh();
-    map2check_init();
+    map2check_init(0);
     malloc_of(0x1000, 4);
     assert_eq!(snapshot(|s| s.memtrack.len()), 1);
 }
@@ -2800,7 +2979,7 @@ fn container_add_item_increases_size() {
 #[test]
 fn container_added_item_is_set() {
     let _guard = fresh();
-    map2check_init();
+    map2check_init(0);
     malloc_of(42, 4);
     assert_eq!(only_memtrack().points_to, 42);
 }
@@ -2808,7 +2987,7 @@ fn container_added_item_is_set() {
 #[test]
 fn container_multiple_items_added_do_not_break() {
     let _guard = fresh();
-    map2check_init();
+    map2check_init(0);
     let n = 10_000usize;
     for i in 0..n {
         malloc_of(n - i, 4);
@@ -2997,4 +3176,1971 @@ fn memtrack_release_after_calloc_leaves_no_leak() {
     free_resolved(0x1000);
     map2check_check_mem_endprog();
     assert_ok();
+}
+
+// ── Map2CheckFunctions, TrackBBLog and PropertyGenerator (Task 2.1) ─────────
+//
+// The C ABI of `Map2CheckFunctions.c`, `TrackBBLog.c` and
+// `PropertyGenerator.c` of Map2Check `develop`. Exports that end the run or
+// write files with a mode set are pinned in `ffi_golden_tests.rs`, in a
+// child process; these tests pin the effect on the analysis state.
+
+#[test]
+fn map2check_init_takes_the_c_sv_comp_argument_and_starts_clean() {
+    let _guard = fresh();
+    // `Map2CheckFunctions.c:29-40`: `isSvComp` only sets `sv_comp`, which
+    // nothing reads; any value starts the same clean analysis.
+    for is_sv_comp in [0, 1, -7] {
+        // SAFETY: fake address is never dereferenced.
+        unsafe { map2check_map_malloc(addr(0x1000), 8) };
+        // SAFETY: C-string literal is valid and null-terminated.
+        unsafe { map2check_track_bb(3, c"main".as_ptr()) };
+        map2check_next_current_step();
+        map2check_init(is_sv_comp);
+        assert_ok();
+        snapshot(|s| {
+            assert!(s.memtrack.is_empty() && s.bbtrack.is_empty());
+            assert_eq!(s.current_step(), 0);
+        });
+        assert_eq!(map2check_get_current_step(), 0);
+    }
+}
+
+#[test]
+fn map2check_get_current_step_is_the_c_step_counter() {
+    let _guard = fresh();
+    map2check_init(0);
+    // `Map2CheckFunctions.c:30,42-43`: 0 after init, +1 per
+    // `map2check_next_current_step`, and nothing else moves it.
+    assert_eq!(map2check_get_current_step(), 0);
+    // SAFETY: C-string literal is valid; fake address is never dereferenced.
+    unsafe {
+        map2check_track_bb(3, c"main".as_ptr());
+        map2check_map_malloc(addr(0x1000), 8);
+    }
+    assert_eq!(map2check_get_current_step(), 0);
+    map2check_next_current_step();
+    map2check_next_current_step();
+    assert_eq!(map2check_get_current_step(), 2);
+    assert_eq!(map2check_get_current_step(), 2, "ler não avança");
+    map2check_init(0);
+    assert_eq!(map2check_get_current_step(), 0);
+}
+
+#[test]
+fn map2check_next_current_step_wraps_like_c_unsigned() {
+    let _guard = fresh();
+    map2check_init(0);
+    state::with_state(|s| {
+        s.c_step = u32::MAX;
+        Ok(())
+    })
+    .unwrap();
+    map2check_next_current_step();
+    assert_eq!(map2check_get_current_step(), 0);
+}
+
+#[test]
+fn map2check_track_bb_appends_each_line_once() {
+    let _guard = fresh();
+    map2check_init(0);
+    // `Map2CheckFunctions.c:49-55`: a row is appended only when
+    // `is_in_tracked` finds no row of that line; the first name stays.
+    // SAFETY: C-string literals are valid and null-terminated.
+    unsafe {
+        map2check_track_bb(3, c"main".as_ptr());
+        map2check_track_bb(4, c"main".as_ptr());
+        map2check_track_bb(3, c"other".as_ptr());
+        map2check_track_bb(u32::MAX, c"f".as_ptr());
+    }
+    let rows = snapshot(|s| {
+        s.bbtrack
+            .iter()
+            .map(|r| (r.line, r.function_name.clone()))
+            .collect::<Vec<_>>()
+    });
+    assert_eq!(
+        rows,
+        [
+            (3, "main".to_owned()),
+            (4, "main".to_owned()),
+            (u32::MAX, "f".to_owned())
+        ]
+    );
+    assert_eq!(map2check_is_in_trackbb_container(4), 1);
+    assert_ok();
+}
+
+#[test]
+fn map2check_track_bb_accepts_null_function_name() {
+    let _guard = fresh();
+    map2check_init(0);
+    // SAFETY: null is an accepted function_name (SD-09).
+    unsafe { map2check_track_bb(9, std::ptr::null()) };
+    assert_eq!(
+        snapshot(|s| s
+            .bbtrack
+            .iter()
+            .map(|r| r.function_name.clone())
+            .collect::<Vec<_>>()),
+        [String::new()]
+    );
+}
+
+#[test]
+fn map2check_target_function_records_target_reached() {
+    let _guard = fresh();
+    map2check_init(0);
+    // `Map2CheckFunctions.c:61-65`: TARGET_REACHED at `line` in `func_name`;
+    // `scope` is not used. Unset mode: recorded, the call returns (SD-15).
+    // SAFETY: C-string literal is valid and null-terminated.
+    unsafe { map2check_target_function(c"reach_error".as_ptr(), 3, 22) };
+    assert_violated(ViolatedProperty::Reachability, 22, "reach_error");
+    // SAFETY: as above; the first violation is final (SD-03).
+    unsafe { map2check_target_function(c"other".as_ptr(), 0, 30) };
+    assert_violated(ViolatedProperty::Reachability, 22, "reach_error");
+}
+
+#[test]
+fn map2check_target_function_accepts_null_name() {
+    let _guard = fresh();
+    start(AnalysisMode::Target);
+    // SAFETY: null is an accepted name (SD-09).
+    unsafe { map2check_target_function(std::ptr::null(), 0, 5) };
+    assert_violated(ViolatedProperty::Reachability, 5, "");
+}
+
+#[test]
+fn map2check_destroy_releases_the_block_log_and_the_mode_containers_once() {
+    let _guard = fresh();
+    start(AnalysisMode::Memtrack);
+    // SAFETY: C-string literal is valid; fake address is never dereferenced.
+    unsafe {
+        map2check_track_bb(3, c"main".as_ptr());
+        map2check_map_malloc(addr(0x1000), 8);
+    }
+    // `Map2CheckFunctions.c:77-87`: frees the basic-block log, then
+    // `analysis_destroy` (memtrack frees its logs), once.
+    map2check_destroy();
+    snapshot(|s| {
+        assert!(s.bbtrack.is_empty());
+        assert!(s.memtrack.is_empty());
+        assert!(s.destroyed);
+    });
+    // SAFETY: as above.
+    unsafe { map2check_track_bb(4, c"main".as_ptr()) };
+    map2check_destroy();
+    assert_eq!(
+        snapshot(|s| s.bbtrack.len()),
+        1,
+        "a segunda chamada não faz nada"
+    );
+    assert_ok();
+}
+
+#[test]
+fn map2check_destroy_keeps_records_of_modes_without_containers() {
+    let _guard = fresh();
+    start(AnalysisMode::Assert);
+    // SAFETY: fake address is never dereferenced.
+    unsafe { map2check_map_malloc(addr(0x1000), 8) };
+    map2check_destroy();
+    // AnalysisModeAssert.c:33-35: `analysis_destroy` does nothing.
+    assert_eq!(snapshot(|s| s.memtrack.len()), 1);
+}
+
+#[test]
+fn map2check_exit_without_mode_runs_the_verdict_and_returns() {
+    let _guard = fresh();
+    map2check_init(0);
+    // SAFETY: fake address is never dereferenced.
+    unsafe { map2check_map_malloc(addr(0x1000), 8) };
+    // `Map2CheckFunctions.c:89-92`: with no error, the verdict of the mode
+    // runs. Unset mode: recorded, no files, no abort (SD-03, SD-14).
+    map2check_exit();
+    assert_violated(ViolatedProperty::MemsafetyMemtrack, 0, "");
+    assert!(snapshot(|s| s.destroyed), "map2check_destroy roda");
+}
+
+#[test]
+fn map2check_exit_skips_the_verdict_after_an_error() {
+    let _guard = fresh();
+    map2check_init(0);
+    // SAFETY: fake address is never dereferenced.
+    unsafe { map2check_map_malloc(addr(0x1000), 8) };
+    // `:90`: `analysis_is_program_correct` runs only when `gotError` is
+    // FALSE; `map2check_error` sets it (`:72-75`).
+    map2check_error();
+    assert!(snapshot(|s| s.got_error));
+    assert!(
+        snapshot(|s| s.result.ok),
+        "nenhuma propriedade é registrada"
+    );
+}
+
+#[test]
+fn map2check_error_without_mode_returns() {
+    let _guard = fresh();
+    map2check_init(0);
+    map2check_error();
+    snapshot(|s| assert!(s.got_error && s.destroyed));
+    map2check_init(0);
+    assert!(!snapshot(|s| s.got_error), "map2check_init recomeça");
+}
+
+#[test]
+fn write_property_without_output_directory_changes_nothing() {
+    let _guard = fresh();
+    map2check_init(0);
+    // A test build without `MAP2CHECK_TEST_OUTPUT_DIR` writes nowhere; the
+    // export never touches the analysis state (`PropertyGenerator.c:50-106`
+    // only writes files). Files: `ffi_golden_tests.rs`.
+    // SAFETY: C-string literal is valid and null-terminated.
+    unsafe { write_property(ViolatedProperty::MemsafetyFree as i32, 7, c"main".as_ptr()) };
+    assert_ok();
+}
+
+#[test]
+fn set_false_result_takes_the_c_enum_values() {
+    let _guard = fresh();
+    // `Map2CheckTypes.h:80-91`: UNKNOWN = 1, FALSE_OVERFLOW = 6.
+    // SAFETY: C-string literal is valid and null-terminated.
+    unsafe { set_false_result(1, 4, c"main".as_ptr()) };
+    assert_violated(ViolatedProperty::Unknown, 4, "main");
+    map2check_reset();
+    // SAFETY: as above.
+    unsafe { set_false_result(6, 5, c"main".as_ptr()) };
+    assert_violated(ViolatedProperty::Overflow, 5, "main");
+    map2check_reset();
+    // SAFETY: as above. 10 is `Concurrency`, 11 is no value.
+    unsafe { set_false_result(10, 6, c"main".as_ptr()) };
+    assert_violated(ViolatedProperty::Concurrency, 6, "main");
+    map2check_reset();
+    // SAFETY: as above.
+    unsafe { set_false_result(11, 6, c"main".as_ptr()) };
+    assert_ok();
+}
+
+#[test]
+fn non_utf8_function_name_is_kept_not_dropped() {
+    let _guard = fresh();
+    // develop prints the name with `%s`; an invalid UTF-8 byte once turned
+    // the whole name into "". The valid parts are kept now, and the invalid
+    // byte becomes U+FFFD.
+    // SAFETY: C-string literal is valid and null-terminated.
+    unsafe { set_false_result(7, 4, c"ma\xffin".as_ptr()) };
+    assert_violated(ViolatedProperty::Assert, 4, "ma\u{FFFD}in");
+}
+
+#[test]
+fn get_current_property_returns_the_c_enum_value() {
+    let _guard = fresh();
+    // SAFETY: C-string literal is valid and null-terminated.
+    unsafe { set_false_result(3, 1, c"f".as_ptr()) };
+    assert_eq!(get_current_property() as i32, 3, "FALSE_DEREF");
+}
+
+#[test]
+fn m2c_rt_witness_entry_points_without_output_directory_change_nothing() {
+    let _guard = fresh();
+    map2check_init(0);
+    // SAFETY: C-string literal is valid; a NULL log pointer is accepted (D7).
+    unsafe {
+        map2check_track_bb(3, c"main".as_ptr());
+        __m2c_rt_witness_generate_aux_files(std::ptr::null_mut(), 1);
+    }
+    __m2c_rt_witness_generate_confirmation_file();
+    assert_ok();
+    assert_eq!(snapshot(|s| s.bbtrack.len()), 1);
+}
+
+// ── C runtime ABI: NonDetLog ────────────────────────────────────────────────
+//
+// `map2check_nondet_<t>` of develop's `NonDetLog.c`: each call appends a row
+// that takes `map2check_get_current_step()` and then advances it
+// (`:96-113`), and `nondet_log_to_file` writes `klee_log.csv` from the rows.
+
+use crate::nondet::c_log::{self, CNondetCall};
+
+fn c_nondet_rows() -> Vec<CNondetCall> {
+    snapshot(|s| s.c_nondet.clone())
+}
+
+/// Calls `$export` with the extreme `$value` of its width and sign, reads the
+/// row back and compares the stored bits, the type number and the CSV line
+/// that `nondet_log_to_file` prints for it.
+macro_rules! nondet_roundtrip {
+    ($test:ident, $call:expr, $value:expr, $kind:expr, $bits:expr, $csv_value:expr) => {
+        #[test]
+        fn $test() {
+            let _guard = fresh();
+            map2check_init(0);
+            // `$call` is a closure over the export under test.
+            let call = $call;
+            call($value, c"main".as_ptr());
+            let rows = c_nondet_rows();
+            assert_eq!(rows.len(), 1);
+            let row = &rows[0];
+            assert_eq!(row.kind, $kind);
+            assert_eq!(row.value_bits(), $bits);
+            assert_eq!((row.line, row.scope, row.step), (7, 3, 0));
+            assert_eq!(row.function_name(), b"main");
+            assert_eq!(map2check_get_current_step(), 1);
+            assert_eq!(
+                String::from_utf8(row.csv_row(0)).unwrap(),
+                format!("0;7;3;main;0;{};{}\n", $csv_value, $kind)
+            );
+        }
+    };
+}
+
+// `enum NONDET_TYPE` numbers: Map2CheckTypes.h:41-58.
+nondet_roundtrip!(
+    nondet_roundtrip_int,
+    |v, n| // SAFETY: `n` is a valid C string.
+        unsafe { map2check_nondet_int(7, 3, v, n) },
+    i32::MIN,
+    0,
+    0x8000_0000,
+    "-2147483648"
+);
+nondet_roundtrip!(
+    nondet_roundtrip_char,
+    |v, n| // SAFETY: `n` is a valid C string.
+        unsafe { map2check_nondet_char(7, 3, v, n) },
+    -128,
+    1,
+    0xffff_ff80,
+    "-128"
+);
+nondet_roundtrip!(
+    nondet_roundtrip_pointer,
+    |v, n| // SAFETY: `n` is a valid C string.
+        unsafe { map2check_nondet_pointer(7, 3, v, n) },
+    i32::MIN,
+    2,
+    0x8000_0000,
+    "-2147483648"
+);
+nondet_roundtrip!(
+    nondet_roundtrip_ushort,
+    |v, n| // SAFETY: `n` is a valid C string.
+        unsafe { map2check_nondet_ushort(7, 3, v, n) },
+    65535,
+    3,
+    65535,
+    "65535"
+);
+nondet_roundtrip!(
+    nondet_roundtrip_long,
+    |v, n| // SAFETY: `n` is a valid C string.
+        unsafe { map2check_nondet_long(7, 3, v, n) },
+    i32::MIN,
+    4,
+    0x8000_0000,
+    "-2147483648"
+);
+nondet_roundtrip!(
+    nondet_roundtrip_unsigned,
+    |v, n| // SAFETY: `n` is a valid C string.
+        unsafe { map2check_nondet_unsigned(7, 3, v, n) },
+    u32::MAX,
+    5,
+    0xffff_ffff,
+    "4294967295"
+);
+nondet_roundtrip!(
+    nondet_roundtrip_ulong,
+    |v, n| // SAFETY: `n` is a valid C string.
+        unsafe { map2check_nondet_ulong(7, 3, v, n) },
+    -1,
+    6,
+    0xffff_ffff,
+    "-1"
+);
+nondet_roundtrip!(
+    nondet_roundtrip_bool,
+    |v, n| // SAFETY: `n` is a valid C string.
+        unsafe { map2check_nondet_bool(7, 3, v, n) },
+    1,
+    7,
+    1,
+    "1"
+);
+nondet_roundtrip!(
+    nondet_roundtrip_uchar,
+    |v, n| // SAFETY: `n` is a valid C string.
+        unsafe { map2check_nondet_uchar(7, 3, v, n) },
+    255,
+    8,
+    255,
+    "255"
+);
+nondet_roundtrip!(
+    nondet_roundtrip_pchar,
+    |v, n| // SAFETY: `n` is a valid C string.
+        unsafe { map2check_nondet_pchar(7, 3, v, n) },
+    i32::MAX,
+    9,
+    0x7fff_ffff,
+    "2147483647"
+);
+nondet_roundtrip!(
+    nondet_roundtrip_size_t,
+    |v, n| // SAFETY: `n` is a valid C string.
+        unsafe { map2check_nondet_size_t(7, 3, v, n) },
+    i32::MAX,
+    10,
+    0x7fff_ffff,
+    "2147483647"
+);
+nondet_roundtrip!(
+    nondet_roundtrip_loff_t,
+    |v, n| // SAFETY: `n` is a valid C string.
+        unsafe { map2check_nondet_loff_t(7, 3, v, n) },
+    i32::MIN,
+    11,
+    0x8000_0000,
+    "-2147483648"
+);
+nondet_roundtrip!(
+    nondet_roundtrip_sector_t,
+    |v, n| // SAFETY: `n` is a valid C string.
+        unsafe { map2check_nondet_sector_t(7, 3, v, n) },
+    i32::MAX,
+    12,
+    0x7fff_ffff,
+    "2147483647"
+);
+nondet_roundtrip!(
+    nondet_roundtrip_uint,
+    |v, n| // SAFETY: `n` is a valid C string.
+        unsafe { map2check_nondet_uint(7, 3, v, n) },
+    -1,
+    13,
+    0xffff_ffff,
+    "-1"
+);
+nondet_roundtrip!(
+    nondet_roundtrip_short,
+    |v, n| // SAFETY: `n` is a valid C string.
+        unsafe { map2check_nondet_short(7, 3, v, n) },
+    -32768,
+    14,
+    0xffff_8000,
+    "-32768"
+);
+nondet_roundtrip!(
+    nondet_roundtrip_double,
+    |v, n| // SAFETY: `n` is a valid C string.
+        unsafe { map2check_nondet_double(7, 3, v, n) },
+    f64::MAX,
+    15,
+    f64::MAX.to_bits(),
+    "179769313486231570814527423731704356798070567525844996598917476803157260780028538760589558632766878171540458953514382464234321326889464182768467546703537516986049910576551282076245490090389328944075868508455133942304583236903222948165808559332123348274797826204144723168738177180919299881250404026184124858368.000000"
+);
+nondet_roundtrip!(
+    nondet_roundtrip_float,
+    |v, n| // SAFETY: `n` is a valid C string.
+        unsafe { map2check_nondet_float(7, 3, v, n) },
+    f64::from(f32::MAX),
+    16,
+    f64::from(f32::MAX).to_bits(),
+    "3.40282347e+38"
+);
+nondet_roundtrip!(
+    nondet_roundtrip_longlong,
+    |v, n| // SAFETY: `n` is a valid C string.
+        unsafe { map2check_nondet_longlong(7, 3, v, n) },
+    i64::MIN,
+    17,
+    1 << 63,
+    "-9223372036854775808"
+);
+nondet_roundtrip!(
+    nondet_roundtrip_ulonglong,
+    |v, n| // SAFETY: `n` is a valid C string.
+        unsafe { map2check_nondet_ulonglong(7, 3, v, n) },
+    u64::MAX,
+    18,
+    u64::MAX,
+    "18446744073709551615"
+);
+nondet_roundtrip!(
+    nondet_roundtrip_u8,
+    |v, n| // SAFETY: `n` is a valid C string.
+        unsafe { map2check_nondet_u8(7, 3, v, n) },
+    255,
+    19,
+    255,
+    "255"
+);
+nondet_roundtrip!(
+    nondet_roundtrip_u16,
+    |v, n| // SAFETY: `n` is a valid C string.
+        unsafe { map2check_nondet_u16(7, 3, v, n) },
+    65535,
+    20,
+    65535,
+    "65535"
+);
+// U32 prints through `as_unsigned` like UNSIGNED (NonDetLog.c:91).
+nondet_roundtrip!(
+    nondet_roundtrip_u32,
+    |v, n| // SAFETY: `n` is a valid C string.
+        unsafe { map2check_nondet_u32(7, 3, v, n) },
+    -1,
+    21,
+    0xffff_ffff,
+    "4294967295"
+);
+nondet_roundtrip!(
+    nondet_roundtrip_memory_byte,
+    |v, n| // SAFETY: `n` is a valid C string.
+        unsafe { map2check_nondet_memory_byte(7, 3, v, n) },
+    255,
+    22,
+    255,
+    "255"
+);
+
+#[test]
+fn nondet_calls_take_the_step_then_advance_it() {
+    let _guard = fresh();
+    map2check_init(0);
+    // `NonDetLog.c:96-113`: the row takes `map2check_get_current_step()`, and
+    // `helper_map2check_nondet_append_element` then advances it.
+    // SAFETY: C-string literals are valid and null-terminated.
+    unsafe {
+        map2check_nondet_int(1, 0, 10, c"main".as_ptr());
+        map2check_next_current_step();
+        map2check_nondet_int(2, 0, 11, c"main".as_ptr());
+    }
+    let steps: Vec<u32> = c_nondet_rows().iter().map(|r| r.step).collect();
+    assert_eq!(steps, [0, 2]);
+    assert_eq!(map2check_get_current_step(), 3);
+}
+
+#[test]
+fn nondet_function_name_is_cut_at_35_bytes_and_null_is_empty() {
+    let _guard = fresh();
+    map2check_init(0);
+    let long = std::ffi::CString::new("f".repeat(40)).unwrap();
+    // `strncpy(..., FUNCTION_MAX_LENGTH_NAME = 35)` and `put_string(..., 35)`
+    // (`NonDetLog.c:78,120`, `Map2CheckTypes.h:20`).
+    // SAFETY: the C string is valid; a null name is accepted.
+    unsafe {
+        map2check_nondet_int(1, 0, 1, long.as_ptr());
+        map2check_nondet_int(1, 0, 1, std::ptr::null());
+    }
+    let rows = c_nondet_rows();
+    assert_eq!(rows[0].function_name(), "f".repeat(35).as_bytes());
+    assert_eq!(rows[1].function_name(), b"");
+}
+
+#[test]
+fn nondet_log_init_and_destroy_empty_the_log_and_keep_the_step() {
+    let _guard = fresh();
+    map2check_init(0);
+    // SAFETY: C-string literal is valid and null-terminated.
+    unsafe { map2check_nondet_int(1, 0, 1, c"main".as_ptr()) };
+    assert_eq!(c_nondet_rows().len(), 1);
+    // `NonDetLog.c:150-152`: a new container, or a freed one.
+    nondet_log_init();
+    assert!(c_nondet_rows().is_empty());
+    assert_eq!(map2check_get_current_step(), 1);
+    // SAFETY: as above.
+    unsafe { map2check_nondet_int(1, 0, 1, c"main".as_ptr()) };
+    nondet_log_destroy();
+    assert!(c_nondet_rows().is_empty());
+    // `map2check_init` starts a new log too (`nondet_init`).
+    // SAFETY: as above.
+    unsafe { map2check_nondet_int(1, 0, 1, c"main".as_ptr()) };
+    map2check_init(0);
+    assert!(c_nondet_rows().is_empty());
+}
+
+#[test]
+fn nondet_log_does_not_touch_the_json_report_state() {
+    let _guard = fresh();
+    map2check_init(0);
+    // SAFETY: C-string literal is valid and null-terminated.
+    unsafe { map2check_nondet_int(1, 0, 1, c"main".as_ptr()) };
+    assert!(snapshot(
+        |s| s.nondets.is_empty() && s.legacy_nondet_logs.is_empty()
+    ));
+    assert_eq!(snapshot(|s| s.current_step()), 0);
+    assert_ok();
+}
+
+/// A row of every printing arm, in the text `nondet_log_to_file` writes.
+fn sample_log() -> Vec<CNondetCall> {
+    let rows = [
+        (0, 3, 1, 5, "main", 0xffff_fffe_u64),
+        (5, 17, 2, 9, "main", 5),
+        (21, 4, 0, 10, "f", 0xffff_ffff),
+        (15, 8, 1, 11, "g", 2.5_f64.to_bits()),
+        (16, 9, 1, 12, "g", 0.1_f64.to_bits()),
+        (17, 1, 0, 13, "h", i64::MIN as u64),
+        (18, 1, 0, 14, "h", u64::MAX),
+        (19, 2, 0, 15, "name_of_exactly_thirty_five_chars_xyz", 200),
+    ];
+    rows.iter()
+        .map(|&(kind, line, scope, step, name, bits)| {
+            CNondetCall::from_parts(kind, line, scope, step, name.as_bytes(), bits)
+        })
+        .collect()
+}
+
+#[test]
+fn klee_log_csv_matches_c_format() {
+    // `NonDetLog.c:68-112`: `index;line;scope;function;step;value;type\n`, the
+    // numbers in decimal by hand (`:20-48`). INTEGER `%d` of the int (`:106`);
+    // UNSIGNED and U32 `%u` (`:91-92`) and once, not twice (`:82-90`); DOUBLE
+    // `%lf` (`:93-95`); FLOAT `%.9g` of the double narrowed to float (`:96-100`);
+    // LONGLONG and ULONGLONG at 64 bits (`:101-105`); the name cut at 35.
+    // Row 0 is INTEGER with the bits of -2 (`%d` prints -2); the name of row 7
+    // has 37 characters and is cut at 35.
+    let expected = "\
+0;3;1;main;5;-2;0\n\
+1;17;2;main;9;5;5\n\
+2;4;0;f;10;4294967295;21\n\
+3;8;1;g;11;2.500000;15\n\
+4;9;1;g;12;0.100000001;16\n\
+5;1;0;h;13;-9223372036854775808;17\n\
+6;1;0;h;14;18446744073709551615;18\n\
+7;2;0;name_of_exactly_thirty_five_chars_x;15;200;19\n";
+    let dir = tempfile::tempdir().unwrap();
+    assert!(c_log::nondet_log_to_file(&sample_log(), dir.path()));
+    let written = std::fs::read(dir.path().join("klee_log.csv")).unwrap();
+    assert_eq!(String::from_utf8(written).unwrap(), expected);
+}
+
+#[test]
+fn nondet_log_to_file_writes_an_empty_file_for_an_empty_log_and_fails_without_a_directory() {
+    let dir = tempfile::tempdir().unwrap();
+    // `fopen("w")` creates the file even when there are no rows (`:55`).
+    assert!(c_log::nondet_log_to_file(&[], dir.path()));
+    assert_eq!(std::fs::read(dir.path().join("klee_log.csv")).unwrap(), b"");
+    // `fopen` fails: FALSE (`:56-58`).
+    assert!(!c_log::nondet_log_to_file(
+        &[],
+        &dir.path().join("does-not-exist")
+    ));
+}
+
+#[test]
+fn m2c_rt_nondet_log_to_file_writes_the_log_of_the_run() {
+    let _guard = fresh();
+    map2check_init(0);
+    // SAFETY: C-string literals are valid and null-terminated.
+    unsafe {
+        map2check_nondet_int(3, 1, -7, c"main".as_ptr());
+        map2check_nondet_unsigned(4, 1, 8, c"main".as_ptr());
+    }
+    let dir = tempfile::tempdir().unwrap();
+    std::env::set_var(crate::output::termination::OUTPUT_DIR_ENV, dir.path());
+    let ok = __m2c_rt_nondet_log_to_file();
+    std::env::remove_var(crate::output::termination::OUTPUT_DIR_ENV);
+    assert_eq!(ok, 1);
+    assert_eq!(
+        std::fs::read_to_string(dir.path().join("klee_log.csv")).unwrap(),
+        "0;3;1;main;0;-7;0\n1;4;1;main;1;8;5\n"
+    );
+}
+
+#[test]
+fn float_g9_matches_printf() {
+    // Each expected text is what glibc's `printf("%.9g", (float)d)` printed
+    // for the same `d` (clang 21 on this host).
+    let cases: [(f64, &str); 21] = [
+        (f64::from(f32::MAX), "3.40282347e+38"),
+        (1e-30_f32 as f64, "1e-30"),
+        (0.5, "0.5"),
+        (1.0, "1"),
+        (100.0, "100"),
+        (123_456_789.0, "123456792"),
+        (1e9, "1e+09"),
+        (999_999_999.0, "1e+09"),
+        (0.0001_f32 as f64, "9.99999975e-05"),
+        (0.00001_f32 as f64, "9.99999975e-06"),
+        (-0.0, "-0"),
+        (0.0, "0"),
+        (f64::from(f32::MIN_POSITIVE), "1.17549435e-38"),
+        (f64::from(1.4e-45_f32), "1.40129846e-45"),
+        (16_777_216.0, "16777216"),
+        (f64::from(0.1_f32), "0.100000001"),
+        (-2.5, "-2.5"),
+        (f64::INFINITY, "inf"),
+        (f64::NEG_INFINITY, "-inf"),
+        (f64::NAN, "nan"),
+        (99_999.999_9, "100000"),
+    ];
+    for (value, text) in cases {
+        assert_eq!(c_log::c_float_g9(value as f32), text, "{value}");
+    }
+    assert_eq!(c_log::c_float_g9(f32::from_bits(0xffc0_0000)), "-nan");
+    assert_eq!(c_log::c_float_g9(1e8_f32), "100000000");
+    assert_eq!(c_log::c_float_g9(123_456.79_f32), "123456.789");
+}
+
+#[test]
+fn nondet_log_hooks_mirror_the_klee_concretization() {
+    let _guard = fresh();
+    map2check_init(0);
+    assert_eq!(__m2c_rt_nondet_log_len(), 0);
+    // SAFETY: C-string literals are valid and null-terminated.
+    unsafe {
+        map2check_nondet_int(1, 0, -2, c"main".as_ptr());
+        map2check_nondet_double(2, 0, 1.5, c"main".as_ptr());
+        map2check_nondet_longlong(3, 0, i64::MIN, c"main".as_ptr());
+    }
+    assert_eq!(__m2c_rt_nondet_log_len(), 3);
+    // `memcpy(&symbolic, &call->value, 8)` (NonDetGeneratorKlee.c:39): the int
+    // is zero-extended by new_nondet_call's memset, the others are bit patterns.
+    assert_eq!(__m2c_rt_nondet_log_get_i64(0), 0xffff_fffe);
+    assert_eq!(__m2c_rt_nondet_log_get_i64(1), 1.5_f64.to_bits() as i64);
+    assert_eq!(__m2c_rt_nondet_log_get_i64(2), i64::MIN);
+    assert_eq!(__m2c_rt_nondet_log_get_i64(3), 0, "out of range reads 0");
+    // The write-back replaces all 8 bytes (`:42`), and the file shows it.
+    __m2c_rt_nondet_log_set_i64(0, 5);
+    __m2c_rt_nondet_log_set_i64(1, 2.5_f64.to_bits() as i64);
+    __m2c_rt_nondet_log_set_i64(2, -1);
+    __m2c_rt_nondet_log_set_i64(9, 7);
+    assert_eq!(__m2c_rt_nondet_log_len(), 3);
+    let dir = tempfile::tempdir().unwrap();
+    assert!(c_log::nondet_log_to_file(&c_nondet_rows(), dir.path()));
+    assert_eq!(
+        std::fs::read_to_string(dir.path().join("klee_log.csv")).unwrap(),
+        "0;1;0;main;0;5;0\n1;2;0;main;1;2.500000;15\n2;3;0;main;2;-1;17\n"
+    );
+}
+
+#[test]
+fn legacy_nondet_log_reaches_klee_log_csv_through_the_one_c_log_writer() {
+    use crate::output::legacy_files::LegacyLogs;
+    let _guard = fresh();
+    map2check_init(0);
+    let mut u: std::os::raw::c_uint = u32::MAX;
+    let mut d: f64 = 2.5;
+    let long_name = std::ffi::CString::new("n".repeat(40)).unwrap();
+    // SAFETY: the pointers are valid for the calls.
+    unsafe {
+        map2check_save_nondet_log_unsigned(3, 1, 5, &mut u, c"main".as_ptr());
+        map2check_save_nondet_log_double(4, 1, 15, &mut d, long_name.as_ptr());
+    }
+    let logs = snapshot(|s| LegacyLogs::replay(&s.memtrack, &s.nondets, None, false));
+    // The file the witness path writes is exactly what `c_log` formats for
+    // the rows of the legacy log: there is no second formatter.
+    let dir = tempfile::tempdir().unwrap();
+    logs.write_nondet_log(dir.path()).unwrap();
+    let mut expected = Vec::new();
+    for (i, call) in logs.nondet_calls().iter().enumerate() {
+        expected.extend_from_slice(&call.csv_row(i));
+    }
+    assert_eq!(
+        std::fs::read(dir.path().join("klee_log.csv")).unwrap(),
+        expected
+    );
+    // `strncpy(..., 35)`: the C name cut now applies to the legacy API too.
+    assert_eq!(
+        String::from_utf8(expected).unwrap(),
+        format!(
+            "0;3;1;main;0;4294967295;5\n1;4;1;{};1;2.500000;15\n",
+            "n".repeat(35)
+        )
+    );
+}
+
+// ── C runtime ABI: AnalysisModeOverflow (core entry points, D7) ─────────────
+//
+// `AnalysisModeOverflow.bc` is generated IR whose functions forward to these
+// `__m2c_rt_overflow_*` entry points (scripts/runtime-ir/gen_ll.py). The C
+// semantics are `AnalysisModeOverflow.c` of Map2Check `develop`; the files
+// they write are pinned by the golden tests (`ffi_golden_tests.rs`).
+
+/// `map2check_binop_{add,sub,mul,sdiv,srem}` of the C runtime
+/// (bodies at `AnalysisModeOverflow.c:197-217`, `:234-243`, `:250-276`).
+type RtSignedBinop = unsafe extern "C" fn(
+    i64,
+    i64,
+    std::os::raw::c_uint,
+    std::os::raw::c_uint,
+    std::os::raw::c_uint,
+    *const std::os::raw::c_char,
+);
+
+/// `map2check_binop_{add,sub,mul}_uint` (bodies at
+/// `AnalysisModeOverflow.c:224-232`, `:245-248`).
+type RtUnsignedBinop = unsafe extern "C" fn(
+    u64,
+    u64,
+    std::os::raw::c_uint,
+    std::os::raw::c_uint,
+    std::os::raw::c_uint,
+    *const std::os::raw::c_char,
+);
+
+const INT_MAX: i64 = i32::MAX as i64;
+const INT_MIN: i64 = i32::MIN as i64;
+const UINT_MAX: u64 = u32::MAX as u64;
+
+/// Calls `op` on a fresh state as the pass does (width 32, scope 0) at
+/// `line` in `main` and returns the recorded verdict.
+fn rt_signed(op: RtSignedBinop, a: i64, b: i64, width: u32, line: u32) -> Option<P> {
+    state::reset();
+    // SAFETY: C-string literal is valid and null-terminated.
+    unsafe { op(a, b, width, line, 0, c"main".as_ptr()) };
+    let result = snapshot(|s| s.result.clone());
+    if result.ok {
+        return None;
+    }
+    assert_eq!(result.line, line);
+    assert_eq!(result.function_name, "main");
+    Some(result.property)
+}
+
+#[test]
+fn overflow_rt_binops_report_the_c_tag_at_the_boundaries() {
+    let _guard = fresh();
+    let add: RtSignedBinop = __m2c_rt_overflow_map2check_binop_add;
+    let sub: RtSignedBinop = __m2c_rt_overflow_map2check_binop_sub;
+    let mul: RtSignedBinop = __m2c_rt_overflow_map2check_binop_mul;
+    let sdiv: RtSignedBinop = __m2c_rt_overflow_map2check_binop_sdiv;
+    let srem: RtSignedBinop = __m2c_rt_overflow_map2check_binop_srem;
+    // overflowError (FALSE_OVERFLOW, `:185-188`) and divisionByZeroError
+    // (FALSE_DIVBYZERO, `:192-195`) as the C binops call them (`:197-276`).
+    let cases: [(&str, RtSignedBinop, i64, i64, Option<P>); 16] = [
+        ("INT_MAX + 1", add, INT_MAX, 1, Some(P::Overflow)),
+        ("INT_MAX + 0", add, INT_MAX, 0, None),
+        ("INT_MIN - 1", sub, INT_MIN, 1, Some(P::Overflow)),
+        ("INT_MIN - 0", sub, INT_MIN, 0, None),
+        ("INT_MAX * 2", mul, INT_MAX, 2, Some(P::Overflow)),
+        ("INT_MIN * -1", mul, INT_MIN, -1, Some(P::Overflow)),
+        ("INT_MAX * -1", mul, INT_MAX, -1, None),
+        ("INT_MIN / -1", sdiv, INT_MIN, -1, Some(P::Overflow)),
+        ("INT_MIN / 1", sdiv, INT_MIN, 1, None),
+        ("7 / 0", sdiv, 7, 0, Some(P::DivByZero)),
+        ("0 / 0", sdiv, 0, 0, Some(P::DivByZero)),
+        ("7 % 0", srem, 7, 0, Some(P::DivByZero)),
+        ("INT_MIN % 0", srem, INT_MIN, 0, Some(P::DivByZero)),
+        ("INT_MIN % -1", srem, INT_MIN, -1, Some(P::Overflow)),
+        ("INT_MAX % -1", srem, INT_MAX, -1, None),
+        ("-5 % 3", srem, -5, 3, None),
+    ];
+    for (name, op, a, b, expected) in cases {
+        assert_eq!(rt_signed(op, a, b, 32, 20), expected, "{name}");
+    }
+}
+
+#[test]
+fn overflow_rt_binops_use_the_width_like_c() {
+    let _guard = fresh();
+    let add: RtSignedBinop = __m2c_rt_overflow_map2check_binop_add;
+    let sub: RtSignedBinop = __m2c_rt_overflow_map2check_binop_sub;
+    let mul: RtSignedBinop = __m2c_rt_overflow_map2check_binop_mul;
+    let sdiv: RtSignedBinop = __m2c_rt_overflow_map2check_binop_sdiv;
+    // fits_in_width (`:126-134`) after the 64-bit predicates (`:141-183`);
+    // width 0 or >= 64 means 64 bits (`:111-124`).
+    assert_eq!(rt_signed(add, 127, 1, 8, 3), Some(P::Overflow));
+    assert_eq!(rt_signed(add, 126, 1, 8, 3), None);
+    assert_eq!(rt_signed(sub, -32768, 1, 16, 3), Some(P::Overflow));
+    assert_eq!(rt_signed(add, INT_MAX, 1, 64, 3), None);
+    assert_eq!(rt_signed(add, i64::MAX, 1, 64, 3), Some(P::Overflow));
+    assert_eq!(rt_signed(add, i64::MAX, 1, 0, 3), Some(P::Overflow));
+    assert_eq!(rt_signed(mul, i64::MAX, 2, 8, 3), Some(P::Overflow));
+    assert_eq!(rt_signed(sub, i64::MIN, 1, 64, 3), Some(P::Overflow));
+    // Only the width's own minimum overflows the division (`:259`).
+    assert_eq!(rt_signed(sdiv, INT_MIN, -1, 64, 3), None);
+    assert_eq!(rt_signed(sdiv, i64::MIN, -1, 64, 3), Some(P::Overflow));
+    assert_eq!(rt_signed(sdiv, -128, -1, 8, 3), Some(P::Overflow));
+}
+
+#[test]
+fn overflow_rt_unsigned_binops_never_report_like_c() {
+    let _guard = fresh();
+    // "Unsigned wraparound is well-defined in C and is not an overflow under
+    // SV-COMP's no-overflow property, so these remain deliberate no-ops"
+    // (`AnalysisModeOverflow.c:219-248`).
+    let ops: [(&str, RtUnsignedBinop); 3] = [
+        ("add_uint", __m2c_rt_overflow_map2check_binop_add_uint),
+        ("sub_uint", __m2c_rt_overflow_map2check_binop_sub_uint),
+        ("mul_uint", __m2c_rt_overflow_map2check_binop_mul_uint),
+    ];
+    for (name, op) in ops {
+        for (a, b) in [(UINT_MAX, 1), (0, 1), (UINT_MAX, 2), (u64::MAX, u64::MAX)] {
+            state::reset();
+            // SAFETY: C-string literal is valid and null-terminated.
+            unsafe { op(a, b, 32, 20, 0, c"main".as_ptr()) };
+            assert_ok();
+            assert!(snapshot(|s| !s.got_error), "{name}({a}, {b})");
+        }
+        // A null name is accepted: the C body never reads it.
+        // SAFETY: null is allowed.
+        unsafe { op(UINT_MAX, 1, 32, 20, 0, std::ptr::null()) };
+        assert_ok();
+    }
+}
+
+#[test]
+fn overflow_rt_overflow_error_records_false_overflow() {
+    let _guard = fresh();
+    // SAFETY: C-string literal is valid and null-terminated.
+    unsafe { __m2c_rt_overflow_overflowError(12, c"f".as_ptr()) };
+    assert_violated(ViolatedProperty::Overflow, 12, "f");
+    state::reset();
+    // SAFETY: null is allowed.
+    unsafe { __m2c_rt_overflow_overflowError(13, std::ptr::null()) };
+    assert_violated(ViolatedProperty::Overflow, 13, "");
+}
+
+#[test]
+fn overflow_rt_first_violation_is_final() {
+    let _guard = fresh();
+    // SAFETY: C-string literals are valid and null-terminated.
+    unsafe {
+        __m2c_rt_overflow_map2check_binop_srem(1, 0, 32, 4, 0, c"f".as_ptr());
+        __m2c_rt_overflow_map2check_binop_add(INT_MAX, 1, 32, 9, 0, c"g".as_ptr());
+        __m2c_rt_overflow_overflowError(10, c"h".as_ptr());
+    }
+    assert_violated(ViolatedProperty::DivByZero, 4, "f");
+}
+
+#[test]
+fn overflow_rt_binops_check_whatever_mode_is_set() {
+    let _guard = fresh();
+    // The C module has no mode test: being linked is what selects it
+    // (`caller.cpp:575-612`), so the core entry points always check.
+    for mode in MODES {
+        state::reset();
+        map2check_set_mode(mode as i32);
+        map2check_init(0);
+        // SAFETY: C-string literal is valid and null-terminated.
+        unsafe { __m2c_rt_overflow_map2check_binop_add(INT_MAX, 1, 32, 4, 0, c"f".as_ptr()) };
+        assert_violated(ViolatedProperty::Overflow, 4, "f");
+    }
+}
+
+#[test]
+fn overflow_rt_analysis_entry_points_match_c() {
+    let _guard = fresh();
+    map2check_init(0);
+    // SAFETY: C-string literal is valid and null-terminated.
+    unsafe { map2check_track_bb(3, c"main".as_ptr()) };
+    // analysis_init (`:279`) is empty in C; linking the module is what picks
+    // the overflow mode, so the core entry point selects it.
+    __m2c_rt_overflow_analysis_init();
+    assert_eq!(state::config().mode, Some(AnalysisMode::Overflow));
+    // analysis_is_program_correct (`:283`): always TRUE (1).
+    assert_eq!(__m2c_rt_overflow_analysis_is_program_correct(), 1);
+    // analysis_destroy (`:281`), analysis_generate_aux_witness_files
+    // (`:285`): empty.
+    __m2c_rt_overflow_analysis_destroy();
+    __m2c_rt_overflow_analysis_generate_aux_witness_files();
+    assert_ok();
+    assert_eq!(snapshot(|s| s.bbtrack.len()), 1);
+    assert_eq!(__m2c_rt_overflow_analysis_is_program_correct(), 1);
+    // Even after a violation: the C verdict function reads no state.
+    // SAFETY: C-string literal is valid and null-terminated.
+    unsafe { __m2c_rt_overflow_overflowError(1, c"f".as_ptr()) };
+    assert_eq!(__m2c_rt_overflow_analysis_is_program_correct(), 1);
+}
+
+#[test]
+fn overflow_rt_binops_called_as_the_ir_forwarders_do() {
+    let _guard = fresh();
+    let main = c"main".as_ptr();
+    // Safe operations, each entry point called directly with the C
+    // arguments the pass gives `map2check_binop_*` (operands, width, line,
+    // scope, name).
+    // SAFETY: C-string literal is valid and null-terminated.
+    unsafe {
+        __m2c_rt_overflow_map2check_binop_add(-5, 3, 32, 1, 0, main);
+        __m2c_rt_overflow_map2check_binop_sub(-5, 3, 32, 1, 0, main);
+        __m2c_rt_overflow_map2check_binop_mul(-5, 3, 32, 1, 0, main);
+        __m2c_rt_overflow_map2check_binop_sdiv(-5, 3, 32, 1, 0, main);
+        __m2c_rt_overflow_map2check_binop_srem(-5, 3, 32, 1, 0, main);
+    }
+    __m2c_rt_overflow_map2check_binop_add_uint(UINT_MAX, 1, 32, 1, 0, main);
+    __m2c_rt_overflow_map2check_binop_sub_uint(0, 1, 32, 1, 0, main);
+    __m2c_rt_overflow_map2check_binop_mul_uint(UINT_MAX, 2, 32, 1, 0, main);
+    assert_ok();
+    // SAFETY: as above.
+    unsafe { __m2c_rt_overflow_map2check_binop_sub(INT_MIN, 1, 32, 2, 0, main) };
+    assert_violated(ViolatedProperty::Overflow, 2, "main");
+    state::reset();
+    // SAFETY: as above.
+    unsafe { __m2c_rt_overflow_map2check_binop_mul(INT_MAX, 2, 32, 3, 0, main) };
+    assert_violated(ViolatedProperty::Overflow, 3, "main");
+    state::reset();
+    // SAFETY: as above.
+    unsafe { __m2c_rt_overflow_map2check_binop_sdiv(INT_MIN, -1, 32, 4, 0, main) };
+    assert_violated(ViolatedProperty::Overflow, 4, "main");
+}
+
+// ── C runtime ABI: AnalysisModeAssert and AnalysisModeNone (core entry points, D7) ──
+//
+// `AnalysisModeAssert.bc` and `AnalysisModeNone.bc` are generated IR
+// (scripts/runtime-ir/gen_ll.py). Their `analysis_init` forwards to the
+// `__m2c_rt_<mode>_analysis_init` below, which selects the mode; the files
+// are pinned by the golden tests (`ffi_golden_tests.rs`).
+
+#[test]
+fn assert_rt_analysis_entry_points_match_c() {
+    let _guard = fresh();
+    map2check_init(0);
+    // SAFETY: C-string literal is valid and null-terminated.
+    unsafe { map2check_track_bb(3, c"main".as_ptr()) };
+    // AnalysisModeAssert.c:29-31 analysis_init is empty; linking the module
+    // picks the assert mode.
+    __m2c_rt_assert_analysis_init();
+    assert_eq!(state::config().mode, Some(AnalysisMode::Assert));
+    // :37 analysis_is_program_correct is TRUE; :33-35 and :39-41 are empty.
+    assert_eq!(__m2c_rt_assert_analysis_is_program_correct(), 1);
+    __m2c_rt_assert_analysis_destroy();
+    __m2c_rt_assert_analysis_generate_aux_witness_files();
+    assert_ok();
+    assert_eq!(snapshot(|s| s.bbtrack.len()), 1);
+    // Even after a violation: the C verdict function reads no state.
+    // SAFETY: as above.
+    unsafe { __m2c_rt_assert_map2check_assert(0, 1, c"f".as_ptr()) };
+    assert_eq!(__m2c_rt_assert_analysis_is_program_correct(), 1);
+}
+
+#[test]
+fn assert_rt_map2check_assert_zero_records_assert_and_one_does_not() {
+    let _guard = fresh();
+    map2check_init(0);
+    __m2c_rt_assert_analysis_init();
+    // AnalysisModeAssert.c:18-23: only `!condition` is a violation.
+    for condition in [1, 2, -1, i32::MAX] {
+        // SAFETY: C-string literal is valid and null-terminated.
+        unsafe { __m2c_rt_assert_map2check_assert(condition, 9, c"main".as_ptr()) };
+        assert_ok();
+    }
+    // SAFETY: as above.
+    unsafe { __m2c_rt_assert_map2check_assert(0, 21, c"main".as_ptr()) };
+    assert_violated(ViolatedProperty::Assert, 21, "main");
+    // A NULL name reads as "" (the C would crash in fprintf %s).
+    state::reset();
+    // SAFETY: NULL is accepted.
+    unsafe { __m2c_rt_assert_map2check_assert(0, 22, std::ptr::null()) };
+    assert_violated(ViolatedProperty::Assert, 22, "");
+}
+
+#[test]
+fn none_rt_analysis_init_selects_the_none_mode_and_the_verdict_is_true() {
+    let _guard = fresh();
+    map2check_init(0);
+    // AnalysisModeNone.c:11-13 is empty; REACHABILITY_MODE and
+    // COVER_BRANCHES_MODE both link this module (caller.cpp:600-612).
+    __m2c_rt_none_analysis_init();
+    assert_eq!(state::config().mode, Some(AnalysisMode::None));
+    // SAFETY: C-string literal is valid and null-terminated.
+    unsafe { map2check_target_function(c"reach_error".as_ptr(), 0, 22) };
+    assert_violated(ViolatedProperty::Reachability, 22, "reach_error");
+    // :19 analysis_is_program_correct is TRUE, :15-17 and :21-23 are empty.
+    assert_eq!(__m2c_rt_none_analysis_is_program_correct(), 1);
+    __m2c_rt_none_analysis_destroy();
+    __m2c_rt_none_analysis_generate_aux_witness_files();
+}
+
+// ── C runtime ABI: AnalysisModeMemtrack (core entry points, Task 2.5) ───────
+//
+// `AnalysisModeMemtrack.bc` forwards the C names to `__m2c_rt_memtrack_*`.
+// Each test pins the C behaviour of `AnalysisModeMemtrack.c`,
+// `AllocationLog.c`, `ListLog.c` and `HeapLog.c`: the verdict, the property
+// recorded and the rows of the three logs, as the C formats them.
+
+/// `map2check_init` (which in C calls `analysis_init`), then the module's
+/// `analysis_init`, which selects the memtrack mode.
+fn memtrack_rt() -> MutexGuard<'static, ()> {
+    let guard = fresh();
+    map2check_init(0);
+    __m2c_rt_memtrack_analysis_init();
+    guard
+}
+
+fn c_list_log() -> String {
+    snapshot(|s| String::from_utf8(s.c_memory.list_log_bytes()).unwrap())
+}
+
+fn c_allocation_log() -> String {
+    snapshot(|s| String::from_utf8(s.c_memory.allocation_log_bytes()).unwrap())
+}
+
+fn c_heap_log() -> String {
+    snapshot(|s| String::from_utf8(s.c_memory.heap_log_bytes()).unwrap())
+}
+
+fn c_error_deref() -> bool {
+    snapshot(|s| s.c_memory.error_deref())
+}
+
+/// `golden_memory()` of `tests/legacy_golden/drivers/golden.h` through the
+/// core entry points: `int *p` at 0x1000 (8 bytes), `&main` at 0x1040,
+/// `p = malloc(16)` at 0x1100.
+fn rt_prelude() {
+    // SAFETY: fake addresses are only stored and compared; names are C strings.
+    unsafe {
+        __m2c_rt_memtrack_map2check_alloca(c"p".as_ptr(), addr(0x1000), 8, 8, 10, 1);
+        __m2c_rt_memtrack_map2check_function(c"main".as_ptr(), addr(0x1040));
+        __m2c_rt_memtrack_map2check_malloc(addr(0x1100), 16);
+        __m2c_rt_memtrack_map2check_add_store_pointer(
+            addr(0x1000),
+            addr(0x1100),
+            1,
+            c"p".as_ptr(),
+            11,
+            c"main".as_ptr(),
+        );
+    }
+}
+
+#[test]
+fn memtrack_rt_analysis_init_selects_the_mode_and_starts_empty_logs() {
+    let _guard = memtrack_rt();
+    assert_eq!(state::config().mode, Some(AnalysisMode::Memtrack));
+    rt_prelude();
+    __m2c_rt_memtrack_map2check_load(addr(0x9000), 4);
+    assert!(c_error_deref());
+    // AnalysisModeMemtrack.c:125-130: new containers, ERROR_DEREF = FALSE.
+    __m2c_rt_memtrack_analysis_init();
+    assert_eq!(c_list_log(), "");
+    assert_eq!(c_allocation_log(), "");
+    assert_eq!(c_heap_log(), "");
+    assert!(!c_error_deref());
+}
+
+#[test]
+fn memtrack_rt_logs_have_the_c_rows_and_formats() {
+    let _guard = memtrack_rt();
+    rt_prelude();
+    // HeapLog.c:54-66 `%p;%s;%d\n`; map2check_function is size 1 (:393-397).
+    assert_eq!(c_heap_log(), "0x1000;p;8\n0x1040;main;1\n");
+    // AllocationLog.c:161-174 `%p;%u;%d\n`.
+    assert_eq!(c_allocation_log(), "0x1100;16;0\n");
+    // ListLog.c:138-157: id (always 0), var, points to, scope, is_free,
+    // is_dynamic, name, line, function, step (the C step counter, 0 here).
+    assert_eq!(c_list_log(), "0;0x1000;0x1100;1;0;1;p;11;main;0\n");
+    assert_eq!(map2check_get_current_step(), 1);
+}
+
+#[test]
+fn memtrack_rt_list_rows_share_the_step_counter_with_the_nondet_log() {
+    let _guard = memtrack_rt();
+    // SAFETY: C-string literal is valid.
+    unsafe { map2check_nondet_int(5, 0, 42, c"main".as_ptr()) };
+    rt_prelude();
+    assert_eq!(c_list_log(), "0;0x1000;0x1100;1;0;1;p;11;main;1\n");
+}
+
+#[test]
+fn memtrack_rt_malloc_updates_the_row_of_a_known_address_in_place() {
+    let _guard = memtrack_rt();
+    __m2c_rt_memtrack_map2check_malloc(addr(0x2000), 8);
+    __m2c_rt_memtrack_map2check_malloc(addr(0x3000), 4);
+    __m2c_rt_memtrack_map2check_malloc(addr(0x2000), 32);
+    // calloc is malloc of quantity * size (:347-349), as C int.
+    __m2c_rt_memtrack_map2check_calloc(addr(0x4000), 3, 5);
+    __m2c_rt_memtrack_map2check_calloc(addr(0x5000), 0x10000, 0x10001);
+    assert_eq!(
+        c_allocation_log(),
+        "0x2000;32;0\n0x3000;4;0\n0x4000;15;0\n0x5000;65536;0\n"
+    );
+    assert_ok();
+}
+
+#[test]
+fn memtrack_rt_malloc_of_null_is_unknown() {
+    let _guard = memtrack_rt();
+    __m2c_rt_memtrack_map2check_malloc(std::ptr::null(), 4);
+    // :317-323: write_property_unknown + map2check_error, nothing recorded.
+    assert_violated(ViolatedProperty::Unknown, 0, "");
+    assert_eq!(c_allocation_log(), "");
+    // `int addr = (long)ptr`: a block whose low 32 bits are zero is NULL too.
+    state::reset();
+    __m2c_rt_memtrack_map2check_calloc(addr(0x7_0000_0000), 1, 4);
+    assert_violated(ViolatedProperty::Unknown, 0, "");
+}
+
+#[test]
+fn memtrack_rt_non_static_alloca_multiplies_size_by_primitive() {
+    let _guard = memtrack_rt();
+    // SAFETY: fake address; C-string literal.
+    unsafe {
+        __m2c_rt_memtrack_map2check_non_static_alloca(c"vla".as_ptr(), addr(0x6000), 5, 4, 3, 1)
+    };
+    // :380-384: size * size_of_primitive bytes.
+    assert_eq!(c_heap_log(), "0x6000;vla;20\n");
+    __m2c_rt_memtrack_map2check_load(addr(0x6010), 4);
+    assert!(!c_error_deref());
+    __m2c_rt_memtrack_map2check_load(addr(0x6011), 4);
+    assert!(c_error_deref());
+}
+
+#[test]
+fn memtrack_rt_load_and_check_deref_follow_error_deref() {
+    let _guard = memtrack_rt();
+    rt_prelude();
+    // SAFETY (all calls below): fake addresses; C-string literals.
+    unsafe {
+        // Inside the stack slot, the function and the heap block: valid.
+        __m2c_rt_memtrack_map2check_load(addr(0x1000), 8);
+        __m2c_rt_memtrack_map2check_load(addr(0x1040), 1);
+        __m2c_rt_memtrack_map2check_load(addr(0x110c), 4);
+        __m2c_rt_memtrack_map2check_check_deref(14, c"main".as_ptr());
+    }
+    assert!(!c_error_deref());
+    assert_ok();
+    // One byte past the block: map2check_load only sets ERROR_DEREF (:168-174).
+    __m2c_rt_memtrack_map2check_load(addr(0x110d), 4);
+    assert!(c_error_deref());
+    assert_ok();
+    // SAFETY: as above.
+    unsafe {
+        // ERROR_DEREF stays set; check_deref reports it (:309-315).
+        __m2c_rt_memtrack_map2check_load(addr(0x1100), 4);
+        __m2c_rt_memtrack_map2check_check_deref(14, c"main".as_ptr());
+    }
+    assert_violated(ViolatedProperty::MemsafetyDeref, 14, "main");
+}
+
+#[test]
+fn memtrack_rt_load_of_a_freed_block_is_an_invalid_deref() {
+    let _guard = memtrack_rt();
+    rt_prelude();
+    // SAFETY: fake addresses; C-string literals.
+    unsafe {
+        __m2c_rt_memtrack_map2check_free_resolved_address(addr(0x1100), 12, c"main".as_ptr(), 0);
+        __m2c_rt_memtrack_map2check_load(addr(0x1100), 1);
+        __m2c_rt_memtrack_map2check_check_deref(13, c"g".as_ptr());
+    }
+    assert_violated(ViolatedProperty::MemsafetyDeref, 13, "g");
+}
+
+#[test]
+fn memtrack_rt_check_cstring_reads_up_to_the_terminator_inside_the_block() {
+    let _guard = memtrack_rt();
+    let inside: [u8; 4] = *b"ab\0x";
+    let beyond: [u8; 4] = *b"abcd";
+    let a = inside.as_ptr() as usize;
+    let b = beyond.as_ptr() as usize;
+    // SAFETY: the buffers are live; names are C strings.
+    unsafe {
+        __m2c_rt_memtrack_map2check_alloca(c"s".as_ptr(), addr(a), 4, 1, 1, 1);
+        __m2c_rt_memtrack_map2check_alloca(c"t".as_ptr(), addr(b), 4, 1, 2, 1);
+        __m2c_rt_memtrack_map2check_check_cstring(std::ptr::null());
+        __m2c_rt_memtrack_map2check_check_cstring(inside.as_ptr().cast());
+    }
+    assert!(!c_error_deref());
+    // No terminator inside the 4 bytes: the fifth byte is outside every
+    // block, so ERROR_DEREF is set before it is read (:159-166).
+    // SAFETY: only the 4 tracked bytes are read.
+    unsafe { __m2c_rt_memtrack_map2check_check_cstring(beyond.as_ptr().cast()) };
+    assert!(c_error_deref());
+    // SAFETY: C-string literal.
+    unsafe { __m2c_rt_memtrack_map2check_check_deref(30, c"puts".as_ptr()) };
+    assert_violated(ViolatedProperty::MemsafetyDeref, 30, "puts");
+}
+
+/// A live pointer slot holding `value`, as `map2check_free` reads it.
+fn slot(value: usize) -> Box<usize> {
+    Box::new(value)
+}
+
+#[test]
+fn memtrack_rt_free_releases_the_block_and_logs_the_free_row() {
+    let _guard = memtrack_rt();
+    let p = slot(0x1100);
+    let p_addr = &*p as *const usize as usize;
+    // SAFETY: `p` is live; the rest are fake addresses and C strings.
+    unsafe {
+        __m2c_rt_memtrack_map2check_alloca(c"p".as_ptr(), addr(p_addr), 8, 8, 10, 1);
+        __m2c_rt_memtrack_map2check_malloc(addr(0x1100), 16);
+        __m2c_rt_memtrack_map2check_add_store_pointer(
+            addr(p_addr),
+            addr(0x1100),
+            1,
+            c"p".as_ptr(),
+            11,
+            c"main".as_ptr(),
+        );
+        __m2c_rt_memtrack_map2check_free(c"p".as_ptr(), addr(p_addr), 1, 12, c"main".as_ptr());
+    }
+    assert_ok();
+    // :351-378: a FREE row for the variable, then the row of the block is
+    // freed with size 0.
+    assert_eq!(
+        c_list_log(),
+        format!("0;{p_addr:#x};0x1100;1;0;1;p;11;main;0\n0;{p_addr:#x};0x1100;1;1;0;p;12;main;1\n")
+    );
+    assert_eq!(c_allocation_log(), "0x1100;0;1\n");
+    assert_eq!(__m2c_rt_memtrack_analysis_is_program_correct(), 1);
+}
+
+#[test]
+fn memtrack_rt_double_free_is_a_false_free_after_its_row_is_logged() {
+    let _guard = memtrack_rt();
+    let p = slot(0x1100);
+    let p_addr = &*p as *const usize as usize;
+    // SAFETY: `p` is live; the rest are fake addresses and C strings.
+    unsafe {
+        __m2c_rt_memtrack_map2check_malloc(addr(0x1100), 16);
+        __m2c_rt_memtrack_map2check_add_store_pointer(
+            addr(p_addr),
+            addr(0x1100),
+            1,
+            c"p".as_ptr(),
+            11,
+            c"main".as_ptr(),
+        );
+        __m2c_rt_memtrack_map2check_free(c"p".as_ptr(), addr(p_addr), 1, 12, c"main".as_ptr());
+        __m2c_rt_memtrack_map2check_free(c"p".as_ptr(), addr(p_addr), 1, 13, c"main".as_ptr());
+    }
+    assert_violated(ViolatedProperty::MemsafetyFree, 13, "main");
+    // The failing free appended its FREE row before the check (:358-365).
+    assert_eq!(c_list_log().lines().count(), 3);
+    assert!(c_list_log().ends_with("0;p;13;main;2\n"));
+}
+
+#[test]
+fn memtrack_rt_free_of_a_non_heap_address_is_a_false_free() {
+    let _guard = memtrack_rt();
+    let x = 7u64;
+    let x_addr = &x as *const u64 as usize;
+    let p = slot(x_addr);
+    let p_addr = &*p as *const usize as usize;
+    // SAFETY: `p` is live; names are C strings.
+    unsafe {
+        __m2c_rt_memtrack_map2check_alloca(c"x".as_ptr(), addr(x_addr), 8, 8, 3, 1);
+        // `p = &x`: a STATIC row (check_address_allocation_log, AllocationLog.c:33-51).
+        __m2c_rt_memtrack_map2check_add_store_pointer(
+            addr(p_addr),
+            addr(x_addr),
+            1,
+            c"p".as_ptr(),
+            4,
+            c"main".as_ptr(),
+        );
+        __m2c_rt_memtrack_map2check_free(c"p".as_ptr(), addr(p_addr), 1, 5, c"main".as_ptr());
+    }
+    // is_invalid_free: the newest row pointing to x is not dynamic (ListLog.c:95-118).
+    assert_violated(ViolatedProperty::MemsafetyFree, 5, "main");
+}
+
+#[test]
+fn memtrack_rt_free_of_a_null_pointer_does_nothing() {
+    let _guard = memtrack_rt();
+    let p = slot(0);
+    // SAFETY: `p` is live; C strings.
+    unsafe {
+        __m2c_rt_memtrack_map2check_free(
+            c"p".as_ptr(),
+            (&*p as *const usize).cast(),
+            1,
+            5,
+            c"main".as_ptr(),
+        )
+    };
+    assert_ok();
+    assert_eq!(c_list_log(), "");
+}
+
+#[test]
+fn memtrack_rt_free_resolved_address_follows_is_invalid_free() {
+    let _guard = memtrack_rt();
+    // SAFETY (all calls below): fake addresses; C strings; NULL accepted.
+    unsafe {
+        // NULL with isNullValid returns at once (:179-181).
+        __m2c_rt_memtrack_map2check_free_resolved_address(std::ptr::null(), 1, c"f".as_ptr(), 1);
+        assert_ok();
+        // A tracked, stored block is a valid free.
+        rt_prelude();
+        __m2c_rt_memtrack_map2check_free_resolved_address(addr(0x1100), 12, c"main".as_ptr(), 0);
+    }
+    assert_ok();
+    // update_reference_list_log(FREE) re-points `p` at the freed block (:197-256).
+    assert_eq!(
+        c_list_log(),
+        "0;0x1000;0x1100;1;0;1;p;11;main;0\n0;0x1000;0x1100;1;1;0;p;12;main;1\n"
+    );
+    assert_eq!(c_allocation_log(), "0x1100;0;1\n");
+    // SAFETY: as above.
+    unsafe {
+        // Again: the newest row pointing to the block is free.
+        __m2c_rt_memtrack_map2check_free_resolved_address(addr(0x1100), 13, c"main".as_ptr(), 0)
+    };
+    assert_violated(ViolatedProperty::MemsafetyFree, 13, "main");
+}
+
+#[test]
+fn memtrack_rt_free_resolved_of_an_untracked_or_never_stored_block_is_a_false_free() {
+    let _guard = memtrack_rt();
+    // SAFETY: fake address; C string.
+    unsafe {
+        __m2c_rt_memtrack_map2check_free_resolved_address(addr(0x5000), 3, c"main".as_ptr(), 0)
+    };
+    assert_violated(ViolatedProperty::MemsafetyFree, 3, "main");
+    // free(malloc(8)): no list row points to the block, so is_invalid_free
+    // is TRUE (ListLog.c:117) — develop's verdict, unlike SD-13 of the legacy
+    // `map2check_check_free_resolved_address`.
+    state::reset();
+    // SAFETY: as above.
+    unsafe {
+        __m2c_rt_memtrack_map2check_malloc(addr(0x6000), 8);
+        __m2c_rt_memtrack_map2check_free_resolved_address(addr(0x6000), 4, c"main".as_ptr(), 0);
+    }
+    assert_violated(ViolatedProperty::MemsafetyFree, 4, "main");
+}
+
+#[test]
+fn memtrack_rt_add_store_pointer_skips_redundant_rows_and_updates_references() {
+    let _guard = memtrack_rt();
+    // SAFETY (all calls below): fake addresses; C strings.
+    unsafe {
+        __m2c_rt_memtrack_map2check_malloc(addr(0xA0), 8);
+        __m2c_rt_memtrack_map2check_add_store_pointer(
+            addr(0x10),
+            addr(0xA0),
+            1,
+            c"p".as_ptr(),
+            1,
+            c"f".as_ptr(),
+        );
+        // Same var, value and flags: redundant (:285-297), no row, no step.
+        __m2c_rt_memtrack_map2check_add_store_pointer(
+            addr(0x10),
+            addr(0xA0),
+            1,
+            c"p".as_ptr(),
+            2,
+            c"f".as_ptr(),
+        );
+        __m2c_rt_memtrack_map2check_add_store_pointer(
+            addr(0x20),
+            addr(0xA0),
+            2,
+            c"q".as_ptr(),
+            3,
+            c"g".as_ptr(),
+        );
+        __m2c_rt_memtrack_map2check_free_resolved_address(addr(0xA0), 4, c"h".as_ptr(), 0);
+        // After the free, storing the freed block again is a FREE row.
+        __m2c_rt_memtrack_map2check_add_store_pointer(
+            addr(0x30),
+            addr(0xA0),
+            1,
+            c"r".as_ptr(),
+            5,
+            c"f".as_ptr(),
+        );
+    }
+    assert_ok();
+    assert_eq!(
+        c_list_log(),
+        "0;0x10;0xa0;1;0;1;p;1;f;0\n\
+         0;0x20;0xa0;2;0;1;q;3;g;1\n\
+         0;0x10;0xa0;1;1;0;p;4;f;2\n\
+         0;0x20;0xa0;2;1;0;q;4;g;3\n\
+         0;0x30;0xa0;1;1;0;r;5;f;4\n"
+    );
+}
+
+#[test]
+fn memtrack_rt_posix_reads_the_slot_and_logs_malloc_and_store() {
+    let _guard = memtrack_rt();
+    let q = slot(0x2200);
+    let q_addr = &*q as *const usize as usize;
+    // SAFETY: `q` is live and holds a `void *`.
+    unsafe { __m2c_rt_memtrack_map2check_posix(addr(q_addr), 32) };
+    // :340-345: map2check_malloc(*ptr) and the store with scope 1, line 1,
+    // "pointer" and "cocoiso".
+    assert_eq!(c_allocation_log(), "0x2200;32;0\n");
+    assert_eq!(
+        c_list_log(),
+        format!("0;{q_addr:#x};0x2200;1;0;1;pointer;1;cocoiso;0\n")
+    );
+}
+
+#[test]
+fn memtrack_rt_names_are_cut_at_35_bytes_except_the_variable_name() {
+    let _guard = memtrack_rt();
+    let long = c"a_function_name_of_more_than_35_bytes_long";
+    // SAFETY: fake addresses; C strings.
+    unsafe {
+        __m2c_rt_memtrack_map2check_alloca(long.as_ptr(), addr(0x100), 4, 4, 1, 1);
+        __m2c_rt_memtrack_map2check_add_store_pointer(
+            addr(0x10),
+            addr(0x100),
+            1,
+            long.as_ptr(),
+            2,
+            long.as_ptr(),
+        );
+    }
+    // new_heap_row and new_list_row strncpy FUNCTION_MAX_LENGTH_NAME (35)
+    // bytes (HeapLog.c:25, ListLog.c:133); the list row keeps the pointer
+    // to the variable name (:132).
+    let cut = "a_function_name_of_more_than_35_byt";
+    assert_eq!(c_heap_log(), format!("0x100;{cut};4\n"));
+    assert_eq!(
+        c_list_log(),
+        format!("0;0x10;0x100;1;0;0;{};2;{cut};0\n", long.to_str().unwrap())
+    );
+}
+
+#[test]
+fn memtrack_rt_is_program_correct_reports_a_leak_and_releases_it() {
+    let _guard = memtrack_rt();
+    assert_eq!(__m2c_rt_memtrack_analysis_is_program_correct(), 1);
+    rt_prelude();
+    // AnalysisModeMemtrack.c:138-146: valid_allocation_log appends a freed
+    // row for the leaked block (AllocationLog.c:69-101) and the verdict is
+    // FALSE_MEMTRACK; the function does not record or end the run.
+    assert_eq!(__m2c_rt_memtrack_analysis_is_program_correct(), 0);
+    assert_ok();
+    assert_eq!(c_allocation_log(), "0x1100;16;0\n0x1100;0;1\n");
+    // The leak is now released: a second call is TRUE.
+    assert_eq!(__m2c_rt_memtrack_analysis_is_program_correct(), 1);
+    __m2c_rt_memtrack_analysis_generate_aux_witness_files();
+}
+
+#[test]
+fn memtrack_rt_end_of_program_reports_the_leak_through_the_core() {
+    let _guard = memtrack_rt();
+    rt_prelude();
+    map2check_check_mem_endprog();
+    assert_violated(ViolatedProperty::MemsafetyMemtrack, 0, "end_of_program");
+}
+
+#[test]
+fn memtrack_rt_destroy_releases_the_logs() {
+    let _guard = memtrack_rt();
+    rt_prelude();
+    __m2c_rt_memtrack_analysis_destroy();
+    assert_eq!(c_allocation_log(), "");
+    assert_eq!(c_list_log(), "");
+    assert_eq!(c_heap_log(), "");
+}
+
+#[test]
+fn memtrack_rt_wasm_checks_use_the_allocation_log() {
+    let _guard = memtrack_rt();
+    __m2c_rt_memtrack_map2check_wasm_malloc(0, 8);
+    __m2c_rt_memtrack_map2check_wasm_malloc(u64::MAX, 8);
+    __m2c_rt_memtrack_map2check_wasm_malloc(0x400, 16);
+    // AnalysisModeMemtrack.c:403-416: 0 and -1 are no block.
+    assert_eq!(c_allocation_log(), "0x400;16;0\n");
+    __m2c_rt_memtrack_map2check_wasm_check_access(0x40c, 4);
+    assert_ok();
+    // :430-436: FALSE_OVERFLOW at line 0, function "".
+    __m2c_rt_memtrack_map2check_wasm_check_access(0x40d, 4);
+    assert_violated(ViolatedProperty::Overflow, 0, "");
+    state::reset();
+    __m2c_rt_memtrack_map2check_wasm_malloc(0x400, 16);
+    __m2c_rt_memtrack_map2check_wasm_free(0x400, 7);
+    // A double free finds the row again (:418-428): no error.
+    __m2c_rt_memtrack_map2check_wasm_free(0x400, 8);
+    assert_ok();
+    assert_eq!(c_allocation_log(), "0x400;0;1\n");
+    __m2c_rt_memtrack_map2check_wasm_free(0x800, 9);
+    assert_violated(ViolatedProperty::MemsafetyFree, 9, "");
+}
+
+#[test]
+fn sd23_memtrack_rt_release_without_allocation_row_goes_on() {
+    let _guard = memtrack_rt();
+    // SAFETY: NULL is only compared; C strings.
+    unsafe {
+        __m2c_rt_memtrack_map2check_add_store_pointer(
+            addr(0x10),
+            std::ptr::null(),
+            1,
+            c"p".as_ptr(),
+            1,
+            c"main".as_ptr(),
+        );
+        __m2c_rt_memtrack_map2check_free_resolved_address(std::ptr::null(), 2, c"main".as_ptr(), 0);
+    }
+    // develop SIGSEGVs in find_row_with_address's NULL row; no verdict, no
+    // row, no reference update here.
+    assert_ok();
+    assert_eq!(c_list_log(), "0;0x10;(nil);1;0;0;p;1;main;0\n");
+    assert_eq!(c_allocation_log(), "");
+}
+
+#[test]
+fn memtrack_rt_check_deref_keeps_a_negative_c_line() {
+    let _guard = memtrack_rt();
+    __m2c_rt_memtrack_map2check_load(addr(0x9000), 1);
+    // SAFETY: C string.
+    unsafe { __m2c_rt_memtrack_map2check_check_deref(-1, c"main".as_ptr()) };
+    // The int is stored as its u32 bit pattern; the property files print
+    // it back with %d (write_property_files: `line as i32`), so "-1".
+    assert_violated(ViolatedProperty::MemsafetyDeref, u32::MAX, "main");
+    assert_eq!(snapshot(|s| s.result.line as i32), -1);
+}
+
+// ── C runtime ABI: AnalysisModeMemcleanup (core entry points, Task 2.6) ─────
+//
+// `AnalysisModeMemcleanup.bc` forwards the C names to `__m2c_rt_memcleanup_*`,
+// which share the memory rules of the memtrack entry points (`MemMode`).
+// `diff AnalysisModeMemtrack.c AnalysisModeMemcleanup.c` shows five
+// differences, one test each below:
+//   :141-146  the verdict needs a pointer variable to the last leak
+//   :158      map2check_load is empty (no ERROR_DEREF)
+//   :159      map2check_check_cstring is empty
+//   :168/:342 `Bool error = FALSE` in both release functions (no FALSE-FREE)
+//   :294      map2check_check_deref is empty
+// Everything else (rows, formats, UNKNOWN, posix, calloc) is the same code.
+
+/// `map2check_init`, then the module's `analysis_init`, which selects the
+/// memcleanup mode.
+fn memcleanup_rt() -> MutexGuard<'static, ()> {
+    let guard = fresh();
+    map2check_init(0);
+    __m2c_rt_memcleanup_analysis_init();
+    guard
+}
+
+/// `golden_memory()` through the memcleanup entry points: `int *p` at 0x1000,
+/// `&main` at 0x1040, `p = malloc(16)` at 0x1100.
+fn memcleanup_prelude() {
+    // SAFETY: fake addresses are only stored and compared; names are C strings.
+    unsafe {
+        __m2c_rt_memcleanup_map2check_alloca(c"p".as_ptr(), addr(0x1000), 8, 8, 10, 1);
+        __m2c_rt_memcleanup_map2check_function(c"main".as_ptr(), addr(0x1040));
+        __m2c_rt_memcleanup_map2check_malloc(addr(0x1100), 16);
+        __m2c_rt_memcleanup_map2check_add_store_pointer(
+            addr(0x1000),
+            addr(0x1100),
+            1,
+            c"p".as_ptr(),
+            11,
+            c"main".as_ptr(),
+        );
+    }
+}
+
+#[test]
+fn memcleanup_rt_analysis_init_selects_the_mode_and_starts_empty_logs() {
+    let _guard = memcleanup_rt();
+    assert_eq!(state::config().mode, Some(AnalysisMode::Memcleanup));
+    memcleanup_prelude();
+    // AnalysisModeMemcleanup.c:125-130: new containers, ERROR_DEREF = FALSE.
+    __m2c_rt_memcleanup_analysis_init();
+    assert_eq!(c_list_log(), "");
+    assert_eq!(c_allocation_log(), "");
+    assert_eq!(c_heap_log(), "");
+    assert!(!c_error_deref());
+    // :132-136 frees the logs.
+    memcleanup_prelude();
+    __m2c_rt_memcleanup_analysis_destroy();
+    assert_eq!(c_allocation_log(), "");
+}
+
+#[test]
+fn memcleanup_rt_shares_the_row_formats_and_rules_of_memtrack() {
+    let _guard = memcleanup_rt();
+    memcleanup_prelude();
+    assert_eq!(c_heap_log(), "0x1000;p;8\n0x1040;main;1\n");
+    assert_eq!(c_allocation_log(), "0x1100;16;0\n");
+    assert_eq!(c_list_log(), "0;0x1000;0x1100;1;0;1;p;11;main;0\n");
+    // :326-328 calloc is malloc of quantity * size; :296-314 revives a row.
+    __m2c_rt_memcleanup_map2check_calloc(addr(0x2000), 3, 5);
+    __m2c_rt_memcleanup_map2check_malloc(addr(0x2000), 32);
+    // :359-363 non_static_alloca is alloca of size * primitive bytes.
+    // SAFETY: fake address; C-string literal.
+    unsafe {
+        __m2c_rt_memcleanup_map2check_non_static_alloca(c"vla".as_ptr(), addr(0x6000), 5, 4, 3, 1)
+    };
+    assert_eq!(c_allocation_log(), "0x1100;16;0\n0x2000;32;0\n");
+    assert_eq!(c_heap_log(), "0x1000;p;8\n0x1040;main;1\n0x6000;vla;20\n");
+    assert_ok();
+}
+
+#[test]
+fn memcleanup_rt_malloc_of_null_is_still_unknown() {
+    let _guard = memcleanup_rt();
+    // :296-302 is the memtrack code: write_property_unknown + map2check_error.
+    __m2c_rt_memcleanup_map2check_malloc(std::ptr::null(), 4);
+    assert_violated(ViolatedProperty::Unknown, 0, "");
+    assert_eq!(c_allocation_log(), "");
+}
+
+#[test]
+fn memcleanup_rt_posix_records_the_block_and_the_store() {
+    let _guard = memcleanup_rt();
+    let block = slot(0x3000);
+    let p_addr = &*block as *const usize as usize;
+    // SAFETY: `block` is live and holds the block address.
+    unsafe { __m2c_rt_memcleanup_map2check_posix(addr(p_addr), 32) };
+    // :319-324 map2check_malloc(*ptr, size) + the store of "pointer".
+    assert_eq!(c_allocation_log(), "0x3000;32;0\n");
+    assert_eq!(
+        c_list_log(),
+        format!("0;{p_addr:#x};0x3000;1;0;1;pointer;1;cocoiso;0\n")
+    );
+}
+
+#[test]
+fn memcleanup_rt_load_never_sets_error_deref() {
+    let _guard = memcleanup_rt();
+    memcleanup_prelude();
+    // :158 `void map2check_load(void *ptr, int size) {}`: the access that
+    // memtrack flags (memtrack_rt_load_and_check_deref_follow_error_deref)
+    // leaves no trace.
+    __m2c_rt_memcleanup_map2check_load(addr(0x9000), 4);
+    __m2c_rt_memcleanup_map2check_load(addr(0x110d), 4);
+    assert!(!c_error_deref());
+}
+
+#[test]
+fn memcleanup_rt_check_deref_is_empty() {
+    let _guard = memcleanup_rt();
+    // :294 `void map2check_check_deref(int line, const char *function_name) {}`
+    // even when the state would be an invalid dereference in memtrack mode.
+    __m2c_rt_memcleanup_map2check_load(addr(0x9000), 4);
+    // SAFETY: C-string literal.
+    unsafe { __m2c_rt_memcleanup_map2check_check_deref(14, c"main".as_ptr()) };
+    assert_ok();
+}
+
+#[test]
+fn memcleanup_rt_check_cstring_is_empty() {
+    let _guard = memcleanup_rt();
+    let beyond: [u8; 4] = *b"abcd";
+    // SAFETY: the buffer is live; names are C strings. Nothing is read.
+    unsafe {
+        __m2c_rt_memcleanup_map2check_alloca(
+            c"t".as_ptr(),
+            addr(beyond.as_ptr() as usize),
+            4,
+            1,
+            2,
+            1,
+        );
+        // :160 `void map2check_check_cstring(const char *string) {}`: memtrack
+        // (memtrack_rt_check_cstring_reads_up_to_the_terminator_inside_the_block)
+        // sets ERROR_DEREF at the fifth byte.
+        __m2c_rt_memcleanup_map2check_check_cstring(beyond.as_ptr().cast());
+        __m2c_rt_memcleanup_map2check_check_cstring(std::ptr::null());
+        __m2c_rt_memcleanup_map2check_check_deref(30, c"puts".as_ptr());
+    }
+    assert!(!c_error_deref());
+    assert_ok();
+}
+
+#[test]
+fn memcleanup_rt_free_resolved_never_reports_false_free() {
+    let _guard = memcleanup_rt();
+    memcleanup_prelude();
+    // SAFETY: fake addresses; C-string literals.
+    unsafe {
+        // :164-166 NULL with isNullValid returns.
+        __m2c_rt_memcleanup_map2check_free_resolved_address(
+            std::ptr::null(),
+            11,
+            c"main".as_ptr(),
+            1,
+        );
+        // :168 `Bool error = FALSE`: the block is released ...
+        __m2c_rt_memcleanup_map2check_free_resolved_address(addr(0x1100), 12, c"main".as_ptr(), 0);
+        // ... and a second release is not FALSE-FREE (memtrack:
+        // memtrack_rt_double_free_is_a_false_free_after_its_row_is_logged).
+        __m2c_rt_memcleanup_map2check_free_resolved_address(addr(0x1100), 13, c"main".as_ptr(), 0);
+    }
+    assert_ok();
+    assert_eq!(c_allocation_log(), "0x1100;0;1\n");
+    // :179 update_reference_list_log: p gets a FREE row (line 12).
+    assert_eq!(
+        c_list_log(),
+        "0;0x1000;0x1100;1;0;1;p;11;main;0\n0;0x1000;0x1100;1;1;0;p;12;main;1\n"
+    );
+}
+
+#[test]
+fn memcleanup_rt_free_never_reports_false_free() {
+    let _guard = memcleanup_rt();
+    let p = slot(0x1100);
+    let p_addr = &*p as *const usize as usize;
+    // SAFETY: `p` is live; the rest are fake addresses and C strings.
+    unsafe {
+        __m2c_rt_memcleanup_map2check_malloc(addr(0x1100), 16);
+        __m2c_rt_memcleanup_map2check_add_store_pointer(
+            addr(p_addr),
+            addr(0x1100),
+            1,
+            c"p".as_ptr(),
+            11,
+            c"main".as_ptr(),
+        );
+        __m2c_rt_memcleanup_map2check_free(c"p".as_ptr(), addr(p_addr), 1, 12, c"main".as_ptr());
+        // :342 `Bool error = FALSE`: the double free that memtrack reports
+        // is a no-op here (the row is found again).
+        __m2c_rt_memcleanup_map2check_free(c"p".as_ptr(), addr(p_addr), 1, 13, c"main".as_ptr());
+    }
+    assert_ok();
+    assert_eq!(c_allocation_log(), "0x1100;0;1\n");
+    assert_eq!(c_list_log().lines().count(), 3);
+    assert!(c_list_log().ends_with("0;p;13;main;2\n"));
+}
+
+#[test]
+fn memcleanup_rt_free_of_a_null_block_does_nothing() {
+    let _guard = memcleanup_rt();
+    let p = slot(0);
+    let p_addr = &*p as *const usize as usize;
+    // SAFETY: `p` is live; C-string literal.
+    unsafe {
+        __m2c_rt_memcleanup_map2check_free(c"p".as_ptr(), addr(p_addr), 1, 12, c"main".as_ptr())
+    };
+    // :334-336
+    assert_eq!(c_list_log(), "");
+    assert_ok();
+}
+
+#[test]
+fn memcleanup_rt_verdict_needs_a_pointer_to_the_last_leak() {
+    let _guard = memcleanup_rt();
+    memcleanup_prelude();
+    // :138-148: the block 0x1100 is leaked and p (0x1000) still points to it.
+    assert_eq!(__m2c_rt_memcleanup_analysis_is_program_correct(), 0);
+    // valid_allocation_log appended the freed row (AllocationLog.c:69-101),
+    // so the verdict is TRUE the second time.
+    assert_eq!(c_allocation_log(), "0x1100;16;0\n0x1100;0;1\n");
+    assert_eq!(__m2c_rt_memcleanup_analysis_is_program_correct(), 1);
+    // memtrack reports the same leak whatever points to it.
+    state::reset();
+    state::reset_config();
+    map2check_init(0);
+    __m2c_rt_memcleanup_analysis_init();
+    __m2c_rt_memcleanup_map2check_malloc(addr(0x1100), 16);
+    // :141: no pointer variable refers to it: TRUE (memtrack would be FALSE).
+    assert_eq!(__m2c_rt_memcleanup_analysis_is_program_correct(), 1);
+    assert_ok();
+}
+
+#[test]
+fn memcleanup_rt_verdict_is_true_once_the_pointer_moves_away() {
+    let _guard = memcleanup_rt();
+    memcleanup_prelude();
+    // SAFETY: fake addresses; C strings. p = NULL after the malloc.
+    unsafe {
+        __m2c_rt_memcleanup_map2check_add_store_pointer(
+            addr(0x1000),
+            std::ptr::null(),
+            1,
+            c"p".as_ptr(),
+            12,
+            c"main".as_ptr(),
+        )
+    };
+    // ListLog.c:40-65: the newest row of p no longer points to the block.
+    assert_eq!(__m2c_rt_memcleanup_analysis_is_program_correct(), 1);
+}
+
+#[test]
+fn memcleanup_rt_verdict_writes_the_memcleanup_property_files() {
+    let _guard = memcleanup_rt();
+    let dir = tempfile::tempdir().unwrap();
+    // The verdict writes into the output directory of the test build.
+    std::env::set_var(crate::output::termination::OUTPUT_DIR_ENV, dir.path());
+    memcleanup_prelude();
+    assert_eq!(__m2c_rt_memcleanup_analysis_is_program_correct(), 0);
+    std::env::remove_var(crate::output::termination::OUTPUT_DIR_ENV);
+    // PropertyGenerator.c:36-40 and :77-80.
+    assert_eq!(
+        std::fs::read_to_string(dir.path().join("map2check_property")).unwrap(),
+        "FALSE-MEMCLEANUP\n"
+    );
+    assert_eq!(
+        std::fs::read_to_string(dir.path().join("map2check_property_memcleanup")).unwrap(),
+        "FALSE-MEMCLEANUP\n"
+    );
+}
+
+#[test]
+fn memcleanup_rt_generate_aux_witness_files_writes_the_three_logs() {
+    let _guard = memcleanup_rt();
+    let dir = tempfile::tempdir().unwrap();
+    std::env::set_var(crate::output::termination::OUTPUT_DIR_ENV, dir.path());
+    memcleanup_prelude();
+    __m2c_rt_memcleanup_analysis_generate_aux_witness_files();
+    std::env::remove_var(crate::output::termination::OUTPUT_DIR_ENV);
+    // :150-154 heap, allocation and list logs, in the C formats.
+    let read = |n: &str| std::fs::read_to_string(dir.path().join(n)).unwrap();
+    assert_eq!(read("heap_log.csv"), "0x1000;p;8\n0x1040;main;1\n");
+    assert_eq!(read("allocation_log.csv"), "0x1100;16;0\n");
+    assert_eq!(read("list_log.csv"), "0;0x1000;0x1100;1;0;1;p;11;main;0\n");
+}
+
+/// SD-23 in memcleanup mode: `error = FALSE` lets a release of an untracked
+/// or stack address through (`AnalysisModeMemcleanup.c:168`, `:342`); develop
+/// then writes `row->size` through the NULL row of `find_row_with_address`
+/// (`:176-177`, `:353-354`) and gets SIGSEGV. The core goes on.
+#[test]
+fn sd23_memcleanup_rt_release_without_allocation_row_goes_on() {
+    let _guard = memcleanup_rt();
+    let x = 7u64;
+    let x_addr = &x as *const u64 as usize;
+    let p = slot(x_addr);
+    let p_addr = &*p as *const usize as usize;
+    // SAFETY: `p` is live; fake addresses; C strings. `int x; int *p = &x;
+    // free(p);` by both release functions.
+    unsafe {
+        __m2c_rt_memcleanup_map2check_alloca(c"x".as_ptr(), addr(x_addr), 8, 8, 3, 1);
+        __m2c_rt_memcleanup_map2check_add_store_pointer(
+            addr(p_addr),
+            addr(x_addr),
+            1,
+            c"p".as_ptr(),
+            4,
+            c"main".as_ptr(),
+        );
+        __m2c_rt_memcleanup_map2check_free(c"p".as_ptr(), addr(p_addr), 1, 50, c"main".as_ptr());
+        __m2c_rt_memcleanup_map2check_free_resolved_address(addr(x_addr), 51, c"main".as_ptr(), 0);
+        __m2c_rt_memcleanup_map2check_free_resolved_address(addr(0x7777), 52, c"main".as_ptr(), 0);
+    }
+    // No verdict, no allocation row; only the FREE row of the store that
+    // map2check_free appends before it looks the block up (:337-345).
+    assert_ok();
+    assert_eq!(c_allocation_log(), "");
+    assert_eq!(c_list_log().lines().count(), 2);
+    assert!(c_list_log().ends_with(&format!("0;{p_addr:#x};{x_addr:#x};1;1;0;p;50;main;1\n")));
+    assert_eq!(__m2c_rt_memcleanup_analysis_is_program_correct(), 1);
+}
+
+/// `__VERIFIER_error` of the C core does nothing (`Map2CheckFunctions.c:57-59`),
+/// with a mode set and without: no violation, no step, the process goes on
+/// (SD-08).
+#[test]
+fn core_verifier_error_does_nothing_as_in_c() {
+    for mode in [None, Some(crate::analysismode::mode::AnalysisMode::None)] {
+        let _g = fresh();
+        state::update_config(|c| c.mode = mode);
+        let seen = || snapshot(|s| (s.result.ok, s.result.property, s.result.step, s.c_step));
+        let before = seen();
+        __VERIFIER_error();
+        assert_eq!(seen(), before, "mode {mode:?}");
+        assert_ok();
+    }
+}
+
+#[test]
+fn output_set_atomic_selects_the_result_file_write_mode() {
+    use crate::output::legacy_files::{atomic_writes, write_mode_test_lock};
+    let _mode = write_mode_test_lock();
+    __m2c_rt_output_set_atomic(0);
+    assert!(!atomic_writes());
+    __m2c_rt_output_set_atomic(7);
+    assert!(atomic_writes());
+    assert!(crate::output::legacy_files::never_downgrade());
+    __m2c_rt_output_set_atomic(0);
+    assert!(!crate::output::legacy_files::never_downgrade());
+    __m2c_rt_output_set_atomic(1);
+    assert!(atomic_writes(), "the default of every non-dropin build");
+    assert!(crate::output::legacy_files::never_downgrade());
+    crate::output::legacy_files::set_never_downgrade(false);
 }

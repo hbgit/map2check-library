@@ -210,14 +210,31 @@ pub struct SignedBinop {
     pub bits: u32,
 }
 
+/// `signed_max_for_width` (`:111-124`) by width: index 0 stands for a width
+/// of 0 or 64 and more (64 bits), index 1..=63 for that many bits.
+const SIGNED_MAX: [i64; 64] = {
+    let mut t = [i64::MAX; 64];
+    let mut bits = 1;
+    while bits < 64 {
+        t[bits] = (1i64 << (bits - 1)) - 1;
+        bits += 1;
+    }
+    t
+};
+
 /// `signed_min_for_width` / `signed_max_for_width` (`:111-124`): a width of
 /// 0 or 64 and more means 64 bits.
+///
+/// A table, not a shift, so that rustc's optimiser emits no `freeze`, which
+/// KLEE 3.1 cannot execute (scripts/runtime-ir/check_no_freeze.py): a shift
+/// by a width-dependent amount, speculated out of its branch or into the
+/// branch-free `and` of the range test, needed one (`shl nuw`, `ashr`,
+/// `lshr`). A load from a constant table at an in-bounds index cannot be
+/// poison. `min` is the complement of `max`.
 fn signed_bounds(bits: u32) -> (i64, i64) {
-    if bits == 0 || bits >= 64 {
-        (i64::MIN, i64::MAX)
-    } else {
-        (-(1i64 << (bits - 1)), (1i64 << (bits - 1)) - 1)
-    }
+    let index = if bits >= 64 { 0 } else { bits as usize };
+    let max = SIGNED_MAX[index];
+    (!max, max)
 }
 
 impl SignedBinop {
@@ -261,6 +278,21 @@ mod tests {
 
     fn ctx() -> VccContext<'static> {
         VccContext::new(1, 0, "test")
+    }
+
+    /// The C bounds (`:111-124`) for every width: 1..=63 bits give
+    /// -2^(bits-1) .. 2^(bits-1)-1; 0 and 64 or more give the i64 range.
+    #[test]
+    fn signed_bounds_match_c_for_every_width() {
+        for bits in (0..=200u32).chain([u32::MAX - 1, u32::MAX]) {
+            let want = if bits == 0 || bits >= 64 {
+                (i64::MIN, i64::MAX)
+            } else {
+                let half = 1i128 << (bits - 1);
+                ((-half) as i64, (half - 1) as i64)
+            };
+            assert_eq!(signed_bounds(bits), want, "bits = {bits}");
+        }
     }
 
     #[test]

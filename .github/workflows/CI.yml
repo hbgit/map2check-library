@@ -5,6 +5,7 @@ on:
     branches: [ "main", "develop", "release/**" ]
   pull_request:
     branches: [ "main", "develop", "release/**" ]
+  workflow_dispatch:
 
 jobs:
   build_and_test:
@@ -46,11 +47,145 @@ jobs:
       - name: Testar script de proteção de branches
         run: scripts/test-branch-protection.sh
 
+      - name: Testar download do Map2Check
+        run: scripts/test-fetch-map2check.sh
+
       - name: Testar guard de artefatos da era C
         run: scripts/test-check-no-c-era-artifacts.sh
 
       - name: Verificar ausência de artefatos da era C
         run: scripts/check-no-c-era-artifacts.sh
+
+      - name: Testar guarda de cobertura da ABI do runtime C
+        run: scripts/test-runtime-abi-coverage.sh
+
+      - name: Conferir assinaturas contra os headers do runtime C
+        run: |
+          test -d vendor/map2check/modules/backend/library/header || scripts/fetch-map2check.sh
+          tests/abi/check-signatures.sh vendor/map2check/modules/backend/library/header
+
+      # Gerador dos módulos IR do layout A-fwd (D7). O teste de paridade de
+      # ABI compila cada assinatura com o clang instalado acima.
+      - name: Testar o gerador de IR do runtime (scripts/runtime-ir/gen_ll.py)
+        run: python3 -I -m unittest discover -s scripts/runtime-ir
+
+      # Gera target/runtime-ir/AnalysisModeOverflow.ll (não versionado),
+      # confere a sintaxe com clang -c -x ir e liga um driver C ao .ll e à
+      # staticlib: cada encaminhador precisa chegar ao __m2c_rt_overflow_*
+      # do núcleo e escrever os arquivos de propriedade do C.
+      - name: Gerar, conferir e ligar o módulo IR AnalysisModeOverflow
+        run: |
+          cargo build --release --all-features
+          scripts/runtime-ir/test-overflow-link.sh
+
+      # Idem para AnalysisModeAssert.ll e AnalysisModeNone.ll (Task 2.4):
+      # map2check_assert, analysis_* e map2check_target_function chegam ao
+      # núcleo; __VERIFIER_assert é vazio no IR, como no C.
+      - name: Gerar, conferir e ligar os módulos IR AnalysisModeAssert e AnalysisModeNone
+        run: |
+          cargo build --release --all-features
+          scripts/runtime-ir/test-assert-none-link.sh
+
+      # Idem para AnalysisModeMemtrack.ll (Task 2.5), ligado com os módulos
+      # vazios de container e de log nos dois conjuntos (Array e --btree, D3):
+      # os cenários golden escrevem os arquivos de tests/legacy_golden/ byte a
+      # byte.
+      - name: Gerar, conferir e ligar o módulo IR AnalysisModeMemtrack
+        run: |
+          cargo build --release --all-features
+          scripts/runtime-ir/test-memtrack-link.sh
+
+      # Idem para AnalysisModeMemcleanup.ll (Task 2.6), nos dois conjuntos de
+      # container; sem map2check_wasm_*. Cenários: vazamento no exit(0), os
+      # caminhos vazios do .c e o SD-23.
+      - name: Gerar, conferir e ligar o módulo IR AnalysisModeMemcleanup
+        run: |
+          cargo build --release --all-features
+          scripts/runtime-ir/test-memcleanup-link.sh
+
+      # Gerador KLEE (Task 2.7): gera NonDetGeneratorKlee.ll, confere a
+      # sintaxe com clang -c -x ir, que não há stub nem intrínseco além dos do
+      # NonDetGeneratorKlee.c, e que a staticlib não define nenhum dos seus
+      # nomes C. O módulo chama intrínsecos do KLEE e não liga nativamente:
+      # roda sob o KLEE 3.1 em scripts/runtime-ir/test-klee-generator.sh, que
+      # precisa da imagem do Map2Check e não roda aqui.
+      - name: Gerar e conferir o módulo IR NonDetGeneratorKlee
+        run: |
+          cargo build --release --all-features
+          scripts/runtime-ir/test-klee-ir.sh
+
+      # Gerador AFL++ (Task 2.8): gera NonDetGeneratorAFL.ll, confere a
+      # sintaxe com clang -c -x ir, que não há stub nem nome do AFL++ além das
+      # expansões de __AFL_FUZZ_INIT/__AFL_LOOP do NonDetGeneratorAFL.c, e que
+      # a staticlib não define nenhum dos seus nomes C. O módulo precisa do
+      # afl-compiler-rt e não liga aqui: roda sob o AFL++ 4.40c em
+      # scripts/runtime-ir/test-afl-generator.sh, que precisa da imagem do
+      # Map2Check e não roda aqui.
+      - name: Gerar e conferir o módulo IR NonDetGeneratorAFL
+        run: |
+          cargo build --release --all-features
+          scripts/runtime-ir/test-afl-ir.sh
+
+      # Stubs wasm (Task 2.9): gera WasmRuntimeStubs.ll, confere a sintaxe e
+      # liga um driver C que chama os wasm_rt_* como a saída do wasm2c; cada
+      # nome C chega ao seu __m2c_rt_wasm_*. A staticlib não define nenhum
+      # deles (sem exceção desde a Task 2.10).
+      - name: Gerar, conferir e ligar o módulo IR WasmRuntimeStubs
+        run: |
+          cargo build --release --all-features
+          scripts/runtime-ir/test-wasm-link.sh
+
+      # Sobreposição de instalação (Task 3.1): uma cópia de uma instalação do
+      # Map2Check em que só os 21 lib/*.bc mudam; bin/, plugins e symlinks
+      # ficam iguais. Aqui só as fixtures (a instalação real do C não existe
+      # no runner).
+      - name: Teste da sobreposição de instalação (fixtures)
+        run: scripts/it/test-overlay-install.sh
+
+      # Nenhuma relocação da staticlib pode ter como alvo um nome que um
+      # módulo IR define (uma chamada interna a um export #[no_mangle] seria
+      # ligada à definição do IR, que encaminha de volta: recursão infinita).
+      - name: Guarda de chamadas a nomes definidos pelos módulos IR
+        run: |
+          cargo build --release --all-features
+          scripts/runtime-ir/test-check-no-ir-name-calls.sh
+          scripts/runtime-ir/check-no-ir-name-calls.sh
+
+      # map2check_assume* (Task 2.10): a cola IR do Map2CheckFunctions.bc
+      # (Map2CheckFunctions-glue.ll) chama o nondet_assume do gerador.
+      - name: Gerar, conferir e ligar a cola IR (map2check_assume*)
+        run: |
+          cargo build --release --all-features
+          scripts/runtime-ir/test-assume-link.sh
+
+      # D6 (Task 2.10): o conjunto exportado da staticlib é exatamente o ABI C
+      # do runtime que os módulos núcleo têm, mais os __m2c_rt_*. Nas duas
+      # bibliotecas: sem features e com --all-features.
+      - name: Guarda do conjunto exportado (ABI C do runtime)
+        run: |
+          scripts/test-check-export-set.sh
+          cargo build --release
+          scripts/check-export-set.sh --without-wasm
+          cargo build --release --all-features
+          scripts/check-export-set.sh
+
+      # Os símbolos C dos modos, dos geradores KLEE e AFL++, dos stubs wasm e
+      # da cola (map2check_assume*) são definidos só pelos módulos IR: o .ll
+      # entra como artefato extra da cobertura. Usa os .ll dos passos
+      # anteriores. pending.txt fica vazio (Task 2.10).
+      - name: Conferir cobertura da ABI do runtime C (pending.txt)
+        run: |
+          CARGO_TARGET_DIR=target/coverage-lib cargo build --release --features wasm
+          scripts/runtime-abi-coverage.sh --lib target/coverage-lib/release/libmap2check.a \
+            target/runtime-ir/AnalysisModeOverflow.ll \
+            target/runtime-ir/AnalysisModeAssert.ll target/runtime-ir/AnalysisModeNone.ll \
+            target/runtime-ir/AnalysisModeMemtrack.ll target/runtime-ir/AnalysisModeMemcleanup.ll \
+            target/runtime-ir/NonDetGeneratorKlee.ll target/runtime-ir/NonDetGeneratorAFL.ll \
+            target/runtime-ir/WasmRuntimeStubs.ll target/runtime-ir/Map2CheckFunctions-glue.ll
+
+      # Os testes da lib só com a feature wasm, o build do núcleo do drop-in.
+      - name: Rodar os testes da lib com a feature wasm
+        run: cargo test --lib --features wasm
 
       - name: Instalar cargo-tarpaulin
         uses: taiki-e/install-action@v2
@@ -82,30 +217,33 @@ jobs:
       # stopgap so this pre-existing flake doesn't make CI red on unrelated
       # PRs — see the retry: a *new* memory-safety bug would fail every
       # attempt, not just some.
+      # O harness é ligado como o Map2Check liga um programa: a staticlib, a
+      # cola IR (map2check_assume*) e o gerador AFL++ (NonDetGeneratorAFL.ll),
+      # cujo main roda uma entrada por iteração do __AFL_LOOP (Task 2.10).
       - name: Compilar e executar harness FFI com ASan e UBSan
         run: |
           cargo build --release --all-features
-          clang -fsanitize=address,undefined -fno-omit-frame-pointer \
-            tests/ffi_harness.c target/release/libmap2check.a \
-            -ldl -lpthread -lm -o target/ffi_harness
+          scripts/build-c-abi-program.sh -o target/ffi_harness \
+            -m Map2CheckFunctions-glue -m NonDetGeneratorAFL tests/ffi_harness.c \
+            -- -fsanitize=address,undefined -fno-omit-frame-pointer
           ok=0
           for i in 1 2 3 4 5; do
             if target/ffi_harness; then ok=1; break; fi
           done
           [ "$ok" = 1 ]
 
-      # The harness rejects inputs with __VERIFIER_assume(0), which unwinds
-      # through the C frame of its __map2check_main__ (D1 condition 11).
-      # Optimised builds are where a missing unwind path would show: once
-      # with -fexceptions, the flag the pipeline must use, and once with
-      # clang's defaults.
+      # The harness rejects inputs with map2check_assume(0), whose
+      # nondet_assume longjmps through the C frame of its __map2check_main__
+      # back to the __AFL_LOOP (D7 item 5). Optimised builds are where a
+      # broken jump would show: once with -fexceptions and once with clang's
+      # defaults.
       - name: Compilar e executar harness FFI em -O2 (com e sem -fexceptions)
         run: |
           cargo build --release --all-features
           for flags in "-fexceptions" ""; do
-            clang -O2 $flags -fsanitize=address,undefined -fno-omit-frame-pointer \
-              tests/ffi_harness.c target/release/libmap2check.a \
-              -ldl -lpthread -lm -o target/ffi_harness_o2
+            scripts/build-c-abi-program.sh -o target/ffi_harness_o2 \
+              -m Map2CheckFunctions-glue -m NonDetGeneratorAFL tests/ffi_harness.c \
+              -- -O2 $flags -fsanitize=address,undefined -fno-omit-frame-pointer
             ok=0
             for i in 1 2 3 4 5; do
               if target/ffi_harness_o2; then ok=1; break; fi
@@ -113,44 +251,46 @@ jobs:
             [ "$ok" = 1 ] || { echo "ffi_harness -O2 $flags falhou"; exit 1; }
           done
 
-      - name: Compilar e executar test/codeAPI_by_caller_test.c (API núcleo)
+      - name: Compilar e executar test/codeAPI_by_caller_test.c (memtrack pelo ABI C)
         run: |
           cargo build --release
-          clang -fsanitize=address,undefined -fno-omit-frame-pointer \
-            test/codeAPI_by_caller_test.c target/release/libmap2check.a \
-            -ldl -lpthread -lm -o target/codeAPI_test
+          scripts/build-c-abi-program.sh -o target/codeAPI_test -m AnalysisModeMemtrack \
+            test/codeAPI_by_caller_test.c -- -fsanitize=address,undefined -fno-omit-frame-pointer
           ok=0
           for i in 1 2 3 4 5; do
             if target/codeAPI_test; then ok=1; break; fi
           done
           [ "$ok" = 1 ]
 
-      - name: Compilar e executar test/codefuzz_by_caller_test.c (feature libfuzzer)
+      - name: Compilar e executar test/codefuzz_by_caller_test.c (gerador AFL++ pelo ABI C)
         run: |
-          cargo build --release --features libfuzzer
-          clang -fsanitize=address,undefined -fno-omit-frame-pointer \
-            test/codefuzz_by_caller_test.c target/release/libmap2check.a \
-            -ldl -lpthread -lm -o target/codefuzz_test
+          cargo build --release
+          scripts/build-c-abi-program.sh -o target/codefuzz_test \
+            -m Map2CheckFunctions-glue -m NonDetGeneratorAFL \
+            test/codefuzz_by_caller_test.c -- -fsanitize=address,undefined -fno-omit-frame-pointer
           ok=0
           for i in 1 2 3 4 5; do
             if target/codefuzz_test; then ok=1; break; fi
           done
           [ "$ok" = 1 ]
 
-      - name: Compilar e executar test/codeklee_by_caller_test.c (smoke test, sem KLEE real)
+      - name: Compilar e executar test/codeklee_by_caller_test.c (gerador KLEE pelo ABI C, sem KLEE real)
         run: |
           cargo build --release
-          clang -fsanitize=address,undefined -fno-omit-frame-pointer \
-            test/codeklee_by_caller_test.c target/release/libmap2check.a \
-            -ldl -lpthread -lm -o target/codeklee_test
+          scripts/build-c-abi-program.sh -o target/codeklee_test \
+            -m Map2CheckFunctions-glue -m NonDetGeneratorKlee -m AnalysisModeAssert \
+            test/codeklee_by_caller_test.c -- -fsanitize=address,undefined -fno-omit-frame-pointer
           ok=0
           for i in 1 2 3 4 5; do
             if target/codeklee_test; then ok=1; break; fi
           done
           [ "$ok" = 1 ]
 
-      - name: Testar empacotamento de release (header, bibliotecas e docs)
-        run: scripts/test-package-release.sh
+      # Modo fixture: 21 arquivos de mentira no lugar dos .bc, sem Docker. O
+      # conteúdo do pacote, o SHA256SUMS interno e a reprodutibilidade são
+      # checados aqui; os .bc de verdade, em BC_DIR, no job runtime_matrix.
+      - name: Testar empacotamento de release (header, bibliotecas, 21 .bc de fixture e docs)
+        run: FIXTURE_BC=1 scripts/test-package-release.sh
 
       - name: Checar segurança de dependências (cargo-deny)
         uses: EmbarkStudios/cargo-deny-action@v2
@@ -167,14 +307,13 @@ jobs:
 
       - name: Build do Dockerfile
         run: docker build .
-  # Runtime do gerador `symex` (D1, rota A′; docs/klee-feasibility.md): as
-  # mesmas fontes compiladas por rustc 1.72.1 (LLVM 16) a partir de
-  # klee/Cargo.toml e do seu Cargo.lock v3, em bitcode que o llvm-link-16 e o
-  # KLEE 3.1 leem. O clippy em 1.82 do job acima não vê o que o 1.72 não
-  # compila (`LazyLock`, `unsafe extern`, API de std posterior a 1.72): este
-  # job é a guarda da condição 5. O KLEE em si não roda aqui (a imagem com o
-  # KLEE 3.1 é a do Map2Check); tests/klee_paths.sh roda no CI do Map2Check
-  # (Task 3.4) e localmente com Docker.
+  # Núcleo Rust do runtime drop-in em bitcode (D1, rota A′; D7): as mesmas
+  # fontes compiladas por rustc 1.72.1 (LLVM 16) a partir de klee/Cargo.toml
+  # e do seu Cargo.lock v3, em bitcode que o llvm-link-16 e o KLEE 3.1 leem.
+  # O clippy em 1.82 do job acima não vê o que o 1.72 não compila
+  # (`LazyLock`, `unsafe extern`, API de std posterior a 1.72): este job é a
+  # guarda da condição 5. O KLEE em si não roda aqui (a imagem com o KLEE 3.1
+  # é a do Map2Check).
   klee_runtime:
     runs-on: ubuntu-24.04
     steps:
@@ -187,34 +326,107 @@ jobs:
       - name: Instalar o rustc 1.72.1 (LLVM 16) com clippy
         run: rustup toolchain install 1.72.1 --profile minimal --component clippy
 
-      # O clippy em 1.82 do job acima não compila nondet/klee.rs (feature
-      # `klee` só existe em klee/Cargo.toml); este é o lint dele.
-      - name: Clippy do build KLEE (rustc 1.72.1, feature klee)
-        run: RUSTUP_TOOLCHAIN=1.72.1 cargo clippy --locked --manifest-path klee/Cargo.toml --features klee,wasm -- -D warnings
+      # O núcleo do runtime drop-in (feature `dropin`, Task 2.7): o
+      # map2check_init chama o analysis_init e o nondet_init externos dos
+      # módulos IR; só existe neste manifesto.
+      - name: Clippy do núcleo drop-in (rustc 1.72.1, feature dropin)
+        run: RUSTUP_TOOLCHAIN=1.72.1 cargo clippy --locked --manifest-path klee/Cargo.toml --features dropin,wasm -- -D warnings
 
-      # O script roda os autotestes da troca de intrínsecos antes de usá-la:
-      # equivalência por lli-16 em tests/klee/lower-intrinsics.ll e recusa
-      # de tests/klee/unknown-intrinsic.ll; qualquer intrínseco que o KLEE
-      # 3.1 não execute faz o build falhar. Antes da troca, o simbolizador
-      # de backtrace do std vira stubs de abort (scripts/klee-stub-symbolizer.py,
-      # com autoteste em tests/klee/stub-symbolizer.ll), e a guarda final
-      # falha se algum corpo do simbolizador sobrar.
-      - name: Compilar o runtime KLEE em bitcode (klee/Cargo.toml, --locked)
-        run: scripts/build-klee-runtime.sh target/klee/map2check-klee.bc
+      # Autotestes do pós-processamento do bitcode do núcleo (antes dentro de
+      # scripts/build-klee-runtime.sh, que saiu com a feature klee na Task
+      # 2.10): equivalência por lli-16 em tests/klee/lower-intrinsics.ll,
+      # recusa de tests/klee/unknown-intrinsic.ll e os stubs do simbolizador
+      # de backtrace (tests/klee/stub-symbolizer*.ll).
+      - name: Autotestes do pós-processamento do bitcode (scripts/klee-*.py)
+        run: scripts/test-klee-postprocess.sh
 
-      - name: Verificar que o bitcode existe e é legível pelo llvm-dis-16
+      # Os 21 módulos .bc do drop-in (Task 3.1, scripts/build-runtime-bc.sh):
+      # núcleo Rust com o pós-processamento da D7 e os 20 módulos IR montados
+      # com llvm-as-16. Usa o LLVM 16 instalado acima, sem a imagem; o build
+      # confere que o llvm-dis-16 lê os 21, que o núcleo não define nome de
+      # módulo IR, que não sobra nenhum `freeze` (o KLEE 3.1 não o executa),
+      # que o núcleo tem menos de 9 500 linhas de instrução e 13 600 linhas
+      # de IR (Task 3.3) e nenhum llvm.bitreverse (test-core-checks.sh é o
+      # teste dessas guardas).
+      # test-build-runtime-bc.sh constrói duas vezes, do zero, e exige a lista
+      # exata dos 21 arquivos e os mesmos sha256 (determinismo); a matriz de
+      # link precisa da imagem e roda no job runtime_matrix.
+      - name: Os 21 módulos .bc do runtime drop-in (lista, leitura, determinismo)
         run: |
-          test -s target/klee/map2check-klee.bc
-          llvm-dis-16 target/klee/map2check-klee.bc -o /dev/null
+          scripts/runtime-ir/test-core-checks.sh
+          MATRIX=0 scripts/test-build-runtime-bc.sh
 
       - name: Checar dependências do lockfile KLEE (cargo-deny)
         uses: EmbarkStudios/cargo-deny-action@v2
         with:
           manifest-path: ./klee/Cargo.toml
 
-      - name: Publicar o bitcode do runtime KLEE
-        uses: actions/upload-artifact@v4
+  # Matriz de link dos 21 .bc (Task 3.1) na imagem do Map2Check. A imagem
+  # map2check-dev:develop-<commit12> não está num registro: o job baixa o
+  # develop (scripts/fetch-map2check.sh, que reescreve vendor/MAP2CHECK_VERSION
+  # no runner: o commit testado é o HEAD do develop do dia, não
+  # necessariamente o fixado no repositório), constrói a imagem a partir do
+  # Dockerfile.dev dele (camadas no cache do GitHub Actions) e a instalação do
+  # C (scripts/it/build-map2check.sh), gera os .bc e roda a matriz sem e com
+  # --ref. Longo (a imagem compila KLEE, AFL++, crab/clam, dg); só em push e
+  # sob demanda, não em pull_request.
+  # ATENÇÃO: este job ainda não rodou em nenhum runner do GitHub (escrito na
+  # Task 3.1 sem push); tempo de build da imagem e espaço em disco são
+  # estimativas (~6 min numa máquina local; 20-60 min previstos no runner).
+  runtime_matrix:
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 240
+    steps:
+      - name: Baixar o código do repositório
+        uses: actions/checkout@v4
+
+      - name: Instalar o rustc 1.72.1 (LLVM 16)
+        run: rustup toolchain install 1.72.1 --profile minimal
+
+      # O fetch reescreve vendor/MAP2CHECK_VERSION com o HEAD do develop do
+      # dia; o commit fixado é o do arquivo como está no repositório.
+      - name: Baixar o Map2Check (branch develop, sem .git)
+        run: |
+          pinned="$(sed -n 's/^commit=//p' vendor/MAP2CHECK_VERSION)"
+          scripts/fetch-map2check.sh
+          fetched="$(sed -n 's/^commit=//p' vendor/MAP2CHECK_VERSION)"
+          echo "develop baixado: $fetched"
+          echo "develop fixado:  $pinned (vendor/MAP2CHECK_VERSION do repositório)"
+          if [ "$fetched" != "$pinned" ]; then
+            echo "::warning title=Map2Check develop mudou::o job testa $fetched, não o commit fixado $pinned (vendor/MAP2CHECK_VERSION)"
+          fi
+          echo "MAP2CHECK_COMMIT12=${fetched:0:12}" >> "$GITHUB_ENV"
+
+      # A imagem tem ~4,2 GB, mais o cache do buildx e a instalação do C: o
+      # runner padrão tem pouco espaço livre.
+      - name: Liberar espaço em disco
+        run: |
+          df -h /
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+          sudo docker image prune --all --force
+          df -h /
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Construir a imagem do Map2Check (Dockerfile.dev do develop)
+        uses: docker/build-push-action@v6
         with:
-          name: map2check-klee-bc
-          path: target/klee/map2check-klee.bc
-          if-no-files-found: error
+          context: vendor/map2check
+          file: vendor/map2check/Dockerfile.dev
+          tags: map2check-dev:develop-${{ env.MAP2CHECK_COMMIT12 }}
+          load: true
+          cache-from: type=gha,scope=map2check-dev
+          cache-to: type=gha,scope=map2check-dev,mode=max
+
+      - name: Construir e instalar o Map2Check (C) na imagem
+        run: scripts/it/build-map2check.sh
+
+      - name: Os 21 .bc, determinismo e a matriz de link (sem e com --ref)
+        run: scripts/test-build-runtime-bc.sh
+
+      - name: Sobreposição sobre a instalação do C
+        run: BC_DIR=target/runtime-bc-test/a/out scripts/it/test-overlay-install.sh
+
+      - name: Pacote de release com os 21 .bc de verdade
+        run: BC_DIR=target/runtime-bc-test/a/out scripts/test-package-release.sh

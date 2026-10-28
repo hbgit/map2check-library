@@ -1,31 +1,43 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #![deny(unsafe_code)]
 
-use serde::Serialize;
-
 /// Properties that can be violated during program analysis.
 /// `#[repr(C)]` allows FFI callers to pass this enum across the ABI boundary.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Default)]
+///
+/// The discriminants are the values of `enum ViolatedProperty` of the C
+/// runtime of Map2Check `develop` (`Map2CheckTypes.h:80-91`), so the C ABI
+/// (`write_property`, `set_false_result`, `get_current_property`) uses the C
+/// numbers; `tests/abi/enum-map.tsv` pairs the enumerators and
+/// `tests/abi/check-signatures.sh` checks the values. `Concurrency` has no C
+/// counterpart and comes after them.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[cfg_attr(not(feature = "dropin"), derive(serde::Serialize))]
 #[repr(C)]
 pub enum ViolatedProperty {
-    Overflow,
-    MemsafetyFree,
-    MemsafetyDeref,
-    MemsafetyMemtrack,
-    MemsafetyMemcleanup,
-    Reachability,
-    Concurrency,
+    /// `NONE`: no violation.
     #[default]
-    None,
-    /// A failed `map2check_is_valid_assert` (`ASSERT` in `PropertyGenerator.c`).
-    /// `Reachability` is the target-reached property (`TARGET_REACHED`).
-    Assert,
+    None = 0,
     /// The analysis could not decide (`UNKNOWN` in `PropertyGenerator.c`).
-    Unknown,
-    /// Signed division or remainder by zero (`FALSE_DIVBYZERO`,
-    /// `Map2CheckTypes.h:78`), reported by `map2check_binop_div_signed` and
-    /// `map2check_binop_rem_signed`.
-    DivByZero,
+    Unknown = 1,
+    /// `FALSE_FREE`.
+    MemsafetyFree = 2,
+    /// `FALSE_DEREF`.
+    MemsafetyDeref = 3,
+    /// `FALSE_MEMTRACK`.
+    MemsafetyMemtrack = 4,
+    /// The target function was reached (`TARGET_REACHED`).
+    Reachability = 5,
+    /// `FALSE_OVERFLOW`.
+    Overflow = 6,
+    /// A failed `map2check_assert` (`ASSERT` in `PropertyGenerator.c`).
+    Assert = 7,
+    /// `FALSE_MEMCLEANUP`.
+    MemsafetyMemcleanup = 8,
+    /// Signed division or remainder by zero (`FALSE_DIVBYZERO`), reported by
+    /// `map2check_binop_sdiv` and `map2check_binop_srem`.
+    DivByZero = 9,
+    /// No counterpart in the C runtime.
+    Concurrency = 10,
 }
 
 impl ViolatedProperty {
@@ -47,7 +59,8 @@ impl ViolatedProperty {
 }
 
 /// Central analysis result, analogous to `caller_result_t` in C.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone)]
+#[cfg_attr(not(feature = "dropin"), derive(serde::Serialize))]
 pub struct AnalysisResult {
     pub step: u64,
     pub line: u32,
@@ -56,8 +69,9 @@ pub struct AnalysisResult {
     pub property: ViolatedProperty,
 }
 
-impl Default for AnalysisResult {
-    fn default() -> Self {
+impl AnalysisResult {
+    /// The result before any record: no violation, step 0.
+    pub const fn new() -> Self {
         Self {
             step: 0,
             line: 0,
@@ -65,6 +79,12 @@ impl Default for AnalysisResult {
             ok: true,
             property: ViolatedProperty::None,
         }
+    }
+}
+
+impl Default for AnalysisResult {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -87,12 +107,27 @@ mod tests {
         assert_eq!(ViolatedProperty::None.as_str(), "NONE");
     }
 
+    /// The discriminants are the values of develop's `enum ViolatedProperty`
+    /// (`Map2CheckTypes.h:80-91`), so `write_property` takes the C values;
+    /// `Concurrency` has no C counterpart and comes after them.
     #[test]
-    fn new_variants_are_appended_after_the_original_ones() {
-        assert_eq!(ViolatedProperty::None as i32, 7);
-        assert_eq!(ViolatedProperty::Assert as i32, 8);
-        assert_eq!(ViolatedProperty::Unknown as i32, 9);
-        assert_eq!(ViolatedProperty::DivByZero as i32, 10);
+    fn discriminants_are_the_values_of_the_c_enum() {
+        let cases = [
+            (ViolatedProperty::None, 0),
+            (ViolatedProperty::Unknown, 1),
+            (ViolatedProperty::MemsafetyFree, 2),
+            (ViolatedProperty::MemsafetyDeref, 3),
+            (ViolatedProperty::MemsafetyMemtrack, 4),
+            (ViolatedProperty::Reachability, 5),
+            (ViolatedProperty::Overflow, 6),
+            (ViolatedProperty::Assert, 7),
+            (ViolatedProperty::MemsafetyMemcleanup, 8),
+            (ViolatedProperty::DivByZero, 9),
+            (ViolatedProperty::Concurrency, 10),
+        ];
+        for (property, value) in cases {
+            assert_eq!(property as i32, value, "{property:?}");
+        }
     }
 
     #[test]

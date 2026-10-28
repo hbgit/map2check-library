@@ -1,0 +1,11 @@
+tag	c_enumerator	rust_enumerator
+ViolatedProperty	NONE	None
+ViolatedProperty	UNKNOWN	Unknown
+ViolatedProperty	FALSE_FREE	MemsafetyFree
+ViolatedProperty	FALSE_DEREF	MemsafetyDeref
+ViolatedProperty	FALSE_MEMTRACK	MemsafetyMemtrack
+ViolatedProperty	TARGET_REACHED	Reachability
+ViolatedProperty	FALSE_OVERFLOW	Overflow
+ViolatedProperty	ASSERT	Assert
+ViolatedProperty	FALSE_MEMCLEANUP	MemsafetyMemcleanup
+ViolatedProperty	FALSE_DIVBYZERO	DivByZero

@@ -33,9 +33,9 @@ fn record(property: ViolatedProperty, line: u32) {
         s.set_false(property, line, "");
         Ok(first)
     }) {
-        Ok(true) => crate::output::termination::on_violation(false),
+        Ok(true) => crate::output::termination::on_violation(),
         Ok(false) => {}
-        Err(e) => eprintln!("[map2check] error: {e}"),
+        Err(e) => crate::output::termination::log_error(&e),
     }
 }
 
@@ -46,7 +46,6 @@ fn record(property: ViolatedProperty, line: u32) {
 /// pass emits the call right after the call to `w2c_*_malloc`, with the
 /// zero-extended result and size. Offsets 0 and `(uint64_t)-1` are ignored.
 /// Tracking happens in every mode.
-#[no_mangle]
 pub extern "C" fn map2check_wasm_malloc(offset: u64, size: u64) {
     ffi_guard(
         || {
@@ -54,7 +53,7 @@ pub extern "C" fn map2check_wasm_malloc(offset: u64, size: u64) {
                 memtrack::wasm_register_malloc(&mut s.wasm_allocs, offset, size);
                 Ok(())
             }) {
-                eprintln!("[map2check] error: {e}");
+                crate::output::termination::log_error(&e);
             }
         },
         (),
@@ -66,7 +65,6 @@ pub extern "C" fn map2check_wasm_malloc(offset: u64, size: u64) {
 /// a `MEMSAFETY_FREE` violation at `line` (the pass sends the source line as
 /// an `i64`); an already freed block is found again and is not an error.
 /// The violation is reported only where the memory checks are active.
-#[no_mangle]
 pub extern "C" fn map2check_wasm_free(offset: u64, line: i64) {
     ffi_guard(
         || {
@@ -75,7 +73,7 @@ pub extern "C" fn map2check_wasm_free(offset: u64, line: i64) {
             }) {
                 Ok(found) => found,
                 Err(e) => {
-                    eprintln!("[map2check] error: {e}");
+                    crate::output::termination::log_error(&e);
                     return;
                 }
             };
@@ -94,7 +92,6 @@ pub extern "C" fn map2check_wasm_free(offset: u64, line: i64) {
 /// store through the lifted memory. A bad access is reported as develop does,
 /// `FALSE_OVERFLOW` with line 0 and no function name: the report tag is
 /// `OVERFLOW`. Reported only where the memory checks are active.
-#[no_mangle]
 pub extern "C" fn map2check_wasm_check_access(offset: u64, access_size: u64) {
     ffi_guard(
         || {
@@ -110,7 +107,7 @@ pub extern "C" fn map2check_wasm_check_access(offset: u64, access_size: u64) {
             }) {
                 Ok(valid) => valid,
                 Err(e) => {
-                    eprintln!("[map2check] error: {e}");
+                    crate::output::termination::log_error(&e);
                     return;
                 }
             };
@@ -187,8 +184,7 @@ pub mod rt {
     ///
     /// # Safety
     /// `mem` must point to a writable `wasm_rt_memory_t`.
-    #[no_mangle]
-    pub unsafe extern "C" fn wasm_rt_allocate_memory(
+    pub(super) unsafe fn wasm_rt_allocate_memory_impl(
         mem: *mut wasm_rt_memory_t,
         initial_pages: u64,
         max_pages: u64,
@@ -218,8 +214,7 @@ pub mod rt {
     ///
     /// # Safety
     /// `mem` must point to a memory set up by [`wasm_rt_allocate_memory`].
-    #[no_mangle]
-    pub unsafe extern "C" fn wasm_rt_grow_memory(mem: *mut wasm_rt_memory_t, pages: u64) -> u64 {
+    pub(super) unsafe fn wasm_rt_grow_memory_impl(mem: *mut wasm_rt_memory_t, pages: u64) -> u64 {
         ffi_guard(
             || {
                 let failure = u64::from(u32::MAX);
@@ -269,8 +264,7 @@ pub mod rt {
     ///
     /// # Safety
     /// `mem` must point to a memory set up by [`wasm_rt_allocate_memory`].
-    #[no_mangle]
-    pub unsafe extern "C" fn wasm_rt_free_memory(mem: *mut wasm_rt_memory_t) {
+    pub(super) unsafe fn wasm_rt_free_memory_impl(mem: *mut wasm_rt_memory_t) {
         ffi_guard(
             || {
                 // SAFETY: caller guarantees `mem` is a valid descriptor whose
@@ -293,8 +287,7 @@ pub mod rt {
     ///
     /// # Safety
     /// `table` must point to a writable `wasm_rt_funcref_table_t`.
-    #[no_mangle]
-    pub unsafe extern "C" fn wasm_rt_allocate_funcref_table(
+    pub(super) unsafe fn wasm_rt_allocate_funcref_table_impl(
         table: *mut wasm_rt_funcref_table_t,
         elements: u32,
         _max_elements: u32,
@@ -320,8 +313,7 @@ pub mod rt {
     /// # Safety
     /// `table` must point to a table set up by
     /// [`wasm_rt_allocate_funcref_table`].
-    #[no_mangle]
-    pub unsafe extern "C" fn wasm_rt_free_funcref_table(table: *mut wasm_rt_funcref_table_t) {
+    pub(super) unsafe fn wasm_rt_free_funcref_table_impl(table: *mut wasm_rt_funcref_table_t) {
         ffi_guard(
             || {
                 // SAFETY: caller guarantees `table` is valid; data is calloc'd.
@@ -334,40 +326,113 @@ pub mod rt {
         );
     }
 
-    /// WASI `proc_exit`: a no-op, so that the analysis, not the lifted
-    /// program, decides when the run ends.
+    /// The old API's body of this C name, not exported since 2.0.0 (Task
+    /// 2.10): the C name belongs to the IR module `WasmRuntimeStubs.ll`.
+    /// Rust tests call it; the body is `wasm_rt_allocate_memory_impl`, which
+    /// `__m2c_rt_wasm_*` also calls.
     ///
     /// # Safety
-    /// `instance` is never dereferenced and may be null.
-    #[no_mangle]
-    pub unsafe extern "C" fn w2c_wasi__snapshot__preview1_proc_exit(
-        instance: *mut c_void,
-        code: u32,
+    /// As `wasm_rt_allocate_memory_impl`.
+    pub unsafe extern "C" fn wasm_rt_allocate_memory(
+        mem: *mut wasm_rt_memory_t,
+        initial_pages: u64,
+        max_pages: u64,
+        is64: bool,
+        page_size: u32,
     ) {
+        // SAFETY: forwarded caller contract.
         ffi_guard(
-            || {
-                let _ = (instance, code);
+            || unsafe {
+                wasm_rt_allocate_memory_impl(mem, initial_pages, max_pages, is64, page_size)
             },
             (),
-        );
+        )
+    }
+
+    /// The old API's body of this C name, not exported since 2.0.0 (Task
+    /// 2.10): the C name belongs to the IR module `WasmRuntimeStubs.ll`.
+    /// Rust tests call it; the body is `wasm_rt_grow_memory_impl`, which
+    /// `__m2c_rt_wasm_*` also calls.
+    ///
+    /// # Safety
+    /// As `wasm_rt_grow_memory_impl`.
+    pub unsafe extern "C" fn wasm_rt_grow_memory(mem: *mut wasm_rt_memory_t, pages: u64) -> u64 {
+        // SAFETY: forwarded caller contract.
+        ffi_guard(
+            || unsafe { wasm_rt_grow_memory_impl(mem, pages) },
+            u64::from(u32::MAX),
+        )
+    }
+
+    /// The old API's body of this C name, not exported since 2.0.0 (Task
+    /// 2.10): the C name belongs to the IR module `WasmRuntimeStubs.ll`.
+    /// Rust tests call it; the body is `wasm_rt_free_memory_impl`, which
+    /// `__m2c_rt_wasm_*` also calls.
+    ///
+    /// # Safety
+    /// As `wasm_rt_free_memory_impl`.
+    pub unsafe extern "C" fn wasm_rt_free_memory(mem: *mut wasm_rt_memory_t) {
+        // SAFETY: forwarded caller contract.
+        ffi_guard(|| unsafe { wasm_rt_free_memory_impl(mem) }, ())
+    }
+
+    /// The old API's body of this C name, not exported since 2.0.0 (Task
+    /// 2.10): the C name belongs to the IR module `WasmRuntimeStubs.ll`.
+    /// Rust tests call it; the body is `wasm_rt_allocate_funcref_table_impl`, which
+    /// `__m2c_rt_wasm_*` also calls.
+    ///
+    /// # Safety
+    /// As `wasm_rt_allocate_funcref_table_impl`.
+    pub unsafe extern "C" fn wasm_rt_allocate_funcref_table(
+        table: *mut wasm_rt_funcref_table_t,
+        elements: u32,
+        max_elements: u32,
+    ) {
+        // SAFETY: forwarded caller contract.
+        ffi_guard(
+            || unsafe { wasm_rt_allocate_funcref_table_impl(table, elements, max_elements) },
+            (),
+        )
+    }
+
+    /// The old API's body of this C name, not exported since 2.0.0 (Task
+    /// 2.10): the C name belongs to the IR module `WasmRuntimeStubs.ll`.
+    /// Rust tests call it; the body is `wasm_rt_free_funcref_table_impl`, which
+    /// `__m2c_rt_wasm_*` also calls.
+    ///
+    /// # Safety
+    /// As `wasm_rt_free_funcref_table_impl`.
+    pub unsafe extern "C" fn wasm_rt_free_funcref_table(table: *mut wasm_rt_funcref_table_t) {
+        // SAFETY: forwarded caller contract.
+        ffi_guard(|| unsafe { wasm_rt_free_funcref_table_impl(table) }, ())
     }
 
     /// "Always initialised for KLEE": true from the start.
     static INITIALIZED: AtomicBool = AtomicBool::new(true);
 
-    #[no_mangle]
-    pub extern "C" fn wasm_rt_is_initialized() -> bool {
+    pub(super) fn wasm_rt_is_initialized_impl() -> bool {
         ffi_guard(|| INITIALIZED.load(Ordering::Relaxed), true)
     }
 
-    #[no_mangle]
-    pub extern "C" fn wasm_rt_init() {
+    pub(super) fn wasm_rt_init_impl() {
         ffi_guard(|| INITIALIZED.store(true, Ordering::Relaxed), ());
     }
 
-    #[no_mangle]
-    pub extern "C" fn wasm_rt_free() {
+    pub(super) fn wasm_rt_free_impl() {
         ffi_guard(|| INITIALIZED.store(false, Ordering::Relaxed), ());
+    }
+
+    /// Not exported since 2.0.0 (Task 2.10), as above.
+    pub extern "C" fn wasm_rt_is_initialized() -> bool {
+        ffi_guard(wasm_rt_is_initialized_impl, true)
+    }
+
+    pub extern "C" fn wasm_rt_init() {
+        ffi_guard(wasm_rt_init_impl, ())
+    }
+
+    pub extern "C" fn wasm_rt_free() {
+        ffi_guard(wasm_rt_free_impl, ())
     }
 
     /// A trap ends the run. develop calls `map2check_error()`, which writes no
@@ -375,8 +440,7 @@ pub mod rt {
     /// records an UNKNOWN verdict (a first violation, final) and aborts.
     /// `wasm-rt.h` declares the function `noreturn`, so it never returns, not
     /// even with no analysis mode set.
-    #[no_mangle]
-    pub extern "C" fn wasm_rt_trap(code: u32) -> ! {
+    pub(super) fn wasm_rt_trap_impl(code: u32) -> ! {
         ffi_guard(
             || {
                 let _ = code;
@@ -386,9 +450,135 @@ pub mod rt {
         );
         std::process::abort()
     }
+
+    /// Not exported since 2.0.0 (Task 2.10), as above.
+    pub extern "C" fn wasm_rt_trap(code: u32) -> ! {
+        ffi_guard(|| wasm_rt_trap_impl(code), ());
+        std::process::abort()
+    }
 }
 
 pub use rt::*;
+
+// ── Core entry points of `WasmRuntimeStubs.ll` (Task 2.9, D7 A-fwd) ─────────
+//
+// The IR module `WasmRuntimeStubs.ll` (`scripts/runtime-ir/gen_ll.py`) defines
+// the C names `wasm_rt_*` the lifted code calls and forwards each one to the
+// `__m2c_rt_wasm_*` below; `w2c_wasi__snapshot__preview1_proc_exit` has an
+// empty C body (`WasmRuntimeStubs.c:90-93`) and is an empty IR define. The
+// descriptors cross the C ABI as `void *` (the header does not know the wabt
+// structs). The behaviour is `rt`'s, one-to-one with `WasmRuntimeStubs.c`.
+// Since 2.0.0 (Task 2.10) the `wasm_rt_*` functions of `rt` are Rust only
+// (tests call them); they and these entry points share the `*_impl` bodies
+// (a `__m2c` function must never call the C name: the IR module defines it
+// and forwards back here).
+
+use std::os::raw::c_void;
+
+/// `wasm_rt_allocate_memory` (`WasmRuntimeStubs.c:22-35`): `calloc`ed linear
+/// memory of `initial_pages` pages; `is64` is not stored.
+///
+/// # Safety
+/// `mem` must point to a writable `wasm_rt_memory_t`.
+#[no_mangle]
+pub unsafe extern "C" fn __m2c_rt_wasm_allocate_memory(
+    mem: *mut c_void,
+    initial_pages: u64,
+    max_pages: u64,
+    is64: bool,
+    page_size: u32,
+) {
+    // SAFETY: forwarded caller contract.
+    ffi_guard(
+        || unsafe {
+            rt::wasm_rt_allocate_memory_impl(mem.cast(), initial_pages, max_pages, is64, page_size)
+        },
+        (),
+    );
+}
+
+/// `wasm_rt_grow_memory` (`WasmRuntimeStubs.c:41-63`): the previous page
+/// count, or `UINT32_MAX` on failure.
+///
+/// # Safety
+/// `mem` must point to a memory set up by `__m2c_rt_wasm_allocate_memory`.
+#[no_mangle]
+pub unsafe extern "C" fn __m2c_rt_wasm_grow_memory(mem: *mut c_void, pages: u64) -> u64 {
+    // SAFETY: forwarded caller contract.
+    ffi_guard(
+        || unsafe { rt::wasm_rt_grow_memory_impl(mem.cast(), pages) },
+        u64::from(u32::MAX),
+    )
+}
+
+/// `wasm_rt_free_memory` (`WasmRuntimeStubs.c:66-70`).
+///
+/// # Safety
+/// `mem` must point to a memory set up by `__m2c_rt_wasm_allocate_memory`.
+#[no_mangle]
+pub unsafe extern "C" fn __m2c_rt_wasm_free_memory(mem: *mut c_void) {
+    // SAFETY: forwarded caller contract.
+    ffi_guard(|| unsafe { rt::wasm_rt_free_memory_impl(mem.cast()) }, ());
+}
+
+/// `wasm_rt_allocate_funcref_table` (`WasmRuntimeStubs.c:73-78`; the element
+/// size is SD-19).
+///
+/// # Safety
+/// `table` must point to a writable `wasm_rt_funcref_table_t`.
+#[no_mangle]
+pub unsafe extern "C" fn __m2c_rt_wasm_allocate_funcref_table(
+    table: *mut c_void,
+    elements: u32,
+    max_elements: u32,
+) {
+    // SAFETY: forwarded caller contract.
+    ffi_guard(
+        || unsafe { rt::wasm_rt_allocate_funcref_table_impl(table.cast(), elements, max_elements) },
+        (),
+    );
+}
+
+/// `wasm_rt_free_funcref_table` (`WasmRuntimeStubs.c:81-84`).
+///
+/// # Safety
+/// `table` must point to a table set up by
+/// `__m2c_rt_wasm_allocate_funcref_table`.
+#[no_mangle]
+pub unsafe extern "C" fn __m2c_rt_wasm_free_funcref_table(table: *mut c_void) {
+    // SAFETY: forwarded caller contract.
+    ffi_guard(
+        || unsafe { rt::wasm_rt_free_funcref_table_impl(table.cast()) },
+        (),
+    );
+}
+
+/// `wasm_rt_init` (`WasmRuntimeStubs.c:102-104`): marks the runtime initialised.
+#[no_mangle]
+pub extern "C" fn __m2c_rt_wasm_init() {
+    ffi_guard(rt::wasm_rt_init_impl, ());
+}
+
+/// `wasm_rt_free` (`WasmRuntimeStubs.c:106-108`): marks it not initialised.
+#[no_mangle]
+pub extern "C" fn __m2c_rt_wasm_free() {
+    ffi_guard(rt::wasm_rt_free_impl, ());
+}
+
+/// `wasm_rt_is_initialized` (`WasmRuntimeStubs.c:98-100`): true from the start.
+#[no_mangle]
+pub extern "C" fn __m2c_rt_wasm_is_initialized() -> bool {
+    ffi_guard(rt::wasm_rt_is_initialized_impl, true)
+}
+
+/// `wasm_rt_trap` (`WasmRuntimeStubs.c:110-116`): never returns. Records an
+/// UNKNOWN verdict, then aborts (SD-19).
+#[no_mangle]
+pub extern "C" fn __m2c_rt_wasm_trap(code: u32) {
+    ffi_guard(|| rt::wasm_rt_trap_impl(code), ());
+    // The impl aborts; a panic that ffi_guard caught must not return either.
+    std::process::abort()
+}
 
 #[cfg(test)]
 mod tests {

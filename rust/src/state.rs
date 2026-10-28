@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #![deny(unsafe_code)]
 
-use std::sync::{Mutex, OnceLock};
+use std::sync::Mutex;
 
 use crate::{
     analysismode::mode::AnalysisMode,
@@ -12,9 +12,10 @@ use crate::{
     nondet::NonDetEntry,
 };
 
-// `OnceLock` and not `LazyLock`: the KLEE runtime compiles this file with
-// rustc 1.72 (D1 condition 5, klee/Cargo.toml), where `LazyLock` is unstable.
-static ANALYSIS_STATE: OnceLock<Mutex<AnalysisState>> = OnceLock::new();
+// Built at compile time (`AnalysisState::new` is const): no `OnceLock` and
+// no `LazyLock` (unstable in rustc 1.72, which builds the drop-in core, D1
+// condition 5), so the core carries no once-initialisation code (Task 3.3).
+static ANALYSIS_STATE: Mutex<AnalysisState> = Mutex::new(AnalysisState::new());
 
 static CONFIG: Mutex<Config> = Mutex::new(Config::new());
 
@@ -23,8 +24,10 @@ static CONFIG: Mutex<Config> = Mutex::new(Config::new());
 /// clear it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Config {
-    /// Set by `map2check_set_mode()`. `None` means unset: every check is
-    /// active and the leak tag follows `memcleanup`, as before Task 2.3.
+    /// Set by the `__m2c_rt_<mode>_analysis_init` of the linked mode module
+    /// (and by the Rust-only `map2check_set_mode()` of the tests). `None`
+    /// means unset: every check is active and the leak tag follows
+    /// `memcleanup`, as before Task 2.3.
     pub mode: Option<AnalysisMode>,
     /// Set by `map2check_set_memcleanup()`: a leak at exit is reported as
     /// `MemsafetyMemcleanup` instead of `MemsafetyMemtrack`.
@@ -75,14 +78,22 @@ pub(crate) fn reset_config() {
     update_config(|c| *c = Config::new());
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct AnalysisState {
     pub result: AnalysisResult,
     pub nondets: Vec<NonDetEntry>,
+    /// The rows of develop's `nondet_log` (`NonDetLog.c:144`), appended by
+    /// the `map2check_nondet_<t>` exports and written to `klee_log.csv` by
+    /// `__m2c_rt_nondet_log_to_file`.
+    pub c_nondet: Vec<crate::nondet::c_log::CNondetCall>,
     pub memtrack: Vec<MemTrackEntry>,
     /// The offset-keyed allocation table of the wasm2c runtime
     /// (`map2check_wasm_*`, Task 2.8).
     pub wasm_allocs: Vec<crate::memtrack::WasmAlloc>,
+    /// develop's `heap_log`, `allocation_log`, `list_log` and `ERROR_DEREF`
+    /// (`AnalysisModeMemtrack.c:120-123`), kept by the `__m2c_rt_memtrack_*`
+    /// core entry points (Task 2.5). Its list rows take `c_step`.
+    pub c_memory: crate::memtrack::c_mode::CMemory,
     pub bbtrack: Vec<BasicBlockEntry>,
     pub legacy_nondet_logs: Vec<Box<crate::ffi::non_det_log_t>>,
     pub legacy_bbtrack_logs: Vec<Box<crate::ffi::bbtrack_log_t>>,
@@ -91,11 +102,55 @@ pub struct AnalysisState {
     /// the list log before it checks (`AnalysisModeMemtrack.c:346-358`), so
     /// the legacy logs keep it; it is not a release and no check reads it.
     pub failed_free: Option<MemTrackEntry>,
+    /// develop's `Map2CheckCurrentStep` (`Map2CheckFunctions.c:19`): 0 after
+    /// `map2check_init`, read by `map2check_get_current_step` and advanced
+    /// only by `map2check_next_current_step`, with C `unsigned` wrap-around.
+    /// It is not `result.step`, which every record of this library advances.
+    pub c_step: u32,
+    /// develop's `gotError` (`Map2CheckFunctions.c:27`): set by
+    /// `map2check_error`, so `map2check_exit` skips the end-of-program
+    /// verdict and ends the run as a violation even with no property recorded.
+    pub got_error: bool,
+    /// The end-of-program verdict (`analysis_is_program_correct`) ran in this
+    /// run; develop's allocation log then has the rows `valid_allocation_log`
+    /// appends (`AllocationLog.c:69-101`), which the witness logs replay.
+    pub end_of_program: bool,
+    /// `map2check_destroy` already ran (develop's function-static
+    /// `alreadyReleased`, `Map2CheckFunctions.c:80-83`). Here it belongs to
+    /// the run and `map2check_init` clears it; develop never clears it, which
+    /// only changes what a second run in the same process frees.
+    pub destroyed: bool,
+}
+
+impl Default for AnalysisState {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl AnalysisState {
+    /// The state before any record.
+    pub const fn new() -> Self {
+        Self {
+            result: AnalysisResult::new(),
+            nondets: Vec::new(),
+            c_nondet: Vec::new(),
+            memtrack: Vec::new(),
+            wasm_allocs: Vec::new(),
+            c_memory: crate::memtrack::c_mode::CMemory::new(),
+            bbtrack: Vec::new(),
+            legacy_nondet_logs: Vec::new(),
+            legacy_bbtrack_logs: Vec::new(),
+            failed_free: None,
+            c_step: 0,
+            got_error: false,
+            end_of_program: false,
+            destroyed: false,
+        }
+    }
+
     pub fn reset(&mut self) {
-        *self = Self::default();
+        *self = Self::new();
     }
 
     /// Records a violation unless one is already recorded (#36, SD-03).
@@ -125,7 +180,7 @@ impl AnalysisState {
 }
 
 fn ensure_state() -> &'static Mutex<AnalysisState> {
-    ANALYSIS_STATE.get_or_init(|| Mutex::new(AnalysisState::default()))
+    &ANALYSIS_STATE
 }
 
 /// Starts a fresh analysis: forces the singleton into existence and runs the
@@ -152,9 +207,10 @@ fn with_state_recovering(f: impl FnOnce(&mut AnalysisState)) {
             let mut guard = poisoned.into_inner();
             f(&mut guard);
             // `Mutex::clear_poison` is unstable in rustc 1.72, which builds
-            // the KLEE runtime. That build has `panic = "abort"`, so no
-            // caught panic can poison the lock there (D1, "Custo do pin").
-            #[cfg(not(feature = "klee"))]
+            // the drop-in core (klee/Cargo.toml). That build has
+            // `panic = "abort"`, so no caught panic can poison the lock there
+            // (D1, "Custo do pin").
+            #[cfg(not(feature = "dropin"))]
             state.clear_poison();
         }
     }
@@ -176,6 +232,14 @@ where
     F: FnOnce(&mut AnalysisState) -> Result<R, Map2CheckError>,
 {
     let state = get()?;
+    // The drop-in core is built with `panic = "abort"`: no panic can poison
+    // its lock, so there is no error to report (and no `PoisonError` text
+    // to format).
+    #[cfg(feature = "dropin")]
+    let mut guard = state
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    #[cfg(not(feature = "dropin"))]
     let mut guard = state.lock()?;
     f(&mut guard)
 }

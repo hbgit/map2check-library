@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #![deny(unsafe_code)]
 
-use serde::Serialize;
+pub mod c_mode;
+
 use std::collections::{hash_map::DefaultHasher, HashSet};
 use std::hash::BuildHasherDefault;
 
@@ -85,16 +86,17 @@ pub fn wasm_is_valid_access(table: &[WasmAlloc], address: u64, access_size: u64)
 
 /// Single memory tracking record — analogous to `memtrack_log_t` in C.
 /// Addresses are `usize` (platform pointer width) instead of `long`.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone)]
+#[cfg_attr(not(feature = "dropin"), derive(serde::Serialize))]
 pub struct MemTrackEntry {
     pub step: u64,
     pub line: u32,
     pub scope: u32,
     /// Address of the variable holding the pointer (cast from `*const T`).
-    #[serde(rename = "var_mem_address")]
+    #[cfg_attr(not(feature = "dropin"), serde(rename = "var_mem_address"))]
     pub var_addr: usize,
     /// Address the variable points to.
-    #[serde(rename = "mem_address_points_to")]
+    #[cfg_attr(not(feature = "dropin"), serde(rename = "mem_address_points_to"))]
     pub points_to: usize,
     pub is_dynamic: bool,
     pub is_free: bool,
@@ -107,7 +109,7 @@ pub struct MemTrackEntry {
     pub is_null_valid: bool,
     /// The export that recorded the entry. Only the legacy log files read it
     /// (`output::legacy_files`); the JSON report does not carry it.
-    #[serde(skip)]
+    #[cfg_attr(not(feature = "dropin"), serde(skip))]
     pub origin: MemOrigin,
 }
 

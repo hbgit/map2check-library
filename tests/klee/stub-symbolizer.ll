@@ -1,6 +1,6 @@
 ; SPDX-License-Identifier: GPL-3.0-only
 ; Self-test of scripts/klee-stub-symbolizer.py, run by
-; scripts/build-klee-runtime.sh (and so by the CI job klee_runtime) with
+; scripts/test-klee-postprocess.sh (and so by the CI job klee_runtime) with
 ; lli-16 before and after the rewrite:
 ;   - no argument: main returns 42 through two bodies named after
 ;     symbolizer and printer types that the remaining code also calls

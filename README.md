@@ -4,13 +4,15 @@
 
 # Map2Check-Library
 
-Biblioteca de suporte à ferramenta [Map2Check](https://github.com/hbgit/map2check), reescrita em **Rust** (rewrite completo do C original). Provê rastreamento dinâmico e verificação de propriedades de segurança para programas analisados por LibFuzzer:
+Biblioteca de suporte à ferramenta [Map2Check](https://github.com/hbgit/map2check), reescrita em **Rust** (rewrite completo do C original). Provê rastreamento dinâmico e verificação de propriedades de segurança para os programas que o Map2Check instrumenta:
 
 - Rastreamento de blocos básicos (`bbtrack`)
 - Rastreamento de endereços de memória e operações de gerenciamento de memória (`memtrack`)
-- Rastreamento de valores não-determinísticos gerados por LibFuzzer (`nondet`)
+- Log dos valores não-determinísticos (`nondet`), gerados pelos módulos de gerador do Map2Check (AFL++, KLEE)
 - Verificação de propriedades de segurança: overflow aritmético, memória inválida, assert definido pelo usuário (`analysismode`)
-- API C compatível via FFI (`ffi.rs`) para integração direta com a LLVM Pass do Map2Check
+- ABI C via FFI (`ffi.rs`): desde a 2.0.0 (D6), exatamente o ABI C do runtime do Map2Check (`develop`) que os módulos núcleo definem, mais os pontos de entrada `__m2c_rt_*` para os quais os módulos IR gerados (`scripts/runtime-ir/gen_ll.py`) encaminham o resto do ABI (`scripts/check-export-set.sh`)
+
+**A interface com o Map2Check são os 21 módulos `.bc` do runtime drop-in** (`scripts/build-runtime-bc.sh`), que substituem os do runtime C em `${MAP2CHECK_PATH}/lib` sem mudança no frontend nem nos passes. A versão 2.0.0-rc.1 foi validada contra o `develop` `0bca42eb89d116178e6b52f52acaf73f7c305088` por dois gates diferenciais (`docs/cutover/gate-2026-10-27.md` e `docs/cutover/gate-2026-10-28.md`). A API núcleo 1.x (`map2check_set_mode`, `map2check_map_*`, `print_all_containers_as_json`...) deixou de ser ABI C e não é a interface com o Map2Check: ela segue como funções Rust de `map2check::ffi`, usadas pelos testes. Instalação: [`docs/integration-guide.md`](docs/integration-guide.md); sugestões para o mantenedor do Map2Check: [`docs/cutover/handoff-map2check.md`](docs/cutover/handoff-map2check.md).
 
 ## Requisitos
 
@@ -32,7 +34,9 @@ cargo install cargo-tarpaulin cargo-audit cargo-deny cbindgen
 
 As features configuradas no `Cargo.toml` são:
 
-- `libfuzzer`: habilita a integração com o LibFuzzer.
+- `wasm`: os pontos de entrada `__m2c_rt_wasm_*` do runtime wasm2c (modo `--wasm` do Map2Check).
+
+A feature `libfuzzer` saiu na 2.0.0, com a API núcleo 1.x (veja o `CHANGELOG.md`).
 
 ## Build e testes
 
@@ -110,7 +114,7 @@ rust/src/
 ├── caller/mod.rs              # ViolatedProperty, AnalysisResult, step counter
 ├── nondet/
 │   ├── mod.rs                 # NonDetValue (enum), NonDetEntry
-│   └── libfuzzer.rs           # LLVMFuzzerTestOneInput (feature = "libfuzzer")
+│   └── c_log.rs               # log nondet do runtime C (NonDetLog.c, klee_log.csv)
 ├── memtrack/mod.rs            # MemTrackEntry, VCC checks de memória
 ├── bbtrack/mod.rs             # BasicBlockEntry, busca por linha
 ├── analysismode/
@@ -152,17 +156,17 @@ Map2Check Tool (LLVM Pass / Instrumentação)
 | Aritmética `INT_MAX/INT_MIN` manual | `i32::checked_add()`, `checked_sub()` etc. |
 | `lib/json-maker.c` + `ftoa.c` | `serde_json` + `#[derive(Serialize)]` |
 
-**Política de `unsafe`**: somente `ffi.rs` contém blocos `unsafe`. Todos os outros módulos têm `#![deny(unsafe_code)]`. Cada bloco unsafe em `ffi.rs` possui um comentário `// SAFETY:`.
+**Política de `unsafe`**: somente `ffi.rs` (com `wasm.rs` e `sys.rs`, as chamadas da libc dos arquivos de resultado, do ambiente e do stderr) contém blocos `unsafe`. Todos os outros módulos têm `#![deny(unsafe_code)]`. Cada bloco unsafe possui um comentário `// SAFETY:`.
 
 ## Output JSON
 
-Ao final da análise, `print_all_containers_as_json()` emite no stdout um objeto `map2check_log` com o veredito (`result`: `"TRUE"`/`"FALSE"`), a propriedade violada e os containers `Container_TrackBBLog`, `Container_NonDetLog` e, só em violações de memória, `Container_AllocationLog`. O formato exato, com exemplos verificados contra o serializador, está em [`docs/integration-guide.md`](docs/integration-guide.md#json-report).
+Sem modo de análise selecionado, `map2check_success()` emite no stdout um objeto `map2check_log` (numa execução do Map2Check, com modo, o resultado vai para os arquivos de propriedade, como no runtime C) com o veredito (`result`: `"TRUE"`/`"FALSE"`), a propriedade violada e os containers `Container_TrackBBLog`, `Container_NonDetLog` e, só em violações de memória, `Container_AllocationLog`. O formato exato, com exemplos verificados contra o serializador, está em [`docs/integration-guide.md`](docs/integration-guide.md#json-report).
 
 ## Compatibilidade e releases
 
 - [`docs/api-deltas.md`](docs/api-deltas.md): matriz de símbolos e assinaturas da API C (núcleo e passes do Map2Check) em relação ao C legado.
 - [`docs/semantic-deltas.md`](docs/semantic-deltas.md): diferenças de comportamento, cada uma com caso reproduzível e teste.
-- [`docs/integration-guide.md`](docs/integration-guide.md): como linkar `libmap2check.a`, ordem de chamadas e formato do relatório JSON.
+- [`docs/integration-guide.md`](docs/integration-guide.md): como instalar os 21 `.bc` no lugar dos do runtime C, o commit validado do Map2Check, como reproduzir o gate, como linkar `libmap2check.a` e o formato do relatório JSON.
 - [`docs/release.md`](docs/release.md) e [`CHANGELOG.md`](CHANGELOG.md): processo de release e histórico de versões.
 
 `tests/compat_docs.rs` falha em três casos: quando um export do header não está na matriz (ou está com a declaração errada), quando um `SD-NN` aponta para um teste que não existe e quando os exemplos JSON do guia divergem da saída real. Toda mudança na ABI C ou no relatório JSON atualiza esses documentos no mesmo PR.
@@ -170,7 +174,7 @@ Ao final da análise, `print_all_containers_as_json()` emite no stdout um objeto
 Para montar o pacote de release localmente:
 
 ```sh
-scripts/package-release.sh   # dist/map2check-library-<versão>-<alvo>.tar.gz + SHA256SUMS
+scripts/package-release.sh   # dist/map2check-library-<versão>-<alvo>.tar.gz + SHA256SUMS (inclui os 21 .bc)
 ```
 
 ## Map2Check flow com a biblioteca

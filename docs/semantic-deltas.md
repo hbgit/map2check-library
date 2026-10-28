@@ -31,6 +31,7 @@ entry and its tests in the same change.
 | `pending decision` | Waits on the cited issue. |
 | `fixed` | Was a regression; the Rust library now matches the C runtime of Map2Check `develop`. The entry cites the fixing issue and the `develop` source. |
 | `C behaviour preserved on purpose` | The C runtime of Map2Check `develop` does something odd and the Rust library does the same, because a consumer depends on the exact output. |
+| `removed` | The export the entry describes left the C ABI in 2.0.0 (D6, Task 2.10), and its tests with it. The entry stays so that its ID keeps its meaning; **Tests:** is `—`. |
 
 ### SD-01 — JSON report shape
 
@@ -62,7 +63,7 @@ Map2Check run (mode set) prints nothing on stdout, as develop.
 **Reproduce:**
 
 ```c
-map2check_init();
+map2check_init(0);
 map2check_save_basic_block_log(10, "main");
 print_all_containers_as_json();
 ```
@@ -81,13 +82,13 @@ property is `MEMSAFETY_FREE`, `MEMSAFETY_DEREF`, `MEMSAFETY_MEMTRACK` or
 **Reproduce:**
 
 ```c
-map2check_init();
+map2check_init(0);
 map2check_map_malloc((void *)0x1000, 16);
-set_false_result(0 /* Overflow */, 3, "main");
+set_false_result(6 /* Overflow (C FALSE_OVERFLOW) */, 3, "main");
 print_all_containers_as_json();   /* no Container_AllocationLog */
 map2check_reset();                /* the first violation is final (SD-03) */
 map2check_map_malloc((void *)0x1000, 16);
-set_false_result(1 /* MemsafetyFree */, 4, "main");
+set_false_result(2 /* MemsafetyFree (C FALSE_FREE) */, 4, "main");
 print_all_containers_as_json();   /* Container_AllocationLog present */
 ```
 
@@ -123,7 +124,7 @@ violation is therefore final. `develop` matches `lib_old` here.
 **Reproduce:**
 
 ```c
-map2check_init();
+map2check_init(0);
 map2check_map_malloc((void *)0x1000, 16);
 set_false_result(5 /* Reachability */, 1, "main");
 map2check_check_load((void *)0x1000, 2, 0, 4, "main");
@@ -160,7 +161,7 @@ an empty function name.
 **Reproduce:**
 
 ```c
-map2check_init();
+map2check_init(0);
 map2check_map_malloc((void *)0x1000, 16);
 map2check_check_mem_endprog();   /* MemsafetyMemtrack */
 /* with map2check_set_memcleanup() first: MemsafetyMemcleanup */
@@ -186,7 +187,7 @@ allocation log and sets `ERROR_DEREF` (`AnalysisModeMemtrack.c:156-162`);
 **Reproduce:**
 
 ```c
-map2check_init();
+map2check_init(0);
 map2check_check_load(NULL, 12, 0, 4, "main");   /* MemsafetyDeref */
 map2check_set_null_is_valid();
 map2check_check_load(NULL, 12, 0, 4, "main");   /* None */
@@ -228,7 +229,7 @@ library does not have that mode split.)
 **Reproduce:**
 
 ```c
-map2check_init();
+map2check_init(0);
 map2check_check_free_resolved_address((void *)0x5000, 3, "main", 0);  /* MemsafetyFree (before #37: None) */
 map2check_reset();
 map2check_check_free("p", (void *)0x5000, 0, 4, "main");             /* MemsafetyFree */
@@ -236,8 +237,16 @@ map2check_check_free("p", (void *)0x5000, 0, 4, "main");             /* Memsafet
 
 ### SD-07 — `__VERIFIER_assume(0)` abandons the fuzzer input; outside one it exits with 0
 
-**Classification:** intentional
-**Tests:** `rust/src/nondet/libfuzzer.rs::failed_assume_abandons_only_the_current_iteration`, `rust/src/nondet/libfuzzer.rs::failed_fuzzer_assume_abandons_the_iteration_too`, `rust/src/nondet/libfuzzer.rs::verifier_assume_false_exits_with_zero`, `rust/src/nondet/libfuzzer.rs::map2check_fuzzer_assume_false_exits_with_zero`
+**Classification:** removed (2.0.0)
+**Tests:** —
+
+**2.0.0 (Task 2.10, D6):** `__VERIFIER_assume`, `map2check_fuzzer_assume`
+and `LLVMFuzzerTestOneInput` left the C ABI with the `libfuzzer` feature.
+The drop-in runtime has develop's mechanism: the program's
+`map2check_assume*` (glue IR of `Map2CheckFunctions.bc`) call the
+generator's `nondet_assume`, which in `NonDetGeneratorAFL.bc` `longjmp`s back
+to the `__AFL_LOOP` of its `main` (D7 item 5; `scripts/runtime-ir/test-assume-link.sh`,
+`tests/ffi_harness.c`). What follows describes 1.x.
 
 **Rust:** inside `LLVMFuzzerTestOneInput`, `__VERIFIER_assume(0)` and
 `map2check_fuzzer_assume(0)` abandon the current input: they unwind (a
@@ -276,7 +285,13 @@ int __map2check_main__(void) {
 ### SD-08 — `__VERIFIER_error()` / `__VERIFIER_assert(0)` without an analysis mode
 
 **Classification:** fixed (#20)
-**Tests:** `rust/src/nondet/libfuzzer.rs::verifier_error_is_a_no_op_with_a_mode_and_the_deref_is_reported`, `rust/src/nondet/libfuzzer.rs::target_mode_reaches_only_through_map2check_reach_target`, `rust/src/nondet/libfuzzer.rs::verifier_error_aborts_and_reports_reachability`, `rust/src/nondet/libfuzzer.rs::verifier_assert_false_aborts_and_reports_reachability`
+**Tests:** `rust/src/ffi_tests.rs::core_verifier_error_does_nothing_as_in_c`
+
+**2.0.0 (Task 2.10, D6):** the `libfuzzer` and `klee` exports left the C
+ABI, and with them the mode-unset path below. The `__VERIFIER_error` of the
+library is the C core's: it does nothing, with a mode set and without
+(`Map2CheckFunctions.c:57-59`), and `__VERIFIER_assert` is defined by the IR
+module `AnalysisModeAssert.bc`, empty as in C. What follows describes 1.x.
 
 **Legacy (develop):** both are empty. `__VERIFIER_error()` is
 `// DO NOTHING` (`Map2CheckFunctions.c:57-59`) and `__VERIFIER_assert` is
@@ -295,8 +310,10 @@ and aborted with no property file. Under KLEE's
 `--exit-on-error-type=Abort` that stopped the exploration before the real
 violation of a memory or overflow task.
 
-Under KLEE the same is checked by `tests/klee_paths.sh` with
-`tests/klee/vererr_deref.c` and `tests/klee/vererr_target.c`. Fixed for the
+Under KLEE the same was checked by the legacy KLEE route (removed in
+2.0.0); the drop-in's `__VERIFIER_error` is pinned by the test above and
+the target path by `scripts/runtime-ir/test-klee-generator.sh`
+(`klee_unsafe_program_reports_same_line`, unsafe-reach.c). Fixed for the
 mode-set path in the Task 2.7 review; the mode-unset path below stays as
 an intentional delta.
 
@@ -307,11 +324,11 @@ an intentional delta.
 **Reproduce (link with `--features libfuzzer`):**
 
 ```c
-map2check_init();
+map2check_init(0);
 __VERIFIER_error();   /* no mode: prints "REACHABILITY", then SIGABRT */
 
 map2check_set_mode(1);  /* memtrack */
-map2check_init();
+map2check_init(0);
 __VERIFIER_error();   /* returns; nothing recorded */
 ```
 
@@ -337,7 +354,7 @@ at the boundary.
 **Reproduce:**
 
 ```c
-map2check_init();
+map2check_init(0);
 map2check_map_malloc((void *)0x1000, -1);   /* no record */
 set_false_result(99, 1, NULL);              /* ignored; result stays OK */
 ```
@@ -359,7 +376,7 @@ into global lists.
 **Reproduce:**
 
 ```c
-map2check_init();
+map2check_init(0);
 bbtrack_log_t *a = map2check_save_basic_block_log(1, "main");
 bbtrack_log_t *b = map2check_save_basic_block_log(2, "main");
 /* a->tqe_next == NULL && b->tqe_prev == NULL */
@@ -367,8 +384,13 @@ bbtrack_log_t *b = map2check_save_basic_block_log(2, "main");
 
 ### SD-11 — Each LibFuzzer iteration starts from an empty state
 
-**Classification:** intentional
-**Tests:** `rust/src/nondet/libfuzzer.rs::fuzzer_iteration_resets_analysis_state_and_input`
+**Classification:** removed (2.0.0)
+**Tests:** —
+
+**2.0.0 (Task 2.10, D6):** `LLVMFuzzerTestOneInput` left the C ABI with the
+`libfuzzer` feature. In the drop-in runtime each AFL++ iteration runs the
+program's `main`, whose `map2check_init` starts a fresh state, as in develop
+(SD-21 keeps the one difference). What follows describes 1.x.
 
 **Rust:** `LLVMFuzzerTestOneInput` resets the analysis state before it calls
 `__map2check_main__`. Records and results from one input never leak into
@@ -407,7 +429,7 @@ are stack/static slots: `map2check_load` accepts them
 **Reproduce:**
 
 ```c
-map2check_init();
+map2check_init(0);
 int n = 4; int vla[n];
 map2check_map_non_static_alloca("vla", vla, n, sizeof(int), 3, 0);  /* element count */
 map2check_set_memcleanup();
@@ -440,7 +462,7 @@ This is a false positive in `develop`.
 **Reproduce:**
 
 ```c
-map2check_init();
+map2check_init(0);
 map2check_map_malloc((void *)0x1000, 8);
 map2check_check_free_resolved_address((void *)0x1000, 3, "main", 0);  /* None; develop: FALSE_FREE */
 ```
@@ -496,10 +518,10 @@ The differences that remain are these:
 
 ```c
 map2check_set_mode(AnalysisMode_Memcleanup);
-map2check_init();
+map2check_init(0);
 map2check_map_malloc((void *)0x3000, 8);
 map2check_check_mem_endprog();                 /* None: nothing points to it */
-map2check_init();
+map2check_init(0);
 map2check_map_malloc((void *)0x3000, 8);
 map2check_map_store_pointer((void *)0x10, (void *)0x3000, 0, "p", 1, "main");
 map2check_check_mem_endprog();                 /* MemsafetyMemcleanup */
@@ -528,7 +550,7 @@ after the target.
 
 ```c
 map2check_set_mode(AnalysisMode_Target);
-map2check_init();
+map2check_init(0);
 map2check_reach_target("reach_error", 0, 12);   /* Reachability, line 12; returns */
 ```
 
@@ -537,7 +559,7 @@ map2check_reach_target("reach_error", 0, 12);   /* Reachability, line 12; return
 **Classification:** C behaviour preserved on purpose
 **Tests:** `rust/src/output/legacy_files.rs::unknown_uses_legacy_double_underscore_name`, `rust/src/ffi_golden_tests.rs::unknown_matches_c_runtime`
 
-**Rust:** an `UNKNOWN` verdict (`set_false_result(9, ...)`, or a NULL block
+**Rust:** an `UNKNOWN` verdict (`set_false_result(1, ...)`, or a NULL block
 from `map2check_map_malloc`/`_calloc` in the memtrack and memcleanup modes)
 writes `UNKNOWN\n` to `map2check_property__unknown`, with two
 underscores, and writes no `map2check_property`.
@@ -555,14 +577,14 @@ develop.
 
 ```c
 map2check_set_mode(AnalysisMode_Memtrack);
-map2check_init();
+map2check_init(0);
 map2check_map_malloc(NULL, 4);   /* writes map2check_property__unknown, aborts */
 ```
 
 ### SD-17 — The memory and nondet logs are rebuilt from this library's records
 
 **Classification:** accepted limitation
-**Tests:** `rust/src/ffi_golden_tests.rs::false_free_matches_c_runtime`, `rust/src/ffi_golden_tests.rs::false_free_resolved_matches_c_runtime`, `rust/src/ffi_golden_tests.rs::none_matches_c_runtime`, `rust/src/ffi_golden_tests.rs::false_memtrack_matches_c_runtime`, `rust/src/ffi_tests.rs::list_log_free_row_names_the_variable_passed_to_free`, `rust/src/ffi_tests.rs::failing_free_keeps_its_list_log_row_like_develop`, `rust/src/output/legacy_files.rs::nondet_rows_use_develop_types_and_value_formats`, `rust/src/ffi_golden_tests.rs::nondet_types_match_c_runtime`
+**Tests:** `rust/src/ffi_golden_tests.rs::false_free_matches_c_runtime`, `rust/src/ffi_golden_tests.rs::false_free_resolved_matches_c_runtime`, `rust/src/ffi_golden_tests.rs::none_matches_c_runtime`, `rust/src/ffi_golden_tests.rs::false_memtrack_matches_c_runtime`, `rust/src/ffi_tests.rs::memtrack_rt_names_are_cut_at_35_bytes_except_the_variable_name`, `rust/src/memtrack/c_mode.rs::cname_cuts_at_35_bytes_and_at_the_first_nul`, `rust/src/ffi_tests.rs::nondet_function_name_is_cut_at_35_bytes_and_null_is_empty`, `rust/src/ffi_tests.rs::list_log_free_row_names_the_variable_passed_to_free`, `rust/src/ffi_tests.rs::failing_free_keeps_its_list_log_row_like_develop`, `rust/src/output/legacy_files.rs::nondet_rows_use_develop_types_and_value_formats`, `rust/src/ffi_golden_tests.rs::nondet_types_match_c_runtime`
 
 **Rust:** `heap_log.csv`, `allocation_log.csv`, `list_log.csv` and
 `klee_log.csv` are rebuilt at the end of the run by replaying the memory
@@ -582,8 +604,16 @@ appends before it checks (`AnalysisModeMemtrack.c:346-358`); the golden
   byte, value format and type number included (golden `NONDET-TYPES`,
   SD-18).
 - **Long function names.** Develop copies names into `char[35]` with
-  `strncpy` (`FUNCTION_MAX_LENGTH_NAME`), which leaves names of 35 or more
-  characters unterminated; this library writes the whole name.
+  `strncpy` (`FUNCTION_MAX_LENGTH_NAME`; `ListLog.c:133`, `HeapLog.c:25`,
+  `NonDetLog.c`), which leaves a name of 35 or more bytes unterminated, so
+  its `%s` prints the 35 bytes and then whatever follows the array
+  (undefined behaviour). This library cuts the name at 35 bytes: the
+  function name of `list_log.csv` and the variable name of `heap_log.csv`
+  on the drop-in path (`__m2c_rt_memtrack_*`, Task 2.5), and the function
+  name of `klee_log.csv` on both paths (Task 2.2). The legacy replay of
+  `list_log.csv` and `heap_log.csv` still writes the whole name. The
+  variable name of `list_log.csv` is a pointer in C and is written whole
+  on both paths. The user approved the cut on 2026-10-26.
 - **NULL names.** Develop prints `(null)` for a NULL name; this library
   prints an empty string, as everywhere else (SD-09).
 
@@ -592,15 +622,26 @@ appends before it checks (`AnalysisModeMemtrack.c:346-358`); the golden
 ```c
 map2check_set_mode(AnalysisMode_Overflow);
 map2check_enable_witness();
-map2check_init();
+map2check_init(0);
 map2check_binop_add_signed(INT64_MAX, 1, 64, 1, "main");
 /* klee_log.csv is written; develop's NonDetGeneratorNone.c writes none */
 ```
 
 ### SD-18 — Nondet values: develop's AFL++ input layout and log format, with three differences
 
-**Classification:** intentional
-**Tests:** `rust/src/nondet/libfuzzer.rs::every_generator_reads_sizeof_type_bytes_and_wraps_like_develop`, `rust/src/nondet/libfuzzer.rs::seed_a_reads_0x41414141_like_develop`, `rust/src/nondet/libfuzzer.rs::bool_consumes_four_bytes_and_is_the_int_converted_to_bool`, `rust/src/nondet/libfuzzer.rs::empty_input_yields_zero`, `rust/src/nondet/libfuzzer.rs::without_an_iteration_every_generator_yields_zero`, `rust/src/nondet/libfuzzer.rs::pchar_reads_an_unsigned_length_then_length_minus_one_chars`, `rust/src/ffi_golden_tests.rs::nondet_types_match_c_runtime`
+**Classification:** removed (2.0.0)
+**Tests:** `rust/src/ffi_golden_tests.rs::nondet_types_match_c_runtime`
+
+**2.0.0 (Task 2.10, D6):** no difference in the drop-in runtime. The three
+differences below belonged to the `__VERIFIER_nondet_<t>` reader of the 1.x
+`libfuzzer` feature, which left the C ABI with its tests. The drop-in
+generators are the IR module `NonDetGeneratorAFL.bc` (Task 2.8), which does
+what the vendored develop `NonDetGeneratorAFL.c` does: zero past the end of
+the input, no rewind (`:55-66`); `bool` returns the raw value of its four
+bytes, as develop's generator macro does (`:93`); `float` reads four bytes,
+develop's own `float` generator (`:104`). The log is
+`map2check_nondet_<t>` (Task 2.2), whose format the golden test above still
+pins. What follows is the record of the 1.x reader.
 
 **Rust:** the `__VERIFIER_nondet_<t>` generators read the fuzzer input as
 develop's `NonDetGeneratorAFL.c` does: `sizeof(type)` bytes per value, in
@@ -642,7 +683,7 @@ int __map2check_main__(void) {
 ### SD-19 — The wasm2c runtime: a bad access is OVERFLOW, and four small differences
 
 **Classification:** C behaviour preserved on purpose
-**Tests:** `rust/src/ffi_tests.rs::wasm_access_past_the_block_is_reported_as_develop_does`, `rust/src/ffi_tests.rs::wasm_free_of_an_untracked_offset_is_a_false_free_at_the_line`, `rust/src/ffi_tests.rs::wasm_double_free_is_not_reported_as_develop`, `rust/src/ffi_tests.rs::wasm_access_inside_a_freed_inner_block_is_covered_by_the_older_block`, `rust/src/ffi_tests.rs::wasm_checks_are_inactive_in_modes_without_memory_checks`, `rust/src/ffi_tests.rs::wasm_first_violation_is_final`, `rust/src/ffi_tests.rs::rt_funcref_table_allocates_zeroed_elements`
+**Tests:** `rust/src/ffi_tests.rs::wasm_access_past_the_block_is_reported_as_develop_does`, `rust/src/ffi_tests.rs::wasm_free_of_an_untracked_offset_is_a_false_free_at_the_line`, `rust/src/ffi_tests.rs::wasm_double_free_is_not_reported_as_develop`, `rust/src/ffi_tests.rs::wasm_access_inside_a_freed_inner_block_is_covered_by_the_older_block`, `rust/src/ffi_tests.rs::wasm_checks_are_inactive_in_modes_without_memory_checks`, `rust/src/ffi_tests.rs::wasm_first_violation_is_final`, `rust/src/ffi_tests.rs::rt_funcref_table_allocates_zeroed_elements`, `rust/src/ffi_golden_tests.rs::sd19_wasm_leak_is_false_memtrack_without_freeing_the_offset`
 
 **Rust (feature `wasm`):** `map2check_wasm_check_access(offset, size)`
 reports an access that does not lie inside a live registered block as
@@ -671,7 +712,11 @@ Differences:
 - **Trap.** `wasm_rt_trap` records an `UNKNOWN` verdict and aborts (develop
   calls `map2check_error()`, which writes no property, so the frontend reads
   UNKNOWN). The function never returns, with or without a mode, as wasm-rt.h
-  declares.
+  declares. develop's `map2check_exit` runs `analysis_is_program_correct`
+  before it aborts, so a leak pending at the trap would be `FALSE_MEMTRACK`
+  there; the library reports `UNKNOWN`, because the trap's verdict is final
+  (first violation wins). This is a consequence of the trap recording
+  `UNKNOWN`, not a new delta.
 - **Funcref table element size.** develop's `wasm_rt_allocate_funcref_table`
   allocates `elements * sizeof(void*)` bytes for elements of
   `sizeof(wasm_rt_funcref_t)` (32 bytes), a heap overflow once the module's
@@ -679,12 +724,22 @@ Differences:
   `max_size` is left untouched in both.
 - **Grow.** `wasm_rt_grow_memory` does not clear bytes when the new size is
   not larger than the old one (develop would `memset` a wrapped length).
+- **Leaked block (Task 2.5, drop-in path).** At the end of a wasm run that
+  leaks a lifted `malloc` block, develop's `valid_allocation_log` calls
+  `free((void *)addr)` on the linear-memory offset (`AllocationLog.c:91`),
+  which is not a host heap pointer, so glibc aborts (`free(): invalid
+  pointer`) before `analysis_is_program_correct` writes `FALSE_MEMTRACK`
+  (`AnalysisModeMemtrack.c:139-142`). The frontend sees an abort with no
+  property file. `__m2c_rt_memtrack_*` never calls `free()` on a logged
+  address, so the run reports `FALSE-MEMTRACK` (`map2check_property` and
+  `map2check_property_memtrack`) and aborts. The user approved this on
+  2026-10-26.
 
 **Reproduce (link with `--features wasm`, analysis mode memtrack):**
 
 ```c
 map2check_set_mode(AnalysisMode_Memtrack);
-map2check_init();
+map2check_init(0);
 map2check_wasm_malloc(0x10000, 16);
 map2check_wasm_check_access(0x10010, 4);   /* OVERFLOW, line 0, aborts */
 ```
@@ -692,7 +747,7 @@ map2check_wasm_check_access(0x10010, 4);   /* OVERFLOW, line 0, aborts */
 ### SD-20 — Result files survive other KLEE states (gate ref `C-BUG-property-race`)
 
 **Classification:** intentional
-**Tests:** `rust/src/output/legacy_files.rs::concurrent_reader_never_sees_empty_or_partial_file`, `rust/src/output/legacy_files.rs::write_goes_through_a_temp_file_and_rename`, `rust/src/output/legacy_files.rs::temp_name_collisions_are_skipped`
+**Tests:** `rust/src/output/legacy_files.rs::concurrent_reader_never_sees_empty_or_partial_file`, `rust/src/output/legacy_files.rs::write_goes_through_a_temp_file_and_rename`, `rust/src/output/legacy_files.rs::temp_name_collisions_are_skipped`, `rust/src/output/legacy_files.rs::result_files_are_atomic_by_default_outside_dropin`, `rust/src/output/legacy_files.rs::plain_mode_truncates_the_target_in_place_like_fopen_w`, `rust/src/output/legacy_files.rs::atomic_mode_replaces_the_target_by_a_rename`, `rust/src/output/legacy_files.rs::set_atomic_writes_switches_the_property_writer`, `rust/src/ffi_tests.rs::output_set_atomic_selects_the_result_file_write_mode`, `rust/src/output/legacy_files.rs::never_downgrade_keeps_a_violation_against_none`, `rust/src/output/legacy_files.rs::never_downgrade_writes_none_when_there_is_no_property_file`, `rust/src/output/legacy_files.rs::never_downgrade_lets_a_violation_replace_none_and_violations`, `rust/src/output/legacy_files.rs::without_never_downgrade_none_replaces_a_violation`, `rust/src/output/legacy_files.rs::write_if_absent_never_replaces_and_cleans_up`
 
 This entry covers a bug of the C runtime of Map2Check `develop` that the
 Rust library fixes. The cutover gate cites it as `C-BUG-property-race` in
@@ -726,15 +781,81 @@ Effects in gate run 1 (task 4.2), deterministic in 5 of 5 C reps:
   file exists, but it parses line 0 and an empty function. C under `afl`
   reports `533 main` for the same task, and so does Rust under `symex`.
 
+**Drop-in gate of 2026-10-27 (Task 4.1, `docs/cutover/gate-2026-10-27.md`;
+approved by the user on 2026-10-28):** the race shows on four keys, each
+deterministic in 5 of 5 C reps, and each has a row in
+`docs/cutover/deltas-aceitos.tsv`:
+- `list-ext-properties/simple-ext` and `map2check-assert/ex01_false`,
+  `unreach-call`/`symex`: verdict UNKNOWN in C, FAILED in the drop-in;
+- `list-ext-properties/list-ext`, `unreach-call`/`symex`: verdict UNKNOWN
+  in C, FAILED in the drop-in. With `--debug` the C run leaves
+  `test000001.abort.err` in `klee-out-0`, a 12-byte
+  `map2check_checked_error` and a 0-byte `map2check_property`;
+- `list-ext-properties/960521-1_1-1`, `valid-memsafety`/`symex`: FALSE-DEREF
+  on both sides, line `0` and an empty function in C, `533 main` in the
+  drop-in.
+
 The Rust library had the same race before `6b49b82` (task 3.3, "Cause B").
+
+**Scope in the drop-in runtime (approved by the user on 2026-10-27, Task
+2.8):** the drop-in `Map2CheckFunctions.bc` writes atomically under the
+`symex` generator only. It starts with develop's write (`fopen("w")`:
+truncate and write in place), and `nondet_init` of
+`NonDetGeneratorKlee.bc` turns the temporary file + rename on through
+`__m2c_rt_output_set_atomic(1)` before anything is written. Under `afl` and
+`none` the files are written as the C runtime writes them, so this entry
+does not apply there: nothing races (one process per input, no forked
+states sharing files), and the rename on every execution cost the AFL++
+generator 30% of its executions per second. Every build outside the drop-in
+core (the staticlib) stays atomic. Image tests:
+`scripts/runtime-ir/test-klee-generator.sh`
+(`klee_symex_writes_result_files_atomically`) and
+`scripts/runtime-ir/test-afl-generator.sh`
+(`afl_writes_result_files_in_place_like_c`).
+
+**Never downgrade under KLEE (approved by the user on 2026-10-27, Task
+3.1):** the temporary file + rename alone does not decide which state's
+content survives. Once the drop-in ended every run through the witness
+module (more writes per state), a KLEE state that finished without a
+violation renamed `NONE` over the `TARGET-REACHED` the violating state had
+just written, before that state reached its abort
+(`scripts/runtime-ir/test-klee-generator.sh`, `unsafe-reach-none`; the C
+kept the violation). So, under the `symex` generator only (the same
+`__m2c_rt_output_set_atomic(1)` of `NonDetGeneratorKlee`'s `nondet_init`
+turns it on), a `map2check_property` whose content is not a violation
+(`NONE`, `UNKNOWN`, the empty `Concurrency` text) never replaces an
+existing `map2check_property`: it is written to a temporary file and
+hard-linked to the target (`link(2)` fails with `EEXIST` when the target
+exists, in one system call, so there is no check-then-write window), and
+the temporary name is removed. A violation is still renamed over the
+target, whatever it held: between two violations the last writer wins, as
+with develop's `fopen("w")` (within one process the first violation is
+final and aborts, SD-03, so two violations only meet across KLEE states).
+The `map2check_property_<prp>` files, `map2check_checked_error` and
+`klee_log.csv` are written only on a violation and are unaffected;
+`track_bb_log.st` carries no verdict and keeps the last writer. A KLEE
+state killed (timer, memory cap) between creating its temporary file and
+the rename or unlink can leave a `.<name>.<pid>.<n>.tmp` file in the
+scratch directory; the frontend reads only the fixed names, so the verdict
+is unaffected. Plain mode
+(AFL++, `none`) and the staticlib are unchanged: a `NONE` replaces whatever
+was there. Observable difference from the C under `symex`: a program that
+writes a violation and later `NONE` in the same path (only through direct
+`write_property` calls; instrumented programs abort at the violation)
+keeps the violation (`klee_symex_writes_result_files_atomically`). A
+stale violation that an earlier KLEE run left in the run directory is also
+kept against a later `NONE`, where the C overwrites it; the frontend makes
+this unreachable, because every phase starts in a fresh scratch directory
+(`rm -rf <hash> && mkdir <hash>`, `caller.cpp:94`).
 
 **Reproduce:** the program is any one where KLEE forks a state that
 reaches the target and states that do not. With the C runtime:
 `map2check --debug --nondet-generator symex --target-function ex01_false.c`
 (sv-benchmarks `map2check-assert`). The kept directory has `abort.err` in
 `klee-out-0`, a 12-byte `map2check_checked_error`, and a 0-byte
-`map2check_property`. Under the Rust runtime, `tests/klee/multistate.c`
-(`tests/klee_paths.sh`) checks the opposite.
+`map2check_property`. Under the drop-in runtime,
+`klee_symex_writes_result_files_atomically` and the unsafe cases of
+`scripts/runtime-ir/test-klee-generator.sh` check the opposite.
 
 ```c
 /* Under KLEE: one path reaches the target, the other finishes later. */
@@ -749,7 +870,14 @@ int main(void) {
 ### SD-21 — AFL++ iterations do not accumulate nondet records (gate ref `C-BUG-oom-afl-nondet`)
 
 **Classification:** intentional
-**Tests:** `rust/src/nondet/libfuzzer.rs::two_fuzzer_iterations_yield_independent_results`, `rust/src/nondet/libfuzzer.rs::fuzzer_iteration_resets_analysis_state_and_input`
+**Tests:** `rust/src/ffi_tests.rs::nondet_log_init_and_destroy_empty_the_log_and_keep_the_step`, `rust/src/ffi_tests.rs::map2check_init_takes_the_c_sv_comp_argument_and_starts_clean`
+
+**2.0.0 (Task 2.10, D6):** `LLVMFuzzerTestOneInput` left the C ABI. In the
+drop-in runtime the `map2check_init` the pass puts at the start of `main`
+runs once per `__AFL_LOOP` iteration and starts a fresh state, and its
+`nondet_init` → `nondet_log_init` replaces the nondet log, releasing the old
+one, where develop leaks it. The tests above pin both. The text below
+describes the 1.x mechanism.
 
 This entry covers a bug of the C runtime of Map2Check `develop` that the
 Rust library does not have. The cutover gate cites it as
@@ -798,3 +926,185 @@ int main(void) {
   return 0;
 }
 ```
+
+### SD-22 — Runtime-internal C names are not exported (D7)
+
+**Classification:** intentional
+**Tests:** `rust/src/output/legacy_files.rs::write_property_helpers_match_c_format`, `rust/src/bbtrack/mod.rs::is_in_tracked_matches_any_row_of_the_line`, `rust/src/output/legacy_files.rs::trackbb_log_to_file_matches_c_format`
+
+The symbol sets are checked by `scripts/it/check-link-matrix.sh --ref <c-lib>
+--policy docs/runtime-abi/export-policy.tsv` and its test
+`scripts/it/test-check-link-matrix.sh`; the tests above pin the C-only
+helpers that the Rust core keeps private (Task 2.1).
+
+The user approved this on 2026-10-26 as item 2 of D7 ([d7-layout.md](cutover/d7-layout.md)).
+
+**Rust:** each runtime `.bc` defines only the external symbols that its C
+counterpart defines *and* that have a consumer outside the C runtime
+(`referenced_by` in `docs/runtime-abi/inventory.tsv` contains `pass`,
+`frontend` or `external`). The Rust core also defines new entry points named
+`__m2c_rt_*`, which the generated IR modules call.
+
+**C runtime of Map2Check `develop`:** the C runtime also exports 76 names that
+only the runtime itself uses. They are listed as `c-only` in
+`docs/runtime-abi/export-policy.tsv` and include:
+- globals such as `sv_comp`, `gotError`, `Map2CheckCurrentStep`,
+  `trackbb_log`, `nondet_log` and `violated_property_file*`;
+- functions such as `append_element`, `write_property_*`, `B_TREE_*` and
+  `is_in_tracked`.
+
+**Observable difference:** a program under analysis that defines one of those
+76 names fails to link with the C runtime and links with the Rust one. A
+program that defines a `__m2c_rt_*` name fails to link with the Rust runtime
+only.
+
+### SD-23 — A release with no allocation row goes on where develop crashes
+
+**Classification:** intentional
+**Tests:** `rust/src/ffi_golden_tests.rs::sd23_free_of_a_literal_null_goes_on_where_develop_crashes`, `rust/src/ffi_tests.rs::sd23_memtrack_rt_release_without_allocation_row_goes_on`, `rust/src/memtrack/c_mode.rs::a_release_without_allocation_row_stops_where_develop_crashes`, `rust/src/ffi_tests.rs::sd23_memcleanup_rt_release_without_allocation_row_goes_on`, `rust/src/ffi_golden_tests.rs::sd23_memcleanup_release_without_allocation_row_goes_on_where_develop_crashes`
+
+The user approved this on 2026-10-26.
+
+**Rust:** on the drop-in path (`__m2c_rt_memtrack_*`, Task 2.5), when a
+release that the free check let through finds no allocation row for the
+block, the core stops there. It updates no row and no reference, records
+nothing, and the run goes on to its normal end. With a correct program that
+end is `NONE`.
+
+**C runtime of Map2Check `develop`:** `map2check_free_resolved_address`
+(`AnalysisModeMemtrack.c:176-195`) and `map2check_free` (`:351-378`) write
+through the row that `find_row_with_address` (`AllocationLog.c:103-118`)
+returns, with no NULL test (`row->size = 0`, `:190-192` and `:372-375`). For
+an address with no row that is a NULL dereference: the process gets
+SIGSEGV and writes no property file.
+
+**Cause:** the pass emits `map2check_free_resolved_address(ptr, line, fn, 0)`
+for a free whose argument is not a `LoadInst` (`MemoryTrackPass.cpp:428-436`).
+- In memtrack mode a literal `free(NULL)` or `free(0)` reaches the release:
+  `is_invalid_free` is FALSE for NULL (`ListLog.c:97-99`), and NULL has no
+  row.
+- In memcleanup mode, `error = FALSE` (`AnalysisModeMemcleanup.c:168`, `:342`)
+  lets every free through, so a free of an untracked or stack address has no
+  row either. `scripts/runtime-ir/test-memcleanup-link.sh` (scenarios
+  `stack-free` and `untracked-free`) pins this through the linked IR module.
+
+**Reproduce:**
+
+```c
+/* the program: */
+int main(void) { free(0); return 0; }
+/* the calls the pass emits, with AnalysisModeMemtrack.bc: */
+map2check_init(0);
+analysis_init();
+map2check_free_resolved_address(NULL, 1, "main", 0); /* Rust: nothing; develop: SIGSEGV */
+map2check_success();                                  /* Rust: NONE */
+```
+
+### SD-24 — A `void main` runs to its end under KLEE
+
+**Classification:** intentional
+**Tests:** `tests/gate_deltas.rs::sd24_klee_generator_main_is_not_optnone`, `tests/gate_deltas.rs::sd24_gate_rows_name_the_void_main_keys`
+
+The user approved this on 2026-10-28 (Task 4.1, first drop-in gate,
+`docs/cutover/gate-2026-10-27.md`).
+
+**Rust:** the `main` of the generated `NonDetGeneratorKlee.bc`
+(`scripts/runtime-ir/gen_ll.py`) calls `i32 @__map2check_main__(i32, ptr)`,
+as `NonDetGeneratorKlee.c:18` does, and carries no attributes. When the
+program declares `void main(void)`, the return types do not match, and
+KLEE's `--optimize` folds the call to `tail call void
+@__map2check_main__()` / `ret i32 poison`. The path runs to its end, and the
+run gives the verdict of the analysis.
+
+**C runtime of Map2Check `develop`:** `NonDetGeneratorKlee.c` is compiled at
+`-O0`, so its `main` is `optnone`. KLEE's `assembly.ll` keeps
+`%8 = call i32 @__map2check_main__(...)` / `ret i32 %8`. KLEE stops the path
+with `KLEE: ERROR: ...: return void when caller expected a result` and
+writes a `.exec.err`. The frontend reports "KLEE terminated states early"
+and then UNKNOWN.
+
+**Effect in the gate:** `ldv-memsafety/memleaks_test10-2` and
+`ldv-memsafety/memleaks_test3-2`, `valid-memsafety`, under `symex` and
+`hybrid`: UNKNOWN in C, SUCCEEDED in the drop-in (expected verdict true).
+This is 4 rows in `docs/cutover/deltas-aceitos.tsv`. The verdicts of
+`memleaks_test1-1` and `memleaks_test17_2-1` (also `void main`) are equal,
+but their `symex` runs are shorter: 4.2 → 0.9 s and 19.6 → 1.8 s.
+
+**Reproduce** (`--nondet-generator symex --memtrack`):
+
+```c
+#include <stdlib.h>
+void main(void) {          /* C: KLEE ERROR, UNKNOWN */
+  int *p = malloc(sizeof(int));
+  free(p);                 /* drop-in: SUCCEEDED */
+}
+```
+
+### SD-25 — KLEE completes explorations that the C runtime leaves to the timer
+
+**Classification:** intentional
+**Tests:** `tests/gate_deltas.rs::sd25_gate_rows_name_the_keys_klee_completes`
+
+The user approved this on 2026-10-28 (Task 4.1, first drop-in gate,
+`docs/cutover/gate-2026-10-27.md`).
+
+**Rust:** under KLEE the drop-in runtime costs fewer interpreted
+instructions per check than the C runtime. On some programs KLEE then
+finishes every path within the budget, and the run reports the verdict the
+analysis proves. The checks and their results are the same; only the time
+differs.
+
+**C runtime of Map2Check `develop`:** on the same programs KLEE halts on
+its timer ("KLEE halted on its timer -- not a complete exploration"). The
+frontend reports UNKNOWN.
+
+**Effect in the gate:** each change is from UNKNOWN in C to SUCCEEDED in
+the drop-in, with expected verdict true. The keys, with one representative
+run each:
+
+| task | prp | gen | C | drop-in |
+|---|---|---|---|---|
+| `ldv-memsafety/ArraysOfVariableLength` | `valid-memsafety` | `symex` | 112 M instructions, 0 complete paths, 31 s | 50 M instructions, 1 complete path, 7 s |
+| `ldv-memsafety/ArraysOfVariableLength` | `valid-memsafety` | `hybrid` | KLEE phase on its timer | KLEE phase complete |
+| `memsafety/960521-1-2` | `valid-memsafety` | `symex` | 109 M instructions, 0 complete paths | 95 M instructions, 1 complete path, 16 s |
+| `list-ext-properties/960521-1_1-2` | `valid-memsafety` | `hybrid` | KLEE phase 30 M instructions, 13 partial paths | 5.5 M instructions, 31 complete paths |
+
+These are 4 rows in `docs/cutover/deltas-aceitos.tsv`.
+
+**Reproduce:** `map2check --nondet-generator symex --timeout 45 --memtrack
+ArraysOfVariableLength.c` (sv-benchmarks `ldv-memsafety`) with each
+runtime. Compare `KLEE: done: total instructions` and `completed paths` in
+KLEE's output.
+
+### SD-26 — An uninitialised heap read can fuzz differently under AFL++
+
+**Classification:** intentional
+**Tests:** `tests/gate_deltas.rs::sd26_gate_row_names_the_uninitialised_read_key`
+
+The user approved this on 2026-10-28 (Task 4.1, first drop-in gate,
+`docs/cutover/gate-2026-10-27.md`).
+
+**Rust:** the drop-in runtime allocates through the same `malloc`, but at
+other sizes and times than the C runtime, so the heap of the program under
+analysis has another layout. A program whose result depends on
+uninitialised heap memory can then crash on other inputs. In
+`list-ext-properties/list-ext` (`valid-memsafety`/`afl`), the free loop
+reads `p->n` of a node whose `n` was never written (`while (p->n != 0)`,
+line 558 of `list-ext.i`). Under the drop-in, the seed `A` does not crash.
+AFL++ finds a crashing input by havoc in about 1,600 executions, the
+witness replays it, and the run reports FAILED `FALSE-DEREF` at line 558,
+function `main` (expected verdict false, subproperty `valid-deref`).
+
+**C runtime of Map2Check `develop`:** the seed `A` crashes in AFL++'s dry
+run in persistent mode (sig 06, "We need at least one valid input seed that
+does not crash!"), so the fuzzer aborts. Replayed in a fresh process, the
+same input writes `NONE` and no `map2check_checked_error`. The frontend
+reports "Could not replicate error", then UNKNOWN.
+
+**Effect in the gate:** this one key, UNKNOWN in C and FAILED in the
+drop-in. One row in `docs/cutover/deltas-aceitos.tsv`.
+
+**Reproduce:** `map2check --debug --nondet-generator afl --timeout 45
+--memtrack list-ext.i` (sv-benchmarks `list-ext-properties`) with each
+runtime. Compare `afl-out/default/crashes/`, `map2check_property` and
+`map2check_checked_error` in the kept directory.

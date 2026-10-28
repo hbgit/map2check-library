@@ -1,7 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-#![cfg_attr(not(any(feature = "libfuzzer", feature = "klee")), deny(unsafe_code))]
-
-use serde::Serialize;
+#![deny(unsafe_code)]
 
 /// Typed nondeterministic value — replaces `union Data` + `enum var_type_t`.
 /// Each variant carries the actual value, eliminating unsafe type-punning.
@@ -11,42 +9,43 @@ use serde::Serialize;
 /// (`bool` is `typedef int bool`, `sector_t` is `unsigned long`, `loff_t` is
 /// glibc's `long long`, `pointer` and `pchar` are addresses), plus `Float`,
 /// which develop does not instrument.
-#[derive(Debug, Clone, Serialize, PartialEq)]
-#[serde(tag = "type", content = "value")]
+#[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(not(feature = "dropin"), derive(serde::Serialize))]
+#[cfg_attr(not(feature = "dropin"), serde(tag = "type", content = "value"))]
 pub enum NonDetValue {
-    #[serde(rename = "INT")]
+    #[cfg_attr(not(feature = "dropin"), serde(rename = "INT"))]
     Int(i32),
-    #[serde(rename = "UINT")]
+    #[cfg_attr(not(feature = "dropin"), serde(rename = "UINT"))]
     UInt(u32),
-    #[serde(rename = "LONG")]
+    #[cfg_attr(not(feature = "dropin"), serde(rename = "LONG"))]
     Long(i64),
-    #[serde(rename = "CHAR")]
+    #[cfg_attr(not(feature = "dropin"), serde(rename = "CHAR"))]
     Char(i8),
-    #[serde(rename = "FLOAT")]
+    #[cfg_attr(not(feature = "dropin"), serde(rename = "FLOAT"))]
     Float(f32),
-    #[serde(rename = "DOUBLE")]
+    #[cfg_attr(not(feature = "dropin"), serde(rename = "DOUBLE"))]
     Double(f64),
-    #[serde(rename = "UNSIGNED")]
+    #[cfg_attr(not(feature = "dropin"), serde(rename = "UNSIGNED"))]
     Unsigned(u32),
-    #[serde(rename = "POINTER")]
+    #[cfg_attr(not(feature = "dropin"), serde(rename = "POINTER"))]
     Pointer(usize),
-    #[serde(rename = "USHORT")]
+    #[cfg_attr(not(feature = "dropin"), serde(rename = "USHORT"))]
     UShort(u16),
-    #[serde(rename = "SHORT")]
+    #[cfg_attr(not(feature = "dropin"), serde(rename = "SHORT"))]
     Short(i16),
-    #[serde(rename = "ULONG")]
+    #[cfg_attr(not(feature = "dropin"), serde(rename = "ULONG"))]
     ULong(u64),
-    #[serde(rename = "BOOL")]
+    #[cfg_attr(not(feature = "dropin"), serde(rename = "BOOL"))]
     Bool(i32),
-    #[serde(rename = "UCHAR")]
+    #[cfg_attr(not(feature = "dropin"), serde(rename = "UCHAR"))]
     UChar(u8),
-    #[serde(rename = "PCHAR")]
+    #[cfg_attr(not(feature = "dropin"), serde(rename = "PCHAR"))]
     PChar(usize),
-    #[serde(rename = "SIZE_T")]
+    #[cfg_attr(not(feature = "dropin"), serde(rename = "SIZE_T"))]
     SizeT(usize),
-    #[serde(rename = "LOFF_T")]
+    #[cfg_attr(not(feature = "dropin"), serde(rename = "LOFF_T"))]
     LoffT(i64),
-    #[serde(rename = "SECTOR_T")]
+    #[cfg_attr(not(feature = "dropin"), serde(rename = "SECTOR_T"))]
     SectorT(u64),
 }
 
@@ -75,7 +74,8 @@ impl NonDetValue {
 }
 
 /// Analogous to `non_det_log_t` in C.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone)]
+#[cfg_attr(not(feature = "dropin"), derive(serde::Serialize))]
 pub struct NonDetEntry {
     pub step: u64,
     pub line: u32,
@@ -96,51 +96,8 @@ impl NonDetEntry {
     }
 }
 
-/// LibFuzzer nondeterministic value generator — feature-gated.
-#[cfg(feature = "libfuzzer")]
-pub mod libfuzzer;
-
-/// KLEE nondeterministic value generator (`symex`) — feature-gated, built
-/// only from `klee/Cargo.toml` with rustc 1.72.1 (D1, route A'). Not in the
-/// C header: the KLEE runtime is linked as bitcode, and its `main` and the
-/// KLEE intrinsics it imports are not library API.
-///
-/// cbindgen:ignore
-#[cfg(feature = "klee")]
-pub mod klee;
-
-/// Body of `__VERIFIER_error`, the same for every generator. Returns
-/// whether the export must abort.
-///
-/// With an analysis mode set (a Map2Check run) it does nothing, as develop's
-/// `__VERIFIER_error` (`Map2CheckFunctions.c:57-59`) and `__VERIFIER_assert`
-/// (`AnalysisModeAssert.c:25-27`): there the passes carry the checks, the
-/// target through `map2check_reach_target` and asserts through
-/// `map2check_is_valid_assert`. An abort here would end the run with no
-/// property recorded, and under KLEE's `--exit-on-error-type=Abort` stop the
-/// exploration before the real violation (SD-08).
-///
-/// With the mode unset (direct API users), records a `Reachability`
-/// violation, prints the JSON report and asks the export to abort.
-#[cfg(any(feature = "libfuzzer", feature = "klee"))]
-fn record_verifier_error() -> bool {
-    if crate::state::config().mode.is_some() {
-        return false;
-    }
-    if let Err(e) = crate::state::with_state(|s| {
-        s.set_false(
-            crate::caller::ViolatedProperty::Reachability,
-            0,
-            "__VERIFIER_error",
-        );
-        Ok(())
-    }) {
-        eprintln!("[map2check] error: {e}");
-    }
-    // Out of the lock (#19 ruling).
-    crate::output::print_report_unless_mode_set();
-    true
-}
+/// The nondet log of the C runtime (`NonDetLog.c`) and its `klee_log.csv`.
+pub mod c_log;
 
 #[cfg(test)]
 mod tests {
