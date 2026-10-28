@@ -116,9 +116,11 @@ postprocess() {
 
   # The 20 IR modules (and the glue) assembled; what they define.
   mkdir -p "$w/irbc"
+  # Assembled from inside ll/, so source_filename is "<module>.ll" and not
+  # the work directory, which differs from build to build.
   for f in "$w"/ll/*.ll; do
     m="$(basename "$f" .ll)"
-    llvm-as-16 "$f" -o "$w/irbc/$m.bc"
+    (cd "$w/ll" && llvm-as-16 "$m.ll" -o "$w/irbc/$m.bc")
   done
   : > "$w/ir-defined.txt"
   for f in "$w"/irbc/*.bc; do
