@@ -6,6 +6,8 @@ Protótipo: `spikes/d7-layout/` (fora do build da crate). Matriz: `scripts/it/ch
 
 **Status: aprovada pelo usuário em 2026-10-26: layout A-fwd com exceção à restrição de IR (item 1a), símbolos internos do C não exportados com delta `SD-22` (item 2) e itens 3–6 fixos.**
 
+**Revalidação:** o layout foi revalidado em `0bca42eb89d1` pelo gate da Task 4.2 (`gate-2026-10-28.md`): os 21 `.bc` do C são byte a byte iguais aos de `3e914528ec57`, o alvo deste spike, e o drop-in passou o gate. Data e histórico acima ficam como foram.
+
 ## Pergunta
 
 O frontend (`Caller::linkLLVM`) liga, com `llvm-link`, o `<hash>-output.bc` do programa a um conjunto fixo de módulos por combinação: os 4 sempre presentes (`Map2CheckFunctions`, `TrackBBLog`, `NonDetLog`, `PropertyGenerator`), 1 ou 2 de container, 1 a 4 de modo, 1 de gerador, opcionalmente `WasmRuntimeStubs`, e `WitnessGeneration` (o `-witness-result.bc`) ou `WitnessGenerationNone` (o `-result.bc`). São 2 × 5 × 3 × 2 × 2 = 120 combinações. O runtime Rust precisa caber nesses 21 nomes de arquivo sem mudar o frontend. Em particular:

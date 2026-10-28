@@ -15,42 +15,32 @@ the C ABI or the JSON report must update them.
 
 ## [Unreleased]
 
-### Added
+## [2.0.0-rc.1] - 2026-10-28
 
-- **The runtime as the 21 bitcode modules Map2Check links (Task 3.1).**
-  `scripts/build-runtime-bc.sh <out-dir>` (was the test build
-  `scripts/runtime-ir/build-test-runtime-bc.sh`) writes exactly
-  `Map2CheckFunctions.bc` ... `WitnessGenerationNone.bc`, the same bytes on
-  every build; `scripts/it/overlay-install.sh` copies a C install of
-  Map2Check and replaces only its `lib/*.bc`.
+This release turns the library into the drop-in runtime of Map2Check
+`develop`: the C ABI is the C runtime's, the package carries the 21 bitcode
+modules that replace the C ones, and two differential gates against the C
+runtime passed.
 
-### Changed
-
-- **A drop-in core four times smaller (Task 3.3).** The frontend compiles
-  the program linked with `Map2CheckFunctions.bc` three times with
-  `afl-clang-fast`, and that time grows with the core's IR. The result files
-  are now written by `rust/src/cfmt.rs` (the `%u`, `%d`, `%p`, `%lf` and
-  `%.9g` of glibc, exact, without `core::fmt`) and `rust/src/sys.rs` (the
-  same libc calls `std::fs`, `std::env` and `std::process` made). The
-  drop-in build has no serde, serde_json or thiserror (`klee/Cargo.toml` has
-  no dependencies), no JSON channel, no old-API leak checks, and is built
-  at `opt-level = "z"`. The core went from 34 582 to 8 865 instruction lines
-  (762 580 to 327 164 bytes), one `afl-clang-fast -g -O2` of the smoke
-  program from 1.74 s to 0.60 s; `scripts/build-runtime-bc.sh` now fails
-  above 9 500 instruction lines or 13 600 IR lines. The file contents, the
-  stderr diagnostics and the C ABI do not change. `thiserror` left the main
-  build too.
-- **The drop-in core ends a run through the linked witness module (Task
-  3.1).** In `Map2CheckFunctions.bc`, `map2check_exit` calls the
-  `generate_aux_files`/`generate_confirmation_file` of `WitnessGeneration.bc`
-  or `WitnessGenerationNone.bc`, as `Map2CheckFunctions.c:89-102` does, and
-  `generate_aux_files` calls the `analysis_generate_aux_witness_files` of the
-  mode module and the `nondet_generate_aux_witness_files` of the generator
-  module, which alone writes `klee_log.csv` (`WitnessGeneration.c:15-29`).
-  Before, the drop-in wrote no witness file at all: nothing turned the
-  witness option on. The staticlib keeps `__m2c_rt_witness_enable`.
-
-## [2.0.0-rc.1] - 2026-10-27
+- **Validated against** Map2Check `develop`
+  `0bca42eb89d116178e6b52f52acaf73f7c305088` (`MAP2CHECK_VERSION` in the
+  archive); its C runtime modules are byte for byte those of `3e914528ec57`,
+  the commit of the first gate.
+- **Packaging.** The archive has the 21 `lib/*.bc` (`scripts/build-runtime-bc.sh`),
+  `MAP2CHECK_VERSION` and an inner `SHA256SUMS`, besides the header and the
+  static libraries (`scripts/package-release.sh`). `scripts/it/overlay-install.sh`
+  installs the modules over a C install, or copy `lib/*.bc` into
+  `${MAP2CHECK_PATH}/lib`. See `docs/integration-guide.md` and
+  `docs/release.md`; `docs/cutover/handoff-map2check.md` suggests what the
+  Map2Check maintainer would change to adopt the package.
+- **Gate 1** (2026-10-27, `docs/cutover/gate-2026-10-27.md`): `gate: PASS`
+  after the approval of SD-24, SD-25, SD-26 and the extension of SD-20, with
+  the 2.0 s compile allowance for `afl` and `hybrid` wall time
+  (`docs/cutover/decisoes.md`; not an SD).
+- **Gate 2** (2026-10-28, `docs/cutover/gate-2026-10-28.md`): `gate: PASS` on
+  the first comparison against the C baseline of `0bca42eb89d1`, with no new
+  deviation: median wall ratio 0.905 (limit 1.10), median RSS ratio 1.022
+  (limit 1.36), no timeouts.
 
 ### Breaking changes
 
@@ -112,6 +102,13 @@ the C ABI or the JSON report must update them.
   longer removes property files of an earlier run, as the C runtime.
 
 ### Added
+
+- **The runtime as the 21 bitcode modules Map2Check links (Task 3.1).**
+  `scripts/build-runtime-bc.sh <out-dir>` (was the test build
+  `scripts/runtime-ir/build-test-runtime-bc.sh`) writes exactly
+  `Map2CheckFunctions.bc` ... `WitnessGenerationNone.bc`, the same bytes on
+  every build; `scripts/it/overlay-install.sh` copies a C install of
+  Map2Check and replaces only its `lib/*.bc`.
 
 - The memcleanup analysis mode of the Map2Check C runtime ABI (Task 2.6 of
   the drop-in plan): core entry points `__m2c_rt_memcleanup_analysis_{init,
@@ -180,6 +177,32 @@ the C ABI or the JSON report must update them.
   develop's `fopen("w")`. The drop-in core starts in place and the KLEE
   generator turns atomic writes on, so the AFL++ and `none` generators write
   as the C runtime (user decision of 2026-10-27). Other builds stay atomic.
+
+### Changed
+
+- **A drop-in core four times smaller (Task 3.3).** The frontend compiles
+  the program linked with `Map2CheckFunctions.bc` three times with
+  `afl-clang-fast`, and that time grows with the core's IR. The result files
+  are now written by `rust/src/cfmt.rs` (the `%u`, `%d`, `%p`, `%lf` and
+  `%.9g` of glibc, exact, without `core::fmt`) and `rust/src/sys.rs` (the
+  same libc calls `std::fs`, `std::env` and `std::process` made). The
+  drop-in build has no serde, serde_json or thiserror (`klee/Cargo.toml` has
+  no dependencies), no JSON channel, no old-API leak checks, and is built
+  at `opt-level = "z"`. The core went from 34 582 to 8 865 instruction lines
+  (762 580 to 327 164 bytes), one `afl-clang-fast -g -O2` of the smoke
+  program from 1.74 s to 0.60 s; `scripts/build-runtime-bc.sh` now fails
+  above 9 500 instruction lines or 13 600 IR lines. The file contents, the
+  stderr diagnostics and the C ABI do not change. `thiserror` left the main
+  build too.
+- **The drop-in core ends a run through the linked witness module (Task
+  3.1).** In `Map2CheckFunctions.bc`, `map2check_exit` calls the
+  `generate_aux_files`/`generate_confirmation_file` of `WitnessGeneration.bc`
+  or `WitnessGenerationNone.bc`, as `Map2CheckFunctions.c:89-102` does, and
+  `generate_aux_files` calls the `analysis_generate_aux_witness_files` of the
+  mode module and the `nondet_generate_aux_witness_files` of the generator
+  module, which alone writes `klee_log.csv` (`WitnessGeneration.c:15-29`).
+  Before, the drop-in wrote no witness file at all: nothing turned the
+  witness option on. The staticlib keeps `__m2c_rt_witness_enable`.
 
 ## [1.1.0-rc1] - 2026-10-17
 

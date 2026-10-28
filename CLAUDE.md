@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Map2Check-Library is a Rust library with a C ABI for the Map2Check program verification tool. It tracks memory, basic blocks, and nondeterministic values, and checks safety properties (overflow, memory safety, assert reachability) in programs analyzed by LibFuzzer. The build produces the static library (`libmap2check.a`) and generates `include/map2check.h`. Remaining parity work with the legacy C implementation is tracked in [TODO.md](TODO.md).
+Map2Check-Library is a Rust library with a C ABI for the Map2Check program verification tool. It tracks memory, basic blocks, and nondeterministic values, and checks safety properties (overflow, memory safety, assert reachability) in programs analyzed by LibFuzzer. Since 2.0.0 (D6) it is a drop-in runtime: the C ABI is the C runtime ABI of Map2Check `develop`, and the interface with Map2Check is the 21 bitcode modules (`lib/*.bc`, `scripts/build-runtime-bc.sh`) that replace the C runtime's. The build also produces the static library (`libmap2check.a`) and generates `include/map2check.h`. Version 2.0.0-rc.1 was validated against Map2Check `develop` `0bca42eb89d116178e6b52f52acaf73f7c305088` (`docs/cutover/gate-2026-10-27.md`, `docs/cutover/gate-2026-10-28.md`; install and handoff in `docs/integration-guide.md` and `docs/cutover/handoff-map2check.md`). Remaining parity work with the legacy C implementation is tracked in [TODO.md](TODO.md).
 
 ## Build Commands
 
@@ -65,6 +65,8 @@ Each package lives in a subdirectory of `rust/src/`:
 
 ### Container Pattern
 
+The 1.x core API below (`ffi.rs` functions such as `map2check_set_mode` and `map2check_map_*`) is no longer the interface with Map2Check; it remains as Rust functions that the Rust tests drive.
+
 Analysis records are stored in vectors in the process-wide `AnalysisState`, protected by a mutex and reset by `map2check_init()`.
 
 ### Output Format
@@ -117,3 +119,4 @@ The C ABI is the C runtime ABI of Map2Check `develop` (D6, 2.0.0); `scripts/chec
 - `map2check_success()`, `map2check_error()`, `map2check_target_function()`, `write_property()` — end of run and result files
 - `map2check_track_bb()`, `map2check_nondet_<t>()` — basic-block and nondet logs, called by the Map2Check passes
 - `__m2c_rt_*` — core entry points; the generated IR modules (`scripts/runtime-ir/gen_ll.py`) define the other C names (`map2check_malloc`, `map2check_assert`, `analysis_init`...) and forward to them
+- `lib/*.bc` (21 modules, `scripts/runtime-modules.txt`) — what Map2Check links; install with `scripts/it/overlay-install.sh` or copy to `${MAP2CHECK_PATH}/lib`

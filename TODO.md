@@ -1,3 +1,25 @@
+# TODO
+
+**Estado em 2026-10-28 (2.0.0-rc.1).** O plano do runtime drop-in
+([docs/superpowers/plans/2026-10-26-runtime-drop-in-map2check.md](docs/superpowers/plans/2026-10-26-runtime-drop-in-map2check.md))
+está concluído: o ABI C é o do runtime C do Map2Check `develop`, o pacote
+leva os 21 `.bc` e dois gates diferenciais passaram contra o `develop`
+`0bca42eb89d116178e6b52f52acaf73f7c305088`
+([gate de 2026-10-27](docs/cutover/gate-2026-10-27.md) e
+[gate de 2026-10-28](docs/cutover/gate-2026-10-28.md)). Falta só a release
+(tag `v2.0.0-rc.1`, PR e GitHub release), que o mantenedor faz sob pedido
+explícito (veja [docs/release.md](docs/release.md)). Sugestões de adoção pelo
+Map2Check: [docs/cutover/handoff-map2check.md](docs/cutover/handoff-map2check.md).
+
+Tudo abaixo é o relatório de paridade de antes do plano, mantido como
+histórico: as tarefas que descrevem a API núcleo 1.x (`map2check_set_mode`,
+`map2check_map_*`, JSON, libfuzzer) deixaram de ser ABI C na 2.0.0 (veja o
+`CHANGELOG.md`) e só valem para as funções Rust de `map2check::ffi`. O que
+segue aberto de fato: desempenho como benchmark periódico no CI, e a
+promoção do runtime Rust a padrão no Map2Check, decisão do mantenedor de lá.
+
+---
+
 # TODO — paridade da implementação Rust
 
 Comparação feita entre `master` (`05b232a02a69d2a14114df9b34172e56f6365a7c`)
