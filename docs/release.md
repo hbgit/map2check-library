@@ -33,7 +33,7 @@ bitcode modules of the drop-in runtime are in the archive (`lib/*.bc`).
 
 ## Validated against
 
-Map2Check `develop` commit `3e914528ec5742d8ae4bc191589ca4669827c7ad`, the
+Map2Check `develop` commit `0bca42eb89d116178e6b52f52acaf73f7c305088`, the
 `commit=` line of `vendor/MAP2CHECK_VERSION`, shipped in the archive as
 `MAP2CHECK_VERSION`. `scripts/test-package-release.sh` fails when this line
 and `vendor/MAP2CHECK_VERSION` differ, so change them together.
