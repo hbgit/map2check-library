@@ -24,14 +24,15 @@
 // rules of `AnalysisModeMemtrack.c` / `AnalysisModeMemcleanup.c`.
 #![deny(unsafe_code)]
 
-use std::fmt::Write as _;
-use std::io;
 use std::path::Path;
+
+use crate::cfmt;
+use crate::sys::{self, FileError, FileResult};
 
 use crate::{
     bbtrack::BasicBlockEntry,
     caller::{AnalysisResult, ViolatedProperty},
-    memtrack::{MemOrigin, MemTrackEntry},
+    memtrack::{c_mode, MemOrigin, MemTrackEntry},
     nondet::{NonDetEntry, NonDetValue},
 };
 
@@ -56,165 +57,401 @@ pub const LIST_LOG_FILE: &str = "list_log.csv";
 pub const ALLOCATION_LOG_FILE: &str = "allocation_log.csv";
 pub const HEAP_LOG_FILE: &str = "heap_log.csv";
 
-/// `%p` of glibc: `(nil)` for NULL, otherwise `0x` and lowercase hex.
+/// `%p` of glibc: `(nil)` for NULL, otherwise `0x` and lowercase hex
+/// ([`cfmt::put_ptr`]).
 pub fn c_pointer(address: usize) -> String {
-    if address == 0 {
-        "(nil)".to_owned()
-    } else {
-        format!("{address:#x}")
-    }
+    let mut out = Vec::new();
+    cfmt::put_ptr(&mut out, address as u64);
+    String::from_utf8_lossy(&out).into_owned()
 }
 
-/// `%lf` of glibc: six decimals, `inf`/`nan` with their sign.
+/// `%lf` of glibc: six decimals, `inf`/`nan` with their sign
+/// ([`cfmt::put_lf`]).
 pub fn c_double(value: f64) -> String {
-    let sign = if value.is_sign_negative() { "-" } else { "" };
-    if value.is_nan() {
-        format!("{sign}nan")
-    } else if value.is_infinite() {
-        format!("{sign}inf")
-    } else {
-        format!("{value:.6}")
-    }
+    let mut out = Vec::new();
+    cfmt::put_lf(&mut out, value);
+    String::from_utf8_lossy(&out).into_owned()
 }
 
-/// Text of the verdict, as `write_property` prints it
-/// (`PropertyGenerator.c:50-106`), and the extra per-property file the C
-/// runtime writes next to `map2check_property`. `line` is printed with
-/// `%d`, so it is shown as a C `int`.
-fn property_text(result: &AnalysisResult) -> (Option<String>, Option<&'static str>) {
-    let located = |tag: &str| {
-        format!(
-            "{tag}\nLine: {}\nFunction: {}\n",
-            result.line as i32, result.function_name
-        )
-    };
-    if result.ok {
-        return (Some("NONE\n".to_owned()), None);
-    }
-    match result.property {
-        ViolatedProperty::None => (Some("NONE\n".to_owned()), None),
-        ViolatedProperty::MemsafetyFree => {
-            (Some(located("FALSE-FREE")), Some("map2check_property_free"))
-        }
-        ViolatedProperty::MemsafetyDeref => (
-            Some(located("FALSE-DEREF")),
-            Some("map2check_property_deref"),
-        ),
-        ViolatedProperty::Overflow => (
-            Some(located("OVERFLOW")),
-            Some("map2check_property_overflow"),
-        ),
-        ViolatedProperty::Assert => (Some(located("ASSERT")), Some("map2check_property_assert")),
-        ViolatedProperty::MemsafetyMemtrack => (
-            Some("FALSE-MEMTRACK\n".to_owned()),
-            Some("map2check_property_memtrack"),
-        ),
-        ViolatedProperty::MemsafetyMemcleanup => (
-            Some("FALSE-MEMCLEANUP\n".to_owned()),
-            Some("map2check_property_memcleanup"),
-        ),
-        ViolatedProperty::Reachability => (Some(located("TARGET-REACHED")), None),
-        // `:98-102`: no per-property file.
-        ViolatedProperty::DivByZero => (Some(located("FALSE-DIVBYZERO")), None),
-        // The only UNKNOWN the C runtime reports is `write_property_unknown`
-        // (NULL from malloc, AnalysisModeMemtrack.c:305-311): it writes
-        // `map2check_property__unknown` and no `map2check_property`.
-        // Concurrency has no develop counterpart and is reported the same way.
-        ViolatedProperty::Unknown | ViolatedProperty::Concurrency => (None, None),
-    }
-}
-
-/// Writes `contents` to `dir/name` atomically: the full text goes to a
-/// temporary file of the same directory, which is then renamed over the
-/// target. `std::fs::write` truncates the target and writes in separate
-/// calls; under KLEE (`--external-calls=all`) the forked states share the
-/// real file system and one state can truncate the file after another wrote
-/// its violation, leaving it empty when KLEE halts on the abort. A reader of
-/// the target sees the old file or the new one, never an empty or partial
-/// one.
+/// Whether the result files are written atomically (SD-20). Under KLEE the
+/// forked states share the host file system, and a write that truncates and
+/// then writes lets one state erase the violation another one wrote; under
+/// AFL++ and the `none` generator nothing races, and develop's
+/// `fopen("w")` / `fprintf` / `fclose` costs a third of the temp-file +
+/// `rename` path on every execution (Task 2.8 measurement).
 ///
-/// The temporary name has the pid and a counter. KLEE states
-/// share the pid and each has a copy of the counter, so the file is created
-/// with `create_new` and a name that already exists is skipped.
-pub fn write_atomic(dir: &Path, name: &str, contents: &str) -> io::Result<()> {
-    use std::io::Write as _;
+/// The default depends on the build. Outside `dropin` (the staticlib, cargo
+/// tests, the goldens, the legacy KLEE runtime) it is atomic, as before. In
+/// the drop-in core (feature `dropin`, one `Map2CheckFunctions.bc` for every
+/// generator, D7) it starts plain, and the KLEE generator module turns it on
+/// from its `nondet_init` through [`crate::ffi::__m2c_rt_output_set_atomic`],
+/// before any file is written. The user approved this scope on 2026-10-27.
+static ATOMIC_WRITES: std::sync::atomic::AtomicBool =
+    std::sync::atomic::AtomicBool::new(!cfg!(feature = "dropin"));
+
+/// Serializes the unit tests that depend on the write mode (the SD-20 tests)
+/// with the ones that change it.
+#[cfg(test)]
+pub(crate) fn write_mode_test_lock() -> std::sync::MutexGuard<'static, ()> {
+    static LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    LOCK.lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+}
+
+/// Selects atomic (`true`) or plain (`false`) result-file writes.
+pub fn set_atomic_writes(on: bool) {
+    ATOMIC_WRITES.store(on, std::sync::atomic::Ordering::Relaxed);
+}
+
+/// Never downgrade a verdict (SD-20, user decision of 2026-10-27): under
+/// KLEE the forked states share the host file system, and a state that ends
+/// without a violation must not replace the `map2check_property` a violating
+/// state already wrote. On only in the drop-in core under the KLEE generator
+/// (`__m2c_rt_output_set_atomic(1)` from `NonDetGeneratorKlee`'s
+/// `nondet_init`); off in plain mode and in every build that never calls it
+/// (the staticlib keeps replacing, as before).
+static NEVER_DOWNGRADE: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// Turns the never-downgrade rule on or off (see [`NEVER_DOWNGRADE`]).
+pub fn set_never_downgrade(on: bool) {
+    NEVER_DOWNGRADE.store(on, std::sync::atomic::Ordering::Relaxed);
+}
+
+/// Whether the never-downgrade rule is on.
+pub fn never_downgrade() -> bool {
+    NEVER_DOWNGRADE.load(std::sync::atomic::Ordering::Relaxed)
+}
+
+/// Writes `contents` to `dir/name` only if `dir/name` does not exist, and
+/// atomically: the text goes to a temporary file, which is then hard-linked
+/// to the target. `link(2)` fails with `EEXIST` when the target exists, in
+/// one system call, so no other KLEE state can write the target between a
+/// check and the replacement (there is no separate check). The temporary
+/// name is removed in every case. Returns `Ok(false)` when the target
+/// existed and was left alone. Never truncates, never leaves an empty file.
+fn write_result_file_if_absent(dir: &Path, name: &str, contents: &[u8]) -> FileResult<bool> {
+    let (tmp, mut file) = create_temp(dir, name)?;
+    let written = file.write_all(contents);
+    drop(file);
+    let result =
+        written.and_then(
+            |()| match sys::hard_link(&tmp, &sys::c_path(dir, name.as_bytes())?) {
+                Ok(()) => Ok(true),
+                Err(e) if e.is_already_exists() => Ok(false),
+                Err(e) => Err(e),
+            },
+        );
+    let _ = sys::remove_file(&tmp);
+    result
+}
+
+/// A new temporary file next to `dir/name` (see [`write_result_file`]):
+/// its NUL-terminated path and the open file.
+fn create_temp(dir: &Path, name: &str) -> FileResult<(Vec<u8>, sys::File)> {
     use std::sync::atomic::{AtomicU64, Ordering};
     static COUNTER: AtomicU64 = AtomicU64::new(0);
-
-    let pid = std::process::id();
+    let pid = sys::process_id();
     let mut attempts = 0u32;
-    let (tmp, mut file) = loop {
+    loop {
         let n = COUNTER.fetch_add(1, Ordering::Relaxed);
-        let tmp = dir.join(format!(".{name}.{pid}.{n}.tmp"));
-        match std::fs::OpenOptions::new()
-            .write(true)
-            .create_new(true)
-            .open(&tmp)
-        {
-            Ok(file) => break (tmp, file),
-            Err(e) if e.kind() == io::ErrorKind::AlreadyExists && attempts < 10_000 => {
+        let mut tmp_name = Vec::with_capacity(name.len() + 32);
+        tmp_name.push(b'.');
+        tmp_name.extend_from_slice(name.as_bytes());
+        tmp_name.push(b'.');
+        cfmt::put_u64(&mut tmp_name, u64::from(pid));
+        tmp_name.push(b'.');
+        cfmt::put_u64(&mut tmp_name, n);
+        tmp_name.extend_from_slice(b".tmp");
+        let tmp = sys::c_path(dir, &tmp_name)?;
+        match sys::File::create_new(&tmp) {
+            Ok(file) => return Ok((tmp, file)),
+            Err(e) if e.is_already_exists() && attempts < 10_000 => {
                 attempts += 1;
             }
             Err(e) => return Err(e),
         }
-    };
-    let result = file.write_all(contents.as_bytes()).and_then(|()| {
+    }
+}
+
+/// Whether result files are written atomically (see [`set_atomic_writes`]).
+pub fn atomic_writes() -> bool {
+    ATOMIC_WRITES.load(std::sync::atomic::Ordering::Relaxed)
+}
+
+/// Writes `contents` to `dir/name`, atomically or not as
+/// [`atomic_writes`] says (SD-20).
+///
+/// Atomic: the full text goes to a temporary file of the same directory,
+/// which is then renamed over the target. A truncating write truncates the
+/// target and writes in separate calls; under KLEE (`--external-calls=all`)
+/// the forked states share the real file system and one state can truncate
+/// the file after another wrote its violation, leaving it empty when KLEE
+/// halts on the abort. A reader of the target sees the old file or the new
+/// one, never an empty or partial one.
+///
+/// The temporary name has the pid and a counter. KLEE states
+/// share the pid and each has a copy of the counter, so the file is created
+/// with `create_new` and a name that already exists is skipped.
+///
+/// Plain: the target is truncated and written in place, as develop's
+/// `fopen(name, "w")` + `fprintf` + `fclose`.
+pub fn write_atomic(dir: &Path, name: &str, contents: &str) -> FileResult<()> {
+    write_atomic_bytes(dir, name, contents.as_bytes())
+}
+
+/// [`write_atomic`] for contents that need not be UTF-8 (a function name is
+/// a C byte string).
+pub fn write_atomic_bytes(dir: &Path, name: &str, contents: &[u8]) -> FileResult<()> {
+    write_result_file(dir, name, contents, atomic_writes())
+}
+
+/// [`write_atomic_bytes`] with the mode given: `atomic` false truncates and
+/// writes in place (develop's `fopen("w")`), true goes through a temporary
+/// file and a rename.
+fn write_result_file(dir: &Path, name: &str, contents: &[u8], atomic: bool) -> FileResult<()> {
+    let target = sys::c_path(dir, name.as_bytes())?;
+    if !atomic {
+        return sys::File::create(&target).and_then(|mut f| f.write_all(contents));
+    }
+    let (tmp, mut file) = create_temp(dir, name)?;
+    let result = file.write_all(contents).and_then(|()| {
         drop(file);
-        std::fs::rename(&tmp, dir.join(name))
+        sys::rename_file(&tmp, &target)
     });
     if result.is_err() {
-        let _ = std::fs::remove_file(&tmp);
+        let _ = sys::remove_file(&tmp);
     }
     result
 }
 
-/// Writes the property files of `result` into `dir`, as `write_property`
-/// and the `write_property_*` helpers of `PropertyGenerator.c` do.
-pub fn write_property_files(dir: &Path, result: &AnalysisResult) -> io::Result<()> {
-    let (text, extra) = property_text(result);
-    match text {
-        Some(text) => {
-            write_atomic(dir, PROPERTY_FILE, &text)?;
-            if let Some(extra) = extra {
-                write_atomic(dir, extra, &text)?;
-            }
+/// `"<tag>\nLine: %d\nFunction: %s\n"`, the three `fprintf` calls of the
+/// located properties of `PropertyGenerator.c`.
+fn located(tag: &str, line: i32, function_name: &str) -> Vec<u8> {
+    let mut out = Vec::with_capacity(tag.len() + function_name.len() + 32);
+    cfmt::put(&mut out, tag.as_bytes());
+    cfmt::put(&mut out, b"\nLine: ");
+    cfmt::put_i64(&mut out, i64::from(line));
+    cfmt::put(&mut out, b"\nFunction: ");
+    cfmt::put(&mut out, function_name.as_bytes());
+    cfmt::put_byte(&mut out, b'\n');
+    out
+}
+
+/// `write_property_unknown` (`PropertyGenerator.c:24-28`). The double
+/// underscore of the file name is kept on purpose (SD-16). Like the other
+/// `write_property_<x>` helpers it is private to the Rust core (SD-22).
+pub(crate) fn write_property_unknown(dir: &Path) -> FileResult<()> {
+    write_atomic(dir, PROPERTY_FILE_UNKNOWN, "UNKNOWN\n")
+}
+
+// The helpers below write their file as `write_property` writes it (the
+// same text as `map2check_property`); since Task 3.3 `write_property`
+// builds that text once and writes both files itself, and the helpers stay
+// for the tests of the C formats.
+
+/// `write_property_memtrack` (`PropertyGenerator.c:30-34`).
+#[cfg(test)]
+pub(crate) fn write_property_memtrack(dir: &Path) -> FileResult<()> {
+    write_atomic(dir, "map2check_property_memtrack", "FALSE-MEMTRACK\n")
+}
+
+/// `write_property_memcleanup` (`PropertyGenerator.c:36-40`).
+#[cfg(test)]
+pub(crate) fn write_property_memcleanup(dir: &Path) -> FileResult<()> {
+    write_atomic(dir, "map2check_property_memcleanup", "FALSE-MEMCLEANUP\n")
+}
+
+/// `write_property_deref` (`PropertyGenerator.c:42-48`).
+#[cfg(test)]
+pub(crate) fn write_property_deref(dir: &Path, line: i32, function_name: &str) -> FileResult<()> {
+    write_atomic_bytes(
+        dir,
+        "map2check_property_deref",
+        &located("FALSE-DEREF", line, function_name),
+    )
+}
+
+/// `write_property_free` (`PropertyGenerator.c:108-114`).
+#[cfg(test)]
+pub(crate) fn write_property_free(dir: &Path, line: i32, function_name: &str) -> FileResult<()> {
+    write_atomic_bytes(
+        dir,
+        "map2check_property_free",
+        &located("FALSE-FREE", line, function_name),
+    )
+}
+
+/// `write_property_overflow` (`PropertyGenerator.c:116-122`).
+#[cfg(test)]
+pub(crate) fn write_property_overflow(
+    dir: &Path,
+    line: i32,
+    function_name: &str,
+) -> FileResult<()> {
+    write_atomic_bytes(
+        dir,
+        "map2check_property_overflow",
+        &located("OVERFLOW", line, function_name),
+    )
+}
+
+/// `write_property_assert` (`PropertyGenerator.c:124-130`).
+#[cfg(test)]
+pub(crate) fn write_property_assert(dir: &Path, line: i32, function_name: &str) -> FileResult<()> {
+    write_atomic_bytes(
+        dir,
+        "map2check_property_assert",
+        &located("ASSERT", line, function_name),
+    )
+}
+
+/// `write_property` (`PropertyGenerator.c:50-106`): `map2check_property`
+/// with the text of `violated` and, for the properties that have one, the
+/// file of its `write_property_<x>` helper, written before
+/// `map2check_property` is complete, as the C function calls the helper
+/// before its own `fclose`. `Concurrency`, which has no case in the C
+/// switch, leaves `map2check_property` empty. Each file is replaced
+/// atomically (SD-20).
+pub fn write_property(
+    dir: &Path,
+    violated: ViolatedProperty,
+    line: i32,
+    function_name: &str,
+) -> FileResult<()> {
+    // The text of `map2check_property`; the file of the `write_property_<x>`
+    // helper, when the property has one, gets the same text, and first.
+    let (tag, own_file, is_located) = match violated {
+        ViolatedProperty::None => ("NONE", None, false),
+        ViolatedProperty::Unknown => ("UNKNOWN", None, false),
+        ViolatedProperty::MemsafetyFree => ("FALSE-FREE", Some("map2check_property_free"), true),
+        ViolatedProperty::MemsafetyDeref => ("FALSE-DEREF", Some("map2check_property_deref"), true),
+        ViolatedProperty::MemsafetyMemtrack => {
+            ("FALSE-MEMTRACK", Some("map2check_property_memtrack"), false)
         }
-        None => write_atomic(dir, PROPERTY_FILE_UNKNOWN, "UNKNOWN\n")?,
+        ViolatedProperty::MemsafetyMemcleanup => (
+            "FALSE-MEMCLEANUP",
+            Some("map2check_property_memcleanup"),
+            false,
+        ),
+        ViolatedProperty::Reachability => ("TARGET-REACHED", None, true),
+        ViolatedProperty::Overflow => ("OVERFLOW", Some("map2check_property_overflow"), true),
+        ViolatedProperty::Assert => ("ASSERT", Some("map2check_property_assert"), true),
+        // `:98-102`: no per-property file.
+        ViolatedProperty::DivByZero => ("FALSE-DIVBYZERO", None, true),
+        ViolatedProperty::Concurrency => ("", None, false),
+    };
+    let text = if is_located {
+        located(tag, line, function_name)
+    } else if tag.is_empty() {
+        Vec::new()
+    } else {
+        let mut text = tag.as_bytes().to_vec();
+        text.push(b'\n');
+        text
+    };
+    if let Some(name) = own_file {
+        write_atomic_bytes(dir, name, &text)?;
     }
-    Ok(())
+    // Never downgrade (SD-20, KLEE only): a non-violation (NONE, UNKNOWN,
+    // the empty Concurrency text) never replaces an existing
+    // map2check_property; a violation replaces it, as fopen("w") does.
+    if !is_violation(violated) && never_downgrade() && atomic_writes() {
+        return write_result_file_if_absent(dir, PROPERTY_FILE, &text).map(|_| ());
+    }
+    write_atomic_bytes(dir, PROPERTY_FILE, &text)
+}
+
+/// Whether `map2check_property` with this property holds a violation (a
+/// FALSE verdict the frontend reports): every property but `None`,
+/// `Unknown` and `Concurrency` (written empty).
+fn is_violation(violated: ViolatedProperty) -> bool {
+    !matches!(
+        violated,
+        ViolatedProperty::None | ViolatedProperty::Unknown | ViolatedProperty::Concurrency
+    )
+}
+
+/// Writes the property files of `result` into `dir`, as the C runtime does
+/// on the path that records it: `write_property(NONE, 0, "")` for a correct
+/// run (`map2check_success`, `Map2CheckFunctions.c:67-70`), and
+/// `write_property` of the property otherwise. `line` is printed with `%d`,
+/// so it is shown as a C `int`. The only UNKNOWN the C runtime reports is
+/// `write_property_unknown` (NULL from malloc, `AnalysisModeMemtrack.c:305-311`),
+/// which writes no `map2check_property`; `Concurrency`, which has no develop
+/// counterpart, is reported the same way.
+pub fn write_property_files(dir: &Path, result: &AnalysisResult) -> FileResult<()> {
+    if result.ok {
+        return write_property(dir, ViolatedProperty::None, 0, "");
+    }
+    match result.property {
+        ViolatedProperty::Unknown | ViolatedProperty::Concurrency => write_property_unknown(dir),
+        property => write_property(dir, property, result.line as i32, &result.function_name),
+    }
 }
 
 /// Removes every property file left in `dir` by an earlier run. A missing
 /// file is not an error; other errors are reported on stderr.
 pub fn remove_stale_property_files(dir: &Path) {
     for name in PROPERTY_FILES {
-        match std::fs::remove_file(dir.join(name)) {
+        match sys::c_path(dir, name.as_bytes()).and_then(|p| sys::remove_file(&p)) {
             Ok(()) => {}
-            Err(e) if e.kind() == io::ErrorKind::NotFound => {}
-            Err(e) => eprintln!("[map2check] cannot remove stale {name}: {e}"),
+            Err(e) if e.is_not_found() => {}
+            Err(e) => {
+                let mut text = b"cannot remove stale ".to_vec();
+                text.extend_from_slice(name.as_bytes());
+                text.extend_from_slice(b": ");
+                e.describe(&mut text);
+                sys::diagnostic(&text);
+            }
         }
     }
 }
 
 /// `generate_confirmation_file` (`WitnessGeneration.c:28-32`).
-pub fn write_checked_error(dir: &Path) -> io::Result<()> {
+pub fn write_checked_error(dir: &Path) -> FileResult<()> {
     write_atomic(dir, CHECKED_ERROR_FILE, "END OF TIME\n")
 }
 
-/// `trackbb_log_to_file` (`TrackBBLog.c:35-44`): `%u;%s\n` per row.
-/// `map2check_track_bb` keeps only the first block of each line
-/// (`Map2CheckFunctions.c:49-55`), so later rows of a line are skipped.
-pub fn write_trackbb_log(dir: &Path, rows: &[BasicBlockEntry]) -> io::Result<()> {
-    let mut seen = crate::memtrack::FixedHashSet::default();
-    let mut out = String::new();
-    for row in rows.iter().filter(|r| seen.insert(r.line)) {
-        let _ = writeln!(out, "{};{}", row.line, row.function_name);
+/// `trackbb_log_to_file` (`TrackBBLog.c:35-44`), private to the Rust core
+/// (SD-22): `"%u;"` then `"%s\n"` per row (`:40-41`), in order.
+pub(crate) fn trackbb_log_to_file(dir: &Path, rows: &[BasicBlockEntry]) -> FileResult<()> {
+    let mut out = Vec::new();
+    for row in rows {
+        cfmt::put_u64(&mut out, u64::from(row.line));
+        cfmt::put_byte(&mut out, b';');
+        cfmt::put(&mut out, row.function_name.as_bytes());
+        cfmt::put_byte(&mut out, b'\n');
     }
-    write_atomic(dir, TRACKBB_LOG_FILE, &out)
+    write_atomic_bytes(dir, TRACKBB_LOG_FILE, &out)
 }
 
-/// The value column and the `enum NONDET_TYPE` number
-/// (`Map2CheckTypes.h:41-58`) of a nondet row, as develop writes them.
+/// The basic-block log of the run: `map2check_track_bb` keeps only the
+/// first block of each line (`Map2CheckFunctions.c:49-55`), and the rows of
+/// `map2check_save_basic_block_log`, which records every block, are reduced
+/// the same way before [`trackbb_log_to_file`].
+pub fn write_trackbb_log(dir: &Path, rows: &[BasicBlockEntry]) -> FileResult<()> {
+    // The drop-in core records blocks only through `map2check_track_bb`,
+    // which already keeps one row per line; the reduction is for the rows of
+    // the old API (`map2check_save_basic_block_log`), which it does not have.
+    #[cfg(feature = "dropin")]
+    {
+        trackbb_log_to_file(dir, rows)
+    }
+    #[cfg(not(feature = "dropin"))]
+    {
+        let mut seen = crate::memtrack::FixedHashSet::default();
+        let first: Vec<BasicBlockEntry> = rows
+            .iter()
+            .filter(|r| seen.insert(r.line))
+            .cloned()
+            .collect();
+        trackbb_log_to_file(dir, &first)
+    }
+}
+
+/// The `enum NONDET_TYPE` number and the union bits of a nondet row, as
+/// develop stores it, so that [`crate::nondet::c_log`] is the only code that
+/// formats `klee_log.csv`.
 ///
 /// `NonDetPass.cpp` hands each value to its `map2check_nondet_<t>` wrapper as
 /// a C `int` (`NonDetLog.c:105-150`): `int`, `unsigned`, `uint` as they are
@@ -223,33 +460,32 @@ pub fn write_trackbb_log(dir: &Path, rows: &[BasicBlockEntry]) -> io::Result<()>
 /// which zero-extends the narrow ones (`char` -3 arrives as 253) and
 /// truncates the wide ones to their low 32 bits; `pointer` and `pchar`
 /// through `CreatePtrToInt(v, i32)` (`:224-238`, `:291-292`), the low 32
-/// bits of the address. `nondet_log_to_file` then prints `UNSIGNED` with
-/// `%u`, `DOUBLE` with `%lf` and every other type with `%d`
-/// (`NonDetLog.c:45-54`). `float` has no develop counterpart and is logged as
+/// bits of the address. `float` has no develop counterpart and is logged as
 /// a double.
-pub fn nondet_value_and_type(value: &NonDetValue) -> (String, i32) {
+pub fn nondet_kind_and_bits(value: &NonDetValue) -> (i32, u64) {
+    use crate::nondet::c_log::kind as k;
     /// `trunc` to `i32`, as `CreateIntegerCast` narrows a wide integer.
-    fn low32(v: u64) -> String {
-        (v as u32 as i32).to_string()
+    fn low32(v: u64) -> u64 {
+        u64::from(v as u32)
     }
     match *value {
-        NonDetValue::Int(v) => (v.to_string(), 0),
-        NonDetValue::Char(v) => ((v as u8).to_string(), 1),
-        NonDetValue::Pointer(v) => (low32(v as u64), 2),
-        NonDetValue::UShort(v) => (v.to_string(), 3),
-        NonDetValue::Long(v) => (low32(v as u64), 4),
-        NonDetValue::Unsigned(v) => (v.to_string(), 5),
-        NonDetValue::ULong(v) => (low32(v), 6),
-        NonDetValue::Bool(v) => (v.to_string(), 7),
-        NonDetValue::UChar(v) => (v.to_string(), 8),
-        NonDetValue::PChar(v) => (low32(v as u64), 9),
-        NonDetValue::SizeT(v) => (low32(v as u64), 10),
-        NonDetValue::LoffT(v) => (low32(v as u64), 11),
-        NonDetValue::SectorT(v) => (low32(v), 12),
-        NonDetValue::UInt(v) => ((v as i32).to_string(), 13),
-        NonDetValue::Short(v) => ((v as u16).to_string(), 14),
-        NonDetValue::Float(v) => (c_double(f64::from(v)), 15),
-        NonDetValue::Double(v) => (c_double(v), 15),
+        NonDetValue::Int(v) => (k::INTEGER, low32(v as u32 as u64)),
+        NonDetValue::Char(v) => (k::CHAR, u64::from(v as u8)),
+        NonDetValue::Pointer(v) => (k::POINTER, low32(v as u64)),
+        NonDetValue::UShort(v) => (k::USHORT, u64::from(v)),
+        NonDetValue::Long(v) => (k::LONG, low32(v as u64)),
+        NonDetValue::Unsigned(v) => (k::UNSIGNED, u64::from(v)),
+        NonDetValue::ULong(v) => (k::ULONG, low32(v)),
+        NonDetValue::Bool(v) => (k::BOOL, low32(v as u32 as u64)),
+        NonDetValue::UChar(v) => (k::UCHAR, u64::from(v)),
+        NonDetValue::PChar(v) => (k::PCHAR, low32(v as u64)),
+        NonDetValue::SizeT(v) => (k::SIZE_T, low32(v as u64)),
+        NonDetValue::LoffT(v) => (k::LOFF_T, low32(v as u64)),
+        NonDetValue::SectorT(v) => (k::SECTOR_T, low32(v)),
+        NonDetValue::UInt(v) => (k::UINT, u64::from(v)),
+        NonDetValue::Short(v) => (k::SHORT, u64::from(v as u16)),
+        NonDetValue::Float(v) => (k::DOUBLE, f64::from(v).to_bits()),
+        NonDetValue::Double(v) => (k::DOUBLE, v.to_bits()),
     }
 }
 
@@ -594,63 +830,69 @@ impl LegacyLogs {
 
     /// `list_log_to_file` (`ListLog.c:138-157`). The id column is always 0
     /// (`new_list_row`, `ListLog.c:125`).
-    pub fn write_list_log(&self, dir: &Path) -> io::Result<()> {
-        let mut out = String::new();
+    pub fn write_list_log(&self, dir: &Path) -> FileResult<()> {
+        let mut out = Vec::new();
         for r in &self.list {
-            let _ = writeln!(
-                out,
-                "0;{};{};{};{};{};{};{};{};{}",
-                c_pointer(r.var),
-                c_pointer(r.points_to),
+            c_mode::list_log_row(
+                &mut out,
+                r.var as u64,
+                r.points_to as u64,
                 r.scope,
-                i32::from(r.is_free),
-                i32::from(r.is_dynamic),
-                r.name,
+                r.is_free,
+                r.is_dynamic,
+                r.name.as_bytes(),
                 r.line,
-                r.function,
-                r.step
+                r.function.as_bytes(),
+                r.step,
             );
         }
-        write_atomic(dir, LIST_LOG_FILE, &out)
+        write_atomic_bytes(dir, LIST_LOG_FILE, &out)
     }
 
     /// `allocation_log_to_file` (`AllocationLog.c:161-174`).
-    pub fn write_allocation_log(&self, dir: &Path) -> io::Result<()> {
-        let mut out = String::new();
+    pub fn write_allocation_log(&self, dir: &Path) -> FileResult<()> {
+        let mut out = Vec::new();
         for r in &self.allocation {
-            let _ = writeln!(
-                out,
-                "{};{};{}",
-                c_pointer(r.addr),
-                r.size,
-                i32::from(r.is_free)
-            );
+            c_mode::allocation_log_row(&mut out, r.addr as u64, r.size, r.is_free);
         }
-        write_atomic(dir, ALLOCATION_LOG_FILE, &out)
+        write_atomic_bytes(dir, ALLOCATION_LOG_FILE, &out)
     }
 
     /// `heap_log_to_file` (`HeapLog.c:54-66`).
-    pub fn write_heap_log(&self, dir: &Path) -> io::Result<()> {
-        let mut out = String::new();
+    pub fn write_heap_log(&self, dir: &Path) -> FileResult<()> {
+        let mut out = Vec::new();
         for r in &self.heap {
-            let _ = writeln!(out, "{};{};{}", c_pointer(r.addr), r.name, r.size);
+            c_mode::heap_log_row(&mut out, r.addr as u64, r.name.as_bytes(), r.size);
         }
-        write_atomic(dir, HEAP_LOG_FILE, &out)
+        write_atomic_bytes(dir, HEAP_LOG_FILE, &out)
     }
 
-    /// `nondet_log_to_file` (`NonDetLog.c:17-60`):
-    /// `index;line;scope;function;step;value;type`.
-    pub fn write_nondet_log(&self, dir: &Path) -> io::Result<()> {
-        let mut out = String::new();
-        for (i, r) in self.nondet.iter().enumerate() {
-            let (value, kind) = nondet_value_and_type(&r.value);
-            let _ = writeln!(
-                out,
-                "{i};{};{};{};{};{value};{kind}",
-                r.line, r.scope, r.function, r.step
-            );
+    /// The rows of the nondet log in the shape of `NONDET_CALL`.
+    pub fn nondet_calls(&self) -> Vec<crate::nondet::c_log::CNondetCall> {
+        self.nondet
+            .iter()
+            .map(|r| {
+                let (kind, bits) = nondet_kind_and_bits(&r.value);
+                crate::nondet::c_log::CNondetCall::from_parts(
+                    kind,
+                    r.line,
+                    r.scope,
+                    r.step,
+                    r.function.as_bytes(),
+                    bits,
+                )
+            })
+            .collect()
+    }
+
+    /// `nondet_log_to_file` (`NonDetLog.c:50-125`) through the one writer,
+    /// [`crate::nondet::c_log::nondet_log_to_file`].
+    pub fn write_nondet_log(&self, dir: &Path) -> FileResult<()> {
+        if crate::nondet::c_log::nondet_log_to_file(&self.nondet_calls(), dir) {
+            Ok(())
+        } else {
+            Err(FileError::Other("cannot write klee_log.csv"))
         }
-        write_atomic(dir, NONDET_LOG_FILE, &out)
     }
 }
 
@@ -758,6 +1000,7 @@ mod tests {
     /// wide; with the old code this fails on every run seen.
     #[test]
     fn concurrent_reader_never_sees_empty_or_partial_file() {
+        let _mode = write_mode_test_lock();
         use std::sync::atomic::{AtomicBool, Ordering};
         let dir = tempfile::tempdir().unwrap();
         let old = bb_rows(400_000, "old");
@@ -798,6 +1041,7 @@ mod tests {
     /// (its inode changes), and no temporary file is left behind.
     #[test]
     fn write_goes_through_a_temp_file_and_rename() {
+        let _mode = write_mode_test_lock();
         use std::os::unix::fs::MetadataExt as _;
         let dir = tempfile::tempdir().unwrap();
         let target = dir.path().join(PROPERTY_FILE);
@@ -818,12 +1062,182 @@ mod tests {
 
     #[test]
     fn temp_name_collisions_are_skipped() {
+        let _mode = write_mode_test_lock();
         let dir = tempfile::tempdir().unwrap();
         for _ in 0..50 {
             write_atomic(dir.path(), "f", "x\n").unwrap();
         }
         assert_eq!(std::fs::read(dir.path().join("f")).unwrap(), b"x\n");
         assert_eq!(std::fs::read_dir(dir.path()).unwrap().count(), 1);
+    }
+
+    /// The default outside the drop-in core: atomic, as SD-20 had it before
+    /// Task 2.8 (the cargo tests never build with `dropin`).
+    #[test]
+    fn result_files_are_atomic_by_default_outside_dropin() {
+        let _mode = write_mode_test_lock();
+        assert!(atomic_writes());
+    }
+
+    /// Plain mode (the drop-in core under AFL++ and `none`): develop's
+    /// `fopen("w")`, the target truncated and rewritten in place (same
+    /// inode), no temporary file.
+    #[test]
+    fn plain_mode_truncates_the_target_in_place_like_fopen_w() {
+        use std::os::unix::fs::MetadataExt as _;
+        let dir = tempfile::tempdir().unwrap();
+        write_result_file(dir.path(), "f", b"a longer first text\n", false).unwrap();
+        let target = dir.path().join("f");
+        let first = std::fs::metadata(&target).unwrap().ino();
+        let _held = std::fs::File::open(&target).unwrap();
+        write_result_file(dir.path(), "f", b"x\n", false).unwrap();
+        assert_eq!(std::fs::read(&target).unwrap(), b"x\n");
+        assert_eq!(first, std::fs::metadata(&target).unwrap().ino());
+        assert_eq!(std::fs::read_dir(dir.path()).unwrap().count(), 1);
+    }
+
+    /// Atomic mode (the KLEE generator, and every build outside `dropin`):
+    /// a new file renamed over the target (new inode), no temporary left.
+    #[test]
+    fn atomic_mode_replaces_the_target_by_a_rename() {
+        use std::os::unix::fs::MetadataExt as _;
+        let dir = tempfile::tempdir().unwrap();
+        write_result_file(dir.path(), "f", b"first\n", true).unwrap();
+        let target = dir.path().join("f");
+        let first = std::fs::metadata(&target).unwrap().ino();
+        let _held = std::fs::File::open(&target).unwrap();
+        write_result_file(dir.path(), "f", b"x\n", true).unwrap();
+        assert_eq!(std::fs::read(&target).unwrap(), b"x\n");
+        assert_ne!(first, std::fs::metadata(&target).unwrap().ino());
+        assert_eq!(std::fs::read_dir(dir.path()).unwrap().count(), 1);
+    }
+
+    /// Runs `f` with the KLEE write mode (atomic + never downgrade) or the
+    /// given one, and restores the defaults of a non-dropin build after.
+    fn with_modes(atomic: bool, never: bool, f: impl FnOnce()) {
+        let _mode = write_mode_test_lock();
+        set_atomic_writes(atomic);
+        set_never_downgrade(never);
+        f();
+        set_atomic_writes(true);
+        set_never_downgrade(false);
+    }
+
+    fn property(dir: &Path) -> String {
+        std::fs::read_to_string(dir.join(PROPERTY_FILE)).unwrap()
+    }
+
+    fn only_property_files(dir: &Path) {
+        for e in std::fs::read_dir(dir).unwrap() {
+            let n = e.unwrap().file_name().into_string().unwrap();
+            assert!(n.starts_with("map2check_property"), "left behind: {n}");
+        }
+    }
+
+    /// SD-20, never downgrade (user decision of 2026-10-27): under KLEE a
+    /// NONE written after a violation leaves the violation in place.
+    #[test]
+    fn never_downgrade_keeps_a_violation_against_none() {
+        with_modes(true, true, || {
+            let dir = tempfile::tempdir().unwrap();
+            write_property_files(
+                dir.path(),
+                &violated(ViolatedProperty::Reachability, 19, "main"),
+            )
+            .unwrap();
+            write_property_files(dir.path(), &AnalysisResult::default()).unwrap();
+            assert_eq!(
+                property(dir.path()),
+                "TARGET-REACHED\nLine: 19\nFunction: main\n"
+            );
+            write_property(dir.path(), ViolatedProperty::Unknown, 0, "").unwrap();
+            write_property(dir.path(), ViolatedProperty::Concurrency, 0, "").unwrap();
+            assert_eq!(
+                property(dir.path()),
+                "TARGET-REACHED\nLine: 19\nFunction: main\n"
+            );
+            only_property_files(dir.path());
+        });
+    }
+
+    /// A NONE with no earlier file is written (atomically: link of a full
+    /// temporary file), and a second NONE leaves it as it is.
+    #[test]
+    fn never_downgrade_writes_none_when_there_is_no_property_file() {
+        with_modes(true, true, || {
+            let dir = tempfile::tempdir().unwrap();
+            write_property_files(dir.path(), &AnalysisResult::default()).unwrap();
+            assert_eq!(property(dir.path()), "NONE\n");
+            write_property_files(dir.path(), &AnalysisResult::default()).unwrap();
+            assert_eq!(property(dir.path()), "NONE\n");
+            only_property_files(dir.path());
+        });
+    }
+
+    /// A violation still replaces a NONE and an earlier violation (the last
+    /// writer wins among violations, as develop's fopen("w")).
+    #[test]
+    fn never_downgrade_lets_a_violation_replace_none_and_violations() {
+        with_modes(true, true, || {
+            let dir = tempfile::tempdir().unwrap();
+            write_property_files(dir.path(), &AnalysisResult::default()).unwrap();
+            write_property_files(dir.path(), &violated(ViolatedProperty::Assert, 5, "f")).unwrap();
+            assert_eq!(property(dir.path()), "ASSERT\nLine: 5\nFunction: f\n");
+            write_property_files(dir.path(), &violated(ViolatedProperty::Overflow, 7, "g"))
+                .unwrap();
+            assert_eq!(property(dir.path()), "OVERFLOW\nLine: 7\nFunction: g\n");
+            only_property_files(dir.path());
+        });
+    }
+
+    /// Plain mode (AFL++, none) and the staticlib default are unchanged: a
+    /// NONE replaces whatever was there, as develop's fopen("w").
+    #[test]
+    fn without_never_downgrade_none_replaces_a_violation() {
+        for (atomic, never) in [(false, false), (true, false), (false, true)] {
+            with_modes(atomic, never, || {
+                let dir = tempfile::tempdir().unwrap();
+                write_property_files(dir.path(), &violated(ViolatedProperty::Assert, 5, "f"))
+                    .unwrap();
+                write_property_files(dir.path(), &AnalysisResult::default()).unwrap();
+                assert_eq!(
+                    property(dir.path()),
+                    "NONE\n",
+                    "atomic {atomic} never {never}"
+                );
+            });
+        }
+    }
+
+    /// The link-or-fail primitive: an existing target is never touched,
+    /// the temporary file is always removed.
+    #[test]
+    fn write_if_absent_never_replaces_and_cleans_up() {
+        let dir = tempfile::tempdir().unwrap();
+        assert!(write_result_file_if_absent(dir.path(), "f", b"one\n").unwrap());
+        assert!(!write_result_file_if_absent(dir.path(), "f", b"two\n").unwrap());
+        assert_eq!(std::fs::read(dir.path().join("f")).unwrap(), b"one\n");
+        assert_eq!(std::fs::read_dir(dir.path()).unwrap().count(), 1);
+    }
+
+    /// The mode switch reaches every writer: in plain mode the property file
+    /// keeps its inode.
+    #[test]
+    fn set_atomic_writes_switches_the_property_writer() {
+        use std::os::unix::fs::MetadataExt as _;
+        let _mode = write_mode_test_lock();
+        let dir = tempfile::tempdir().unwrap();
+        let target = dir.path().join(PROPERTY_FILE);
+        set_atomic_writes(false);
+        write_property_files(dir.path(), &violated(ViolatedProperty::Assert, 5, "main")).unwrap();
+        let first = std::fs::metadata(&target).unwrap().ino();
+        let _held = std::fs::File::open(&target).unwrap();
+        write_property_files(dir.path(), &violated(ViolatedProperty::Assert, 6, "main")).unwrap();
+        let plain_ino = std::fs::metadata(&target).unwrap().ino();
+        set_atomic_writes(true);
+        write_property_files(dir.path(), &violated(ViolatedProperty::Assert, 7, "main")).unwrap();
+        assert_eq!(first, plain_ino);
+        assert_ne!(first, std::fs::metadata(&target).unwrap().ino());
     }
 
     #[test]
@@ -912,27 +1326,97 @@ mod tests {
 
     #[test]
     fn nondet_rows_use_develop_types_and_value_formats() {
+        use crate::nondet::c_log::CNondetCall as C;
         use crate::nondet::NonDetValue as V;
-        assert_eq!(nondet_value_and_type(&V::Int(-1)), ("-1".into(), 0));
-        assert_eq!(nondet_value_and_type(&V::UInt(u32::MAX)), ("-1".into(), 13));
-        assert_eq!(nondet_value_and_type(&V::Long(1 << 32)), ("0".into(), 4));
-        assert_eq!(nondet_value_and_type(&V::Char(-3)), ("253".into(), 1));
-        assert_eq!(nondet_value_and_type(&V::Short(-2)), ("65534".into(), 14));
+        let row = |v: &V| {
+            let (kind, bits) = nondet_kind_and_bits(v);
+            String::from_utf8(C::from_parts(kind, 0, 0, 0, b"", bits).csv_row(0)).unwrap()
+        };
+        assert_eq!(row(&V::Int(-1)), "0;0;0;;0;-1;0\n");
+        assert_eq!(row(&V::UInt(u32::MAX)), "0;0;0;;0;-1;13\n");
+        assert_eq!(row(&V::Long(1 << 32)), "0;0;0;;0;0;4\n");
+        assert_eq!(row(&V::Char(-3)), "0;0;0;;0;253;1\n");
+        assert_eq!(row(&V::Short(-2)), "0;0;0;;0;65534;14\n");
+        assert_eq!(row(&V::Unsigned(u32::MAX)), "0;0;0;;0;4294967295;5\n");
+        assert_eq!(row(&V::Pointer(0x1_2345_6789)), "0;0;0;;0;591751049;2\n");
+        assert_eq!(row(&V::Float(0.5)), "0;0;0;;0;0.500000;15\n");
+        assert_eq!(row(&V::Double(2.5)), "0;0;0;;0;2.500000;15\n");
+    }
+
+    /// The `write_property_<x>` helpers of `PropertyGenerator.c`, which the
+    /// Rust core keeps private (SD-22): each writes its own file with the
+    /// format strings of the C function.
+    #[test]
+    fn write_property_helpers_match_c_format() {
+        let dir = tempfile::tempdir().unwrap();
+        let d = dir.path();
+        write_property_unknown(d).unwrap(); // :24-28
+        write_property_memtrack(d).unwrap(); // :30-34
+        write_property_memcleanup(d).unwrap(); // :36-40
+        write_property_deref(d, 7, "f").unwrap(); // :42-48
+        write_property_free(d, -2, "g").unwrap(); // :108-114
+        write_property_overflow(d, 0, "").unwrap(); // :116-122
+        write_property_assert(d, i32::MAX, "main").unwrap(); // :124-130
+        let read = |name: &str| std::fs::read_to_string(d.join(name)).unwrap();
+        assert_eq!(read("map2check_property__unknown"), "UNKNOWN\n");
+        assert_eq!(read("map2check_property_memtrack"), "FALSE-MEMTRACK\n");
+        assert_eq!(read("map2check_property_memcleanup"), "FALSE-MEMCLEANUP\n");
         assert_eq!(
-            nondet_value_and_type(&V::Unsigned(u32::MAX)),
-            ("4294967295".into(), 5)
+            read("map2check_property_deref"),
+            "FALSE-DEREF\nLine: 7\nFunction: f\n"
         );
         assert_eq!(
-            nondet_value_and_type(&V::Pointer(0x1_2345_6789)),
-            ("591751049".into(), 2)
+            read("map2check_property_free"),
+            "FALSE-FREE\nLine: -2\nFunction: g\n"
         );
         assert_eq!(
-            nondet_value_and_type(&V::Float(0.5)),
-            ("0.500000".into(), 15)
+            read("map2check_property_overflow"),
+            "OVERFLOW\nLine: 0\nFunction: \n"
         );
         assert_eq!(
-            nondet_value_and_type(&V::Double(2.5)),
-            ("2.500000".into(), 15)
+            read("map2check_property_assert"),
+            "ASSERT\nLine: 2147483647\nFunction: main\n"
+        );
+        assert!(
+            !d.join(PROPERTY_FILE).exists(),
+            "nenhum escreve map2check_property"
+        );
+    }
+
+    /// `write_property` replaces `map2check_property` and the file of its
+    /// own property and leaves every other file alone
+    /// (`PropertyGenerator.c:50-106`).
+    #[test]
+    fn write_property_truncates_only_its_own_files() {
+        let dir = tempfile::tempdir().unwrap();
+        for name in PROPERTY_FILES {
+            std::fs::write(dir.path().join(name), "stale\n").unwrap();
+        }
+        write_property(dir.path(), ViolatedProperty::Overflow, 3, "main").unwrap();
+        for name in PROPERTY_FILES {
+            let text = std::fs::read_to_string(dir.path().join(name)).unwrap();
+            if name == PROPERTY_FILE || name == "map2check_property_overflow" {
+                assert_eq!(text, "OVERFLOW\nLine: 3\nFunction: main\n", "{name}");
+            } else {
+                assert_eq!(text, "stale\n", "{name}");
+            }
+        }
+    }
+
+    /// `trackbb_log_to_file` (`TrackBBLog.c:35-44`), private in the Rust
+    /// core (SD-22): `"%u;" "%s\n"` per row, in order.
+    #[test]
+    fn trackbb_log_to_file_matches_c_format() {
+        use crate::bbtrack::BasicBlockEntry;
+        let dir = tempfile::tempdir().unwrap();
+        let rows = [
+            BasicBlockEntry::new(1, 0, "main"),
+            BasicBlockEntry::new(2, u32::MAX, ""),
+        ];
+        trackbb_log_to_file(dir.path(), &rows).unwrap();
+        assert_eq!(
+            std::fs::read(dir.path().join(TRACKBB_LOG_FILE)).unwrap(),
+            b"0;main\n4294967295;\n"
         );
     }
 }

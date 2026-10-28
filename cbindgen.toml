@@ -8,10 +8,14 @@ documentation_style = "doxy"
 
 [export]
 prefix = ""
-# `map2check_set_mode` takes an `int32_t`; export the enum so the header
-# still names the mode values.
-include = ["AnalysisMode"]
-exclude = []
+include = ["ViolatedProperty"]
+exclude = ["ViolatedPropertyRaw"]
 
 [parse]
 parse_deps = false
+
+# `write_property` takes the C enum as its `int` (ViolatedPropertyRaw, so an
+# out-of-range value is defined behaviour); the header keeps the C runtime's
+# parameter type `enum ViolatedProperty`.
+[export.rename]
+"ViolatedPropertyRaw" = "enum ViolatedProperty"

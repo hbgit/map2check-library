@@ -17,7 +17,7 @@
 
 use crate::{
     caller::ViolatedProperty,
-    memtrack,
+    memtrack::{self, c_mode::MemMode},
     state::{AnalysisState, Config},
 };
 
@@ -100,11 +100,21 @@ pub fn analysis_init(mode: Option<AnalysisMode>, state: &mut AnalysisState) {
 pub fn analysis_destroy(mode: Option<AnalysisMode>, state: &mut AnalysisState) {
     match mode {
         // Unset: every check is active, so the memory log is in use.
-        None => state.memtrack.clear(),
-        // AnalysisModeMemtrack.c:132-136 — frees heap, list and allocation logs.
-        Some(AnalysisMode::Memtrack) => state.memtrack.clear(),
+        None => {
+            state.memtrack.clear();
+            state.c_memory.clear();
+        }
+        // AnalysisModeMemtrack.c:132-136 — frees heap, list and allocation
+        // logs (the drop-in ones too).
+        Some(AnalysisMode::Memtrack) => {
+            state.memtrack.clear();
+            state.c_memory.clear();
+        }
         // AnalysisModeMemcleanup.c:132-136 — same as memtrack.
-        Some(AnalysisMode::Memcleanup) => state.memtrack.clear(),
+        Some(AnalysisMode::Memcleanup) => {
+            state.memtrack.clear();
+            state.c_memory.clear();
+        }
         // AnalysisModeNone.c:15-17 — "DO NOTHING".
         Some(AnalysisMode::None) => {}
         // AnalysisModeOverflow.c:281 — empty.
@@ -123,11 +133,16 @@ pub fn analysis_destroy(mode: Option<AnalysisMode>, state: &mut AnalysisState) {
 ///
 /// The memcleanup option is an alias of the memcleanup mode for the leak tag:
 /// in every mode that checks leaks it selects `MemsafetyMemcleanup`.
+///
+/// In memtrack mode the drop-in logs of the `__m2c_rt_memtrack_*` entry
+/// points (`AnalysisState::c_memory`) are checked first, with develop's rule
+/// (`valid_allocation_log`, which appends the freed rows the witness logs
+/// show); that is why the state is mutable.
 pub fn analysis_is_program_correct(
     config: Config,
-    state: &AnalysisState,
+    state: &mut AnalysisState,
 ) -> Option<ViolatedProperty> {
-    let leak = |property| memtrack::has_memcleanup_error(&state.memtrack).then_some(property);
+    let leak = |property| old_api_leak(&state.memtrack).then_some(property);
     let memtrack_tag = if config.memcleanup {
         ViolatedProperty::MemsafetyMemcleanup
     } else {
@@ -139,13 +154,22 @@ pub fn analysis_is_program_correct(
         // AnalysisModeMemtrack.c:138-146 — FALSE_MEMTRACK when
         // valid_allocation_log returns non-zero, i.e. any heap block is still
         // live; no reachability rule. `has_memcleanup_error` is that test.
-        Some(AnalysisMode::Memtrack) => leak(memtrack_tag),
+        Some(AnalysisMode::Memtrack) => state
+            .c_memory
+            .is_program_correct(MemMode::Memtrack)
+            .or_else(|| leak(memtrack_tag)),
         // AnalysisModeMemcleanup.c:138-148 — FALSE_MEMCLEANUP only when the
         // last leaked address (valid_allocation_log, AllocationLog.c:69-101)
         // is still referenced by a pointer variable (is_memcleanup_error,
-        // ListLog.c:40-65). An unreachable leak gives no verdict.
-        Some(AnalysisMode::Memcleanup) => memtrack::has_develop_memcleanup_error(&state.memtrack)
-            .then_some(ViolatedProperty::MemsafetyMemcleanup),
+        // ListLog.c:40-65). An unreachable leak gives no verdict. The drop-in
+        // logs are checked first with that rule, as in memtrack.
+        Some(AnalysisMode::Memcleanup) => state
+            .c_memory
+            .is_program_correct(MemMode::Memcleanup)
+            .or_else(|| {
+                old_api_develop_memcleanup_error(&state.memtrack)
+                    .then_some(ViolatedProperty::MemsafetyMemcleanup)
+            }),
         // AnalysisModeNone.c:19 — TRUE.
         Some(AnalysisMode::None) => None,
         // AnalysisModeOverflow.c:283 — TRUE.
@@ -154,6 +178,36 @@ pub fn analysis_is_program_correct(
         Some(AnalysisMode::Assert) => None,
         // REACHABILITY_MODE links AnalysisModeNone.c: TRUE.
         Some(AnalysisMode::Target) => None,
+    }
+}
+
+/// The leak test of the records of the old API (`map2check_map_*`,
+/// `AnalysisState::memtrack`). The drop-in core has no such records (only
+/// the `__m2c_rt_*` entry points record, into `c_memory`), so there it is
+/// always false and the code is not compiled (Task 3.3).
+fn old_api_leak(records: &[memtrack::MemTrackEntry]) -> bool {
+    #[cfg(not(feature = "dropin"))]
+    {
+        memtrack::has_memcleanup_error(records)
+    }
+    #[cfg(feature = "dropin")]
+    {
+        debug_assert!(records.is_empty());
+        false
+    }
+}
+
+/// develop's memcleanup verdict on the records of the old API
+/// ([`old_api_leak`]).
+fn old_api_develop_memcleanup_error(records: &[memtrack::MemTrackEntry]) -> bool {
+    #[cfg(not(feature = "dropin"))]
+    {
+        memtrack::has_develop_memcleanup_error(records)
+    }
+    #[cfg(feature = "dropin")]
+    {
+        debug_assert!(records.is_empty());
+        false
     }
 }
 
@@ -367,40 +421,40 @@ mod tests {
 
     #[test]
     fn program_correct_unset_reports_leak_by_option() {
-        let s = leaked_state();
+        let mut s = leaked_state();
         assert_eq!(
-            analysis_is_program_correct(config(None, false), &s),
+            analysis_is_program_correct(config(None, false), &mut s),
             Some(ViolatedProperty::MemsafetyMemtrack)
         );
         assert_eq!(
-            analysis_is_program_correct(config(None, true), &s),
+            analysis_is_program_correct(config(None, true), &mut s),
             Some(ViolatedProperty::MemsafetyMemcleanup)
         );
         assert_eq!(
-            analysis_is_program_correct(config(None, false), &AnalysisState::default()),
+            analysis_is_program_correct(config(None, false), &mut AnalysisState::default()),
             None
         );
     }
 
     #[test]
     fn program_correct_none_ignores_leak() {
-        let s = leaked_state();
+        let mut s = leaked_state();
         for memcleanup in [false, true] {
             let c = config(Some(AnalysisMode::None), memcleanup);
-            assert_eq!(analysis_is_program_correct(c, &s), None);
+            assert_eq!(analysis_is_program_correct(c, &mut s), None);
         }
     }
 
     #[test]
     fn program_correct_memtrack_reports_leak_as_memtrack() {
-        let s = leaked_state();
+        let mut s = leaked_state();
         let c = config(Some(AnalysisMode::Memtrack), false);
         assert_eq!(
-            analysis_is_program_correct(c, &s),
+            analysis_is_program_correct(c, &mut s),
             Some(ViolatedProperty::MemsafetyMemtrack)
         );
         assert_eq!(
-            analysis_is_program_correct(c, &AnalysisState::default()),
+            analysis_is_program_correct(c, &mut AnalysisState::default()),
             None
         );
     }
@@ -410,7 +464,7 @@ mod tests {
         // The option is an alias of the memcleanup mode for the leak tag.
         let c = config(Some(AnalysisMode::Memtrack), true);
         assert_eq!(
-            analysis_is_program_correct(c, &leaked_state()),
+            analysis_is_program_correct(c, &mut leaked_state()),
             Some(ViolatedProperty::MemsafetyMemcleanup)
         );
     }
@@ -422,7 +476,7 @@ mod tests {
         assert_eq!(
             analysis_is_program_correct(
                 config(Some(AnalysisMode::Memcleanup), false),
-                &leaked_state()
+                &mut leaked_state()
             ),
             None,
             "an unreferenced leak is no memcleanup error"
@@ -433,11 +487,11 @@ mod tests {
         ));
         let c = config(Some(AnalysisMode::Memcleanup), false);
         assert_eq!(
-            analysis_is_program_correct(c, &s),
+            analysis_is_program_correct(c, &mut s),
             Some(ViolatedProperty::MemsafetyMemcleanup)
         );
         assert_eq!(
-            analysis_is_program_correct(c, &AnalysisState::default()),
+            analysis_is_program_correct(c, &mut AnalysisState::default()),
             None
         );
     }
@@ -445,19 +499,76 @@ mod tests {
     #[test]
     fn program_correct_overflow_ignores_leak() {
         let c = config(Some(AnalysisMode::Overflow), true);
-        assert_eq!(analysis_is_program_correct(c, &leaked_state()), None);
+        assert_eq!(analysis_is_program_correct(c, &mut leaked_state()), None);
     }
 
     #[test]
     fn program_correct_assert_ignores_leak() {
         let c = config(Some(AnalysisMode::Assert), true);
-        assert_eq!(analysis_is_program_correct(c, &leaked_state()), None);
+        assert_eq!(analysis_is_program_correct(c, &mut leaked_state()), None);
     }
 
     #[test]
     fn program_correct_target_ignores_leak() {
         let c = config(Some(AnalysisMode::Target), true);
-        assert_eq!(analysis_is_program_correct(c, &leaked_state()), None);
+        assert_eq!(analysis_is_program_correct(c, &mut leaked_state()), None);
+    }
+
+    #[test]
+    fn program_correct_memcleanup_checks_the_drop_in_logs_with_the_c_rule() {
+        // AnalysisModeMemcleanup.c:138-148 over the drop-in logs: only a
+        // leak still referenced by a pointer is FALSE_MEMCLEANUP.
+        let c = config(Some(AnalysisMode::Memcleanup), false);
+        let mut s = AnalysisState::default();
+        assert!(s.c_memory.malloc(0x1000, 8));
+        assert_eq!(analysis_is_program_correct(c, &mut s), None);
+        let mut s = AnalysisState::default();
+        let mut step = 0;
+        assert!(s.c_memory.malloc(0x1000, 8));
+        s.c_memory
+            .add_store_pointer(&mut step, 0x10, 0x1000, 1, b"p", 1, b"main");
+        assert_eq!(
+            analysis_is_program_correct(c, &mut s),
+            Some(ViolatedProperty::MemsafetyMemcleanup)
+        );
+    }
+
+    #[test]
+    fn program_correct_memtrack_checks_the_drop_in_logs_with_the_c_rule() {
+        // AnalysisModeMemtrack.c:138-146 over the logs of the
+        // __m2c_rt_memtrack_* entry points: valid_allocation_log appends a
+        // freed row for the leak, so the next verdict is TRUE.
+        let mut s = AnalysisState::default();
+        assert!(s.c_memory.malloc(0x1000, 8));
+        let c = config(Some(AnalysisMode::Memtrack), false);
+        assert_eq!(
+            analysis_is_program_correct(c, &mut s),
+            Some(ViolatedProperty::MemsafetyMemtrack)
+        );
+        assert_eq!(
+            s.c_memory.allocation_log_bytes(),
+            b"0x1000;8;0\n0x1000;0;1\n"
+        );
+        assert_eq!(analysis_is_program_correct(c, &mut s), None);
+        // Other modes do not read them.
+        let mut s = AnalysisState::default();
+        assert!(s.c_memory.malloc(0x1000, 8));
+        let c = config(Some(AnalysisMode::Overflow), false);
+        assert_eq!(analysis_is_program_correct(c, &mut s), None);
+    }
+
+    #[test]
+    fn destroy_of_the_memory_modes_frees_the_drop_in_logs() {
+        for mode in [
+            None,
+            Some(AnalysisMode::Memtrack),
+            Some(AnalysisMode::Memcleanup),
+        ] {
+            let mut s = AnalysisState::default();
+            assert!(s.c_memory.malloc(0x1000, 8));
+            analysis_destroy(mode, &mut s);
+            assert!(!s.c_memory.has_rows(), "{mode:?}");
+        }
     }
 
     // ── check_enabled: one test per arm ─────────────────────────────────────

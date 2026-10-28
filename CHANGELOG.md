@@ -15,6 +15,195 @@ the C ABI or the JSON report must update them.
 
 ## [Unreleased]
 
+## [2.0.0-rc.1] - 2026-10-28
+
+This release turns the library into the drop-in runtime of Map2Check
+`develop`: the C ABI is the C runtime's, the package carries the 21 bitcode
+modules that replace the C ones, and two differential gates against the C
+runtime passed.
+
+- **Validated against** Map2Check `develop`
+  `0bca42eb89d116178e6b52f52acaf73f7c305088` (`MAP2CHECK_VERSION` in the
+  archive); its C runtime modules are byte for byte those of `3e914528ec57`,
+  the commit of the first gate.
+- **Packaging.** The archive has the 21 `lib/*.bc` (`scripts/build-runtime-bc.sh`),
+  `MAP2CHECK_VERSION` and an inner `SHA256SUMS`, besides the header and the
+  static libraries (`scripts/package-release.sh`). `scripts/it/overlay-install.sh`
+  installs the modules over a C install, or copy `lib/*.bc` into
+  `${MAP2CHECK_PATH}/lib`. See `docs/integration-guide.md` and
+  `docs/release.md`; `docs/cutover/handoff-map2check.md` suggests what the
+  Map2Check maintainer would change to adopt the package.
+- **Gate 1** (2026-10-27, `docs/cutover/gate-2026-10-27.md`): `gate: PASS`
+  after the approval of SD-24, SD-25, SD-26 and the extension of SD-20, with
+  the 2.0 s compile allowance for `afl` and `hybrid` wall time
+  (`docs/cutover/decisoes.md`; not an SD).
+- **Gate 2** (2026-10-28, `docs/cutover/gate-2026-10-28.md`): `gate: PASS` on
+  the first comparison against the C baseline of `0bca42eb89d1`, with no new
+  deviation: median wall ratio 0.905 (limit 1.10), median RSS ratio 1.022
+  (limit 1.36), no timeouts.
+
+### Breaking changes
+
+- **The C ABI is the Map2Check runtime ABI only (D6, Task 2.10).**
+  `libmap2check.a` exports exactly the names of the C runtime of Map2Check
+  `develop` that its core modules own (`Map2CheckFunctions`, `TrackBBLog`,
+  `NonDetLog`, `PropertyGenerator`; `map2check_init`, `map2check_success`,
+  `map2check_track_bb`, `map2check_target_function`, `map2check_error`,
+  `map2check_exit`, `map2check_destroy`, `map2check_get_current_step`,
+  `map2check_next_current_step`, `__VERIFIER_error`, `write_property`,
+  `nondet_log_init`, `nondet_log_destroy` and the 23 `map2check_nondet_<t>`)
+  and the `__m2c_rt_*` core entry points the generated IR modules forward to;
+  `scripts/check-export-set.sh` fails on anything else. The rest of the C
+  runtime ABI is defined by the IR modules of `scripts/runtime-ir/gen_ll.py`
+  (D7). Left the C ABI and the header:
+  - the 1.x core API: `map2check_reset`, `set_false_result`,
+    `get_current_property`, `get_current_step`, `get_next_step`,
+    `print_all_containers_as_json`, `vcc_reset_meta_data`,
+    `map2check_set_memcleanup`, `map2check_set_null_is_valid`,
+    `map2check_enable_witness` (its C ABI is now `__m2c_rt_witness_enable`),
+    `map2check_set_mode` (and the `AnalysisMode` enum of the header),
+    `map2check_reach_target`, `map2check_save_basic_block_log`,
+    `map2check_is_in_trackbb_container`, `map2check_map_{alloca,
+    non_static_alloca,funct_address,malloc,calloc,posix_memalign,free,
+    store_pointer}`, `map2check_check_{load,free,free_resolved_address,
+    deref,mem_endprog}`, `map2check_is_valid_assert`, the 17
+    `map2check_save_nondet_log_<t>` (and `non_det_log_t`, `bbtrack_log_t`,
+    `enum var_type_t` of the header), `map2check_binop_{add,sub,mul,div}_int`,
+    `map2check_binop_{add,sub,mul,div}_unsigned`, `map2check_binop_neg_int`,
+    `map2check_binop_{shl,shr}_int`, `map2check_binop_shr_unsigned` and
+    `map2check_binop_{add,sub,mul,div,rem}_signed`. They stay Rust functions
+    of `map2check::ffi` that the Rust tests drive;
+  - the 1.x exports whose C names an IR module now defines with the C
+    signature: `map2check_check_deref`, `map2check_wasm_{malloc,free,
+    check_access}` (`AnalysisModeMemtrack.bc`), `wasm_rt_{allocate_memory,
+    grow_memory,free_memory,allocate_funcref_table,free_funcref_table,
+    is_initialized,init,free,trap}` and
+    `w2c_wasi__snapshot__preview1_proc_exit` (`WasmRuntimeStubs.bc`);
+  - the `libfuzzer` feature (`LLVMFuzzerTestOneInput`,
+    `__VERIFIER_nondet_<t>`, `__VERIFIER_assume`, `__VERIFIER_assert`,
+    `map2check_fuzzer_assume`, `lib/libmap2check_libfuzzer.a` of the release
+    archive) and the `klee` feature of `klee/Cargo.toml` with
+    `scripts/build-klee-runtime.sh`, `map2check-klee.bc` and
+    `tests/klee_paths.sh`: the generators are the IR modules
+    `NonDetGenerator{None,Klee,AFL}.bc` (SD-07, SD-08, SD-11 and SD-18 say
+    what changed). The self-tests of the bitcode post-processing moved to
+    `scripts/test-klee-postprocess.sh`.
+  `map2check_assume`, `map2check_assume_loop` and `map2check_crab_assume` are
+  delivered by the glue IR of `Map2CheckFunctions.bc`
+  (`scripts/runtime-ir/test-assume-link.sh`); `docs/runtime-abi/pending.txt`
+  is empty. `tests/ffi_harness.c` and the programs of `test/` link the
+  staticlib with the IR modules they need (`scripts/build-c-abi-program.sh`).
+  The D5 mapping (`docs/cutover/abi-mapping.tsv`, `scripts/symbol-matrix.sh`,
+  `tests/core_api_coverage.rs`) is gone with D5.
+- `map2check_init` takes the C runtime's `int isSvComp` (ignored), and
+  `ViolatedProperty` has the values of the C runtime's `enum ViolatedProperty`
+  (`NONE` 0 … `FALSE_DIVBYZERO` 9, `Concurrency` 10), which
+  `set_false_result` and `get_current_property` now use. `map2check_init` no
+  longer removes property files of an earlier run, as the C runtime.
+
+### Added
+
+- **The runtime as the 21 bitcode modules Map2Check links (Task 3.1).**
+  `scripts/build-runtime-bc.sh <out-dir>` (was the test build
+  `scripts/runtime-ir/build-test-runtime-bc.sh`) writes exactly
+  `Map2CheckFunctions.bc` ... `WitnessGenerationNone.bc`, the same bytes on
+  every build; `scripts/it/overlay-install.sh` copies a C install of
+  Map2Check and replaces only its `lib/*.bc`.
+
+- The memcleanup analysis mode of the Map2Check C runtime ABI (Task 2.6 of
+  the drop-in plan): core entry points `__m2c_rt_memcleanup_analysis_{init,
+  destroy,is_program_correct,generate_aux_witness_files}` and
+  `__m2c_rt_memcleanup_map2check_{load,check_cstring,check_deref,malloc,
+  calloc,posix,free,free_resolved_address,add_store_pointer,alloca,
+  non_static_alloca,function}`. They share the memory rules of the memtrack
+  entry points (`MemMode`); what differs is `AnalysisModeMemcleanup.c`'s: the
+  leak is FALSE-MEMCLEANUP only while a pointer variable still refers to it,
+  `map2check_load`, `map2check_check_cstring` and `map2check_check_deref` are
+  empty, and no free is a FALSE-FREE. A release with no allocation row goes on
+  where develop crashes (SD-23). The C names are defined only by the generated
+  IR module `AnalysisModeMemcleanup.ll` (no `map2check_wasm_*`).
+- The memtrack analysis mode of the Map2Check C runtime ABI (Task 2.5 of the
+  drop-in plan): core entry points `__m2c_rt_memtrack_analysis_{init,destroy,
+  is_program_correct,generate_aux_witness_files}` and
+  `__m2c_rt_memtrack_map2check_{load,check_cstring,check_deref,malloc,calloc,
+  posix,free,free_resolved_address,add_store_pointer,alloca,
+  non_static_alloca,function,wasm_malloc,wasm_free,wasm_check_access}`, with
+  the C signatures and semantics of `AnalysisModeMemtrack.c`, `AllocationLog.c`,
+  `ListLog.c` and `HeapLog.c` over develop's heap, allocation and list logs
+  (`memtrack::c_mode`, one container for the Array and `--btree` builds, D3).
+  The property files and `heap_log.csv`, `allocation_log.csv` and
+  `list_log.csv` are the C runtime's byte for byte. The C names are defined
+  only by the generated IR module `AnalysisModeMemtrack.ll`; the container and
+  log modules (`ContainerRealloc`, `ContainerBTree`, `BTree`, `AllocationLog`,
+  `ListLog`, `HeapLog`) are empty IR. The legacy `map2check_check_deref` and
+  `map2check_wasm_*` exports stay until Task 2.10.
+- The assert and none analysis modes of the Map2Check C runtime ABI (Task 2.4
+  of the drop-in plan): core entry points `__m2c_rt_assert_analysis_{init,
+  destroy,is_program_correct,generate_aux_witness_files}`,
+  `__m2c_rt_assert_map2check_assert` and `__m2c_rt_none_analysis_{init,destroy,
+  is_program_correct,generate_aux_witness_files}`, with the C semantics and
+  property files of `AnalysisModeAssert.c` and `AnalysisModeNone.c`. The C
+  names are defined only by the generated IR modules `AnalysisModeAssert.ll`
+  (where `__VERIFIER_assert` is an empty function, as in C) and
+  `AnalysisModeNone.ll`, never by `libmap2check.a`; each module's
+  `analysis_init` selects its mode.
+- The overflow analysis mode of the Map2Check C runtime ABI (Task 2.3 of the
+  drop-in plan): core entry points `__m2c_rt_overflow_analysis_{init,destroy,
+  is_program_correct,generate_aux_witness_files}`,
+  `__m2c_rt_overflow_map2check_binop_{add,sub,mul,sdiv,srem}`,
+  `__m2c_rt_overflow_map2check_binop_{add,sub,mul}_uint` (no-ops, as in C) and
+  `__m2c_rt_overflow_overflowError`, with the C semantics and property files of
+  `AnalysisModeOverflow.c`. The C names are defined only by the generated IR
+  module `AnalysisModeOverflow.ll` (`scripts/runtime-ir/gen_ll.py --module
+  AnalysisModeOverflow`), never by `libmap2check.a`. The IR generator moved
+  from the D7 spike to `scripts/runtime-ir/` and now emits the
+  `signext`/`zeroext` attributes clang-16 gives `char`, `short` and `_Bool`.
+- The nondet log of the Map2Check C runtime ABI (Task 2.2 of the drop-in
+  plan): the 23 `map2check_nondet_<t>` exports of `NonDetLog.h` (`u8`, `u16`,
+  `u32`, `memory_byte`, `longlong` and `ulonglong` included), `nondet_log_init`,
+  `nondet_log_destroy` and `__m2c_rt_nondet_log_to_file`, which writes
+  `klee_log.csv` byte for byte as `NonDetLog.c` does. The log is separate from
+  the one behind `map2check_save_nondet_log_<t>` and the JSON report, which
+  are unchanged, but `klee_log.csv` of the witness path is now formatted by the same code (`nondet::c_log`), so a function name longer than 35 bytes is cut there as `NonDetLog.c` does. `__m2c_rt_nondet_log_len`, `_get_i64` and `_set_i64` let the KLEE IR do the row-pinning of `NonDetGeneratorKlee.c`. The `none` generator needs no Rust entry point: it is pure IR.
+- The core of the Map2Check C runtime ABI (Task 2.1 of the drop-in plan):
+  `map2check_track_bb`, `map2check_target_function`, `map2check_error`,
+  `map2check_exit`, `map2check_destroy`, `map2check_get_current_step`,
+  `map2check_next_current_step` and `write_property`, with the C signatures,
+  and the witness entry points `__m2c_rt_witness_generate_aux_files` and
+  `__m2c_rt_witness_generate_confirmation_file`.
+
+- `__m2c_rt_output_set_atomic(int)` (Task 2.8) selects how the result files
+  are written: through a temporary file and a rename (SD-20) or in place, as
+  develop's `fopen("w")`. The drop-in core starts in place and the KLEE
+  generator turns atomic writes on, so the AFL++ and `none` generators write
+  as the C runtime (user decision of 2026-10-27). Other builds stay atomic.
+
+### Changed
+
+- **A drop-in core four times smaller (Task 3.3).** The frontend compiles
+  the program linked with `Map2CheckFunctions.bc` three times with
+  `afl-clang-fast`, and that time grows with the core's IR. The result files
+  are now written by `rust/src/cfmt.rs` (the `%u`, `%d`, `%p`, `%lf` and
+  `%.9g` of glibc, exact, without `core::fmt`) and `rust/src/sys.rs` (the
+  same libc calls `std::fs`, `std::env` and `std::process` made). The
+  drop-in build has no serde, serde_json or thiserror (`klee/Cargo.toml` has
+  no dependencies), no JSON channel, no old-API leak checks, and is built
+  at `opt-level = "z"`. The core went from 34 582 to 8 865 instruction lines
+  (762 580 to 327 164 bytes), one `afl-clang-fast -g -O2` of the smoke
+  program from 1.74 s to 0.60 s; `scripts/build-runtime-bc.sh` now fails
+  above 9 500 instruction lines or 13 600 IR lines. The file contents, the
+  stderr diagnostics and the C ABI do not change. `thiserror` left the main
+  build too.
+- **The drop-in core ends a run through the linked witness module (Task
+  3.1).** In `Map2CheckFunctions.bc`, `map2check_exit` calls the
+  `generate_aux_files`/`generate_confirmation_file` of `WitnessGeneration.bc`
+  or `WitnessGenerationNone.bc`, as `Map2CheckFunctions.c:89-102` does, and
+  `generate_aux_files` calls the `analysis_generate_aux_witness_files` of the
+  mode module and the `nondet_generate_aux_witness_files` of the generator
+  module, which alone writes `klee_log.csv` (`WitnessGeneration.c:15-29`).
+  Before, the drop-in wrote no witness file at all: nothing turned the
+  witness option on. The staticlib keeps `__m2c_rt_witness_enable`.
+
 ## [1.1.0-rc1] - 2026-10-17
 
 Release candidate of the cutover work: the library becomes the runtime of

@@ -180,6 +180,8 @@ A aprovação aceita a proposta junto com estas condições.
 - O `--btree` do C não é referência válida. Sob `symex`, dá SUCCEEDED errado em 3 tarefas cujo veredito esperado é falso: `lis_unsafe`, `memleaks_test1-1` e `memleaks_test17_2-1`. Também perde `list-ext` (FAILED → UNKNOWN, nos dois geradores).
 - Números de pico de RSS (mediana, 30 tarefas `valid-memsafety`): symex C-btree 136,3 MB contra Rust 221,2 MB; afl C-btree 94,3 MB contra Rust 92,3 MB. O maior pico do Rust é 472 MB.
 
+**Ressalva do `--btree` do C (Task 2.5, drop-in):** no C, `find_row_with_address` e as buscas de `get_element_at` sobre `ContainerBTree.c`/`BTree.c` devolvem a linha da página carregada, e o runtime a altera no lugar (`row->size = 0; row->is_free = TRUE`, `AnalysisModeMemtrack.c:190-192`, `:372-375`) sem regravá-la. Se `CHECK_AND_RELEASE_PAGES` (`BTree.c:32`, chamado em `:125` e `:166`) liberar a página antes de ela ir para o disco (limite `B_TREE_MAX_OPEN_PAGES` = 133682 páginas, `BTree.h:39-40`), a liberação se perde e um free some do log. O container único do Rust (`memtrack::c_mode::CMemory`, servido aos dois conjuntos de módulos, que são IR vazios) não tem esse caso. Na prática ele é inalcançável: exige mais de 133682 páginas abertas.
+
 **Desvio da condição literal da Task 2.6:** a condição (RSS do Rust ≤ o do C com `--btree` em todas as tarefas) **não** é atendida: sob `symex` o Rust fica acima em 30 de 30 tarefas, por um excesso fixo de cerca de 80 MB. O mantenedor aprovou explicitamente se afastar dela, pelo motivo acima.
 
 ## D4
@@ -248,3 +250,50 @@ The C tests drove internal containers with no Rust export, so each assertion goe
 | BTreeTest.AddItem | not ported | D3 |
 | BTreeTest.AddItemShouldSetValue | not ported | D3 |
 | BTreeTest.AddMultipleItems | not ported | D3 |
+
+## Merge da migração no Map2Check (Task 5.1)
+
+**2026-10-17.** O PR hbgit/Map2Check#76 (`feat/rust-runtime` → `develop`) foi mergeado pelo mantenedor com merge commit **a0f8b9cd4fd97ed71a2f3bc70fa34525d909cfc0** (pais f01e8c3e e 1f91659e). O rollback é `git revert -m 1 a0f8b9cd` em `develop`; o ensaio em clone descartável restaurou o runtime C e passou no `ctest` (10/10). O gate 4.2 passou duas vezes seguidas antes do merge (wall 1,011/1,026; RSS 1,081/1,017). Começa o período de observação de um ciclo de release (Task 5.1, Step 6); a Fase 6 só começa ao fim dele.
+
+## Reinício de 2026-10-26
+
+**Contexto.** O PR hbgit/Map2Check#76 foi mergeado em `develop` como `a0f8b9cd` em 2026-10-17. Em 2026-10-22 um force push do mantenedor moveu `develop` de `a0f8b9cd` para `fbbcb929`, removendo esse merge. Depois disso o `develop` recebeu os PRs #73 (Map2Check 9.0), #85, #86 e #87; o `develop` atual é `3e914528`. A base comum entre `a0f8b9cd` e o `develop` atual é `f01e8c3e`. Portanto as mudanças no Map2Check da migração anterior não existem mais no `develop`, e o merge descrito em "Merge da migração no Map2Check (Task 5.1)" acima deixou de valer.
+
+**Decisões do usuário em 2026-10-26.**
+
+- Recomeçar do zero, sem as mudanças antigas no Map2Check.
+- O agente altera somente este repositório; o Map2Check é lido apenas como cópia local do `develop` (`scripts/fetch-map2check.sh`, commit registrado em `vendor/MAP2CHECK_VERSION`).
+- **D6:** a biblioteca exporta o ABI do runtime C do `develop` (drop-in). D6 **revoga D5**.
+- O código Rust existente é mantido e revalidado contra o novo alvo.
+- **D2** (wasm portado) e **D3** (`--btree` usa o mesmo container Rust, sem mudança observável) continuam valendo.
+
+Plano: [docs/superpowers/plans/2026-10-26-runtime-drop-in-map2check.md](../superpowers/plans/2026-10-26-runtime-drop-in-map2check.md).
+
+## Linha de base do C: `array-examples/relax-1` com afl é ERROR (Task 0.4)
+
+**2026-10-26.** Na linha de base `docs/cutover/baselines/c-3e914528ec57.tsv`, a chave `array-examples/relax-1 valid-memsafety afl` dá `ERROR` em 5 de 5 repetições: o frontend C do Map2Check develop aborta logo após o AFL++ ("AFL++ ran: 42 executions", depois "timeout: the monitored command dumped core") sem imprimir linha `VERIFICATION`. É comportamento do C, determinístico, e o gate o trata como um veredito comum. Se o runtime Rust divergir nessa chave (p.ex. dar UNKNOWN ou FAILED), a divergência só passa com um `SD-xx` em `docs/semantic-deltas.md` e uma linha em `docs/cutover/deltas-aceitos.tsv`. Reproduzir o `ERROR` fazendo o runtime Rust abortar de propósito é proibido.
+
+## D7 — layout dos módulos do runtime (aprovada em 2026-10-26)
+
+Medições e mapa completo em [d7-layout.md](d7-layout.md). O usuário aprovou:
+
+1. **Layout A-fwd, com exceção à restrição de IR.** O núcleo Rust é o `Map2CheckFunctions.bc`. Os outros 20 módulos são LLVM IR textual gerado por `gen_ll.py`, que será promovido a `scripts/`. O IR dos geradores contém lógica de gerador, que passa a ser testada como código (Tasks 2.7/2.8).
+2. **Símbolos internos do C não exportados.** São 76 nomes, listados em `docs/runtime-abi/export-policy.tsv`. O Rust acrescenta os `__m2c_rt_*`. A diferença observável fica registrada como `SD-22` em `docs/semantic-deltas.md`, e `check-link-matrix.sh --ref` confere a política.
+3. **Pós-processamento obrigatório do núcleo:** strip-debug, symbolizer, `rust_eh_personality` → `abort`, intrínsecos rebaixados e `internalize` com a lista do inventário.
+4. **`__dso_handle`** é aceito na matriz só como referência weak.
+5. **O AFL++ mantém `setjmp`/`longjmp` em IR**, como no C.
+6. **Uma só triple** (`x86_64-pc-linux-gnu`) para todos os `.bc`, sem avisos do `llvm-link`.
+
+## Critério de tempo do gate para afl e híbrido (aprovado em 2026-10-27)
+
+A checagem prévia da Task 4.1 (relatório da Task 4.1a) mostrou que a mediana de `wall_rust / wall_c` não chega a 1,10 nos geradores `afl` e `hybrid`. A Task 3.3 reduziu o núcleo em 74%: de 43 340 para 12 741 linhas de IR. No subconjunto, a mediana caiu de 2,78 para 1,35 (afl 3,92, symex 0,95, híbrido 3,21).
+
+O que sobra é custo fixo. O frontend compila o programa ligado ao núcleo três vezes com `afl-clang-fast`: fuzzed, witness e cmplog. Cada compilação leva ~0,60 s, contra 0,10 s no C. Em tarefas de menos de 1 s, só um núcleo do tamanho do C chegaria a 1,10. Uma mudança no frontend, como pré-compilar o núcleo, é vedada pelas regras 2 e 3.
+
+O usuário decidiu:
+
+- Nos geradores `afl` e `hybrid`, cada `wall_rust` desconta até 2,0 s de custo fixo de compilação antes de se calcular a razão. O critério da mediana continua ≤ 1,10.
+- No `symex`, o critério de 1,10 vale sem desconto.
+- RSS, TIMEOUT e vereditos continuam como estavam.
+
+`scripts/it/compare_baselines.py` aplica o desconto.

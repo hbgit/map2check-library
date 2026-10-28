@@ -27,6 +27,10 @@ RUN mkdir -p include && cargo build --release
 # ── Stage 2: Test + Coverage ──────────────────────────────────────────────────
 FROM builder AS test
 
+# tests/gate_deltas.rs runs scripts/runtime-ir/gen_ll.py (SD-24).
+RUN apt-get update && apt-get install -y --no-install-recommends python3 \
+    && rm -rf /var/lib/apt/lists/*
+
 COPY test/ ./test/
 # Os testes leem os goldens do runtime C, os docs de compatibilidade, o
 # CHANGELOG, o mapa de ABI e o próprio Dockerfile (label de versão).
@@ -34,6 +38,7 @@ COPY tests/ ./tests/
 COPY docs/ ./docs/
 COPY CHANGELOG.md Dockerfile ./
 COPY scripts/coverage.sh ./scripts/coverage.sh
+COPY scripts/runtime-ir/gen_ll.py ./scripts/runtime-ir/gen_ll.py
 
 RUN cargo test --all-features 2>&1 | tee /tmp/test-results.txt
 
@@ -55,4 +60,4 @@ LABEL maintainer="herberthb12@gmail.com"
 LABEL org.opencontainers.image.title="map2check-library"
 LABEL org.opencontainers.image.description="Rust library to support Map2Check program verification tool"
 LABEL org.opencontainers.image.licenses="GPL-3.0-only"
-LABEL org.opencontainers.image.version="1.1.0-rc1"
+LABEL org.opencontainers.image.version="2.0.0-rc.1"

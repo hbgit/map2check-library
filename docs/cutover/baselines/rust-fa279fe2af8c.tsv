@@ -1,0 +1,616 @@
+task	prp	gen	rep	verdict	tag	line	function	witness	wall_s	maxrss_kb
+array-examples/relax-1	valid-memsafety	afl	1	ERROR				0	3.99	107920
+array-examples/relax-1	valid-memsafety	symex	1	FAILED	FALSE-DEREF	570	is_relaxed_prefix	1	1.04	154932
+array-examples/relax-1	valid-memsafety	hybrid	1	FAILED	FALSE-DEREF	570	is_relaxed_prefix	1	5.08	156348
+array-examples/standard_sentinel-2	unreach-call	afl	1	UNKNOWN				0	11.76	106368
+array-examples/standard_sentinel-2	unreach-call	symex	1	UNKNOWN				0	31.63	178592
+array-examples/standard_sentinel-2	unreach-call	hybrid	1	UNKNOWN				0	39.59	341384
+array-examples/standard_two_index_04	unreach-call	afl	1	UNKNOWN				0	11.27	106572
+array-examples/standard_two_index_04	unreach-call	symex	1	UNKNOWN				0	31.54	180468
+array-examples/standard_two_index_04	unreach-call	hybrid	1	UNKNOWN				0	38.93	341232
+array-examples/standard_two_index_05	unreach-call	afl	1	UNKNOWN				0	11.17	106112
+array-examples/standard_two_index_05	unreach-call	symex	1	UNKNOWN				0	31.51	180836
+array-examples/standard_two_index_05	unreach-call	hybrid	1	UNKNOWN				0	38.60	341624
+array-memsafety/add_last_unsafe	valid-memsafety	afl	1	FAILED	FALSE-DEREF	522	main	1	2.67	108596
+array-memsafety/add_last_unsafe	valid-memsafety	symex	1	FAILED	FALSE-DEREF	522	main	1	0.59	146092
+array-memsafety/add_last_unsafe	valid-memsafety	hybrid	1	FAILED	FALSE-DEREF	522	main	1	2.60	108004
+array-memsafety/array01-alloca-2	valid-memsafety	afl	1	UNKNOWN				0	2.70	108076
+array-memsafety/array01-alloca-2	valid-memsafety	symex	1	UNKNOWN				0	31.71	171656
+array-memsafety/array01-alloca-2	valid-memsafety	hybrid	1	UNKNOWN				0	41.52	308352
+array-memsafety/insertionsort-alloca-1	valid-memsafety	afl	1	UNKNOWN				0	3.95	108092
+array-memsafety/insertionsort-alloca-1	valid-memsafety	symex	1	UNKNOWN				0	0.68	146768
+array-memsafety/insertionsort-alloca-1	valid-memsafety	hybrid	1	UNKNOWN				0	35.08	341088
+array-memsafety/lis_unsafe	valid-memsafety	afl	1	FAILED	FALSE-DEREF	521	lis	1	2.61	108016
+array-memsafety/lis_unsafe	valid-memsafety	symex	1	UNKNOWN				0	0.69	147632
+array-memsafety/lis_unsafe	valid-memsafety	hybrid	1	FAILED	FALSE-DEREF	521	lis	1	2.58	108420
+ldv-memsafety-bitfields/test-bitfields-1-1	valid-memsafety	afl	1	UNKNOWN				0	11.41	108256
+ldv-memsafety-bitfields/test-bitfields-1-1	valid-memsafety	symex	1	SUCCEEDED				1	0.52	130204
+ldv-memsafety-bitfields/test-bitfields-1-1	valid-memsafety	hybrid	1	SUCCEEDED				1	6.99	130212
+ldv-memsafety-bitfields/test-bitfields-2.1-2	valid-memsafety	afl	1	FAILED	FALSE-FREE	46	main	1	2.55	108588
+ldv-memsafety-bitfields/test-bitfields-2.1-2	valid-memsafety	symex	1	FAILED	FALSE-FREE	46	main	1	0.51	130288
+ldv-memsafety-bitfields/test-bitfields-2.1-2	valid-memsafety	hybrid	1	FAILED	FALSE-FREE	46	main	1	2.59	107940
+ldv-memsafety-bitfields/test-bitfields-3.1-2	valid-memsafety	afl	1	FAILED	FALSE-DEREF	42	main	1	2.59	108152
+ldv-memsafety-bitfields/test-bitfields-3.1-2	valid-memsafety	symex	1	FAILED	FALSE-DEREF	42	main	1	0.52	130964
+ldv-memsafety-bitfields/test-bitfields-3.1-2	valid-memsafety	hybrid	1	FAILED	FALSE-DEREF	42	main	1	2.55	108176
+ldv-memsafety/ArraysOfVariableLength	valid-memsafety	afl	1	UNKNOWN				0	11.42	108488
+ldv-memsafety/ArraysOfVariableLength	valid-memsafety	symex	1	SUCCEEDED				1	7.72	130712
+ldv-memsafety/ArraysOfVariableLength	valid-memsafety	hybrid	1	SUCCEEDED				1	14.53	130780
+ldv-memsafety/ArraysOfVariableLength2	valid-memsafety	afl	1	UNKNOWN				0	3.42	108268
+ldv-memsafety/ArraysOfVariableLength2	valid-memsafety	symex	1	UNKNOWN				0	31.48	130644
+ldv-memsafety/ArraysOfVariableLength2	valid-memsafety	hybrid	1	UNKNOWN				0	40.03	131196
+ldv-memsafety/memleaks_test1-1	valid-memsafety	afl	1	FAILED	FALSE-MEMTRACK			1	2.62	109936
+ldv-memsafety/memleaks_test1-1	valid-memsafety	symex	1	FAILED	FALSE-MEMTRACK			1	0.92	142280
+ldv-memsafety/memleaks_test1-1	valid-memsafety	hybrid	1	FAILED	FALSE-MEMTRACK			1	2.64	110416
+ldv-memsafety/memleaks_test10-2	valid-memsafety	afl	1	UNKNOWN				0	11.55	340704
+ldv-memsafety/memleaks_test10-2	valid-memsafety	symex	1	SUCCEEDED				1	1.60	143060
+ldv-memsafety/memleaks_test10-2	valid-memsafety	hybrid	1	SUCCEEDED				1	8.32	340864
+ldv-memsafety/memleaks_test17_2-1	valid-memsafety	afl	1	FAILED	FALSE-FREE	779	free_17	1	2.82	110028
+ldv-memsafety/memleaks_test17_2-1	valid-memsafety	symex	1	FAILED	FALSE-FREE	779	free_17	1	1.78	145496
+ldv-memsafety/memleaks_test17_2-1	valid-memsafety	hybrid	1	FAILED	FALSE-FREE	779	free_17	1	2.99	110632
+ldv-memsafety/memleaks_test3-2	valid-memsafety	afl	1	UNKNOWN				0	11.56	340688
+ldv-memsafety/memleaks_test3-2	valid-memsafety	symex	1	SUCCEEDED				1	0.90	141064
+ldv-memsafety/memleaks_test3-2	valid-memsafety	hybrid	1	SUCCEEDED				1	7.67	341236
+ldv-memsafety/memsetNonZero	valid-memsafety	afl	1	UNKNOWN				0	11.41	108284
+ldv-memsafety/memsetNonZero	valid-memsafety	symex	1	SUCCEEDED				1	0.51	130264
+ldv-memsafety/memsetNonZero	valid-memsafety	hybrid	1	SUCCEEDED				1	7.00	341056
+list-ext-properties/960521-1_1-1	valid-memsafety	afl	1	FAILED	FALSE-DEREF	533	main	1	2.55	107964
+list-ext-properties/960521-1_1-1	valid-memsafety	symex	1	FAILED	FALSE-DEREF	533	main	1	0.65	137876
+list-ext-properties/960521-1_1-1	valid-memsafety	hybrid	1	FAILED	FALSE-DEREF	533	main	1	2.61	107572
+list-ext-properties/960521-1_1-2	valid-memsafety	afl	1	UNKNOWN				0	11.45	341252
+list-ext-properties/960521-1_1-2	valid-memsafety	symex	1	SUCCEEDED				1	2.33	138104
+list-ext-properties/960521-1_1-2	valid-memsafety	hybrid	1	SUCCEEDED				1	9.18	341128
+list-ext-properties/960521-1_1-3	valid-memsafety	afl	1	FAILED	FALSE-FREE	536	main	1	2.53	107796
+list-ext-properties/960521-1_1-3	valid-memsafety	symex	1	FAILED	FALSE-FREE	536	main	1	0.68	137960
+list-ext-properties/960521-1_1-3	valid-memsafety	hybrid	1	FAILED	FALSE-FREE	536	main	1	2.52	108128
+list-ext-properties/list-ext	unreach-call	afl	1	FAILED	FALSE	556	main	1	2.24	106276
+list-ext-properties/list-ext	unreach-call	symex	1	FAILED	FALSE	556	main	1	0.58	136676
+list-ext-properties/list-ext	unreach-call	hybrid	1	FAILED	FALSE	556	main	1	2.17	105780
+list-ext-properties/list-ext	valid-memsafety	afl	1	FAILED	FALSE-DEREF	558	main	1	2.84	108260
+list-ext-properties/list-ext	valid-memsafety	symex	1	FAILED	FALSE-DEREF	558	main	1	4.10	139992
+list-ext-properties/list-ext	valid-memsafety	hybrid	1	FAILED	FALSE-DEREF	558	main	1	2.91	108592
+list-ext-properties/simple-ext	unreach-call	afl	1	FAILED	FALSE	540	main	1	2.20	106700
+list-ext-properties/simple-ext	unreach-call	symex	1	FAILED	FALSE	540	main	1	0.55	135776
+list-ext-properties/simple-ext	unreach-call	hybrid	1	FAILED	FALSE	540	main	1	2.17	106680
+list-ext-properties/simple-ext	valid-memcleanup	afl	1	UNKNOWN				0	11.49	341352
+list-ext-properties/simple-ext	valid-memcleanup	symex	1	UNKNOWN				0	0.84	136160
+list-ext-properties/simple-ext	valid-memcleanup	hybrid	1	UNKNOWN				0	36.03	341548
+list-ext-properties/test-0019_1-1	valid-memsafety	afl	1	FAILED	FALSE-MEMTRACK			1	2.54	108384
+list-ext-properties/test-0019_1-1	valid-memsafety	symex	1	FAILED	FALSE-MEMTRACK			1	0.52	130152
+list-ext-properties/test-0019_1-1	valid-memsafety	hybrid	1	FAILED	FALSE-MEMTRACK			1	2.51	107496
+list-ext-properties/test-0158_1-1	valid-memsafety	afl	1	UNKNOWN				0	11.38	341224
+list-ext-properties/test-0158_1-1	valid-memsafety	symex	1	SUCCEEDED				1	0.54	137396
+list-ext-properties/test-0158_1-1	valid-memsafety	hybrid	1	SUCCEEDED				1	7.00	341200
+map2check-assert/array_bug	unreach-call	afl	1	FAILED	FALSE	7	__VERIFIER_assert	1	2.13	105576
+map2check-assert/array_bug	unreach-call	symex	1	FAILED	FALSE	7	__VERIFIER_assert	1	0.51	136328
+map2check-assert/array_bug	unreach-call	hybrid	1	FAILED	FALSE	7	__VERIFIER_assert	1	2.30	106008
+map2check-assert/byte_add_bug	unreach-call	afl	1	UNKNOWN				0	11.08	106368
+map2check-assert/byte_add_bug	unreach-call	symex	1	SUCCEEDED				1	0.49	130332
+map2check-assert/byte_add_bug	unreach-call	hybrid	1	SUCCEEDED				1	6.69	130272
+map2check-assert/check_if_bug	unreach-call	afl	1	UNKNOWN				0	2.04	106472
+map2check-assert/check_if_bug	unreach-call	symex	1	UNKNOWN				0	32.00	179972
+map2check-assert/check_if_bug	unreach-call	hybrid	1	UNKNOWN				0	38.08	171320
+map2check-assert/ex01_false	unreach-call	afl	1	FAILED	FALSE	5	__VERIFIER_assert	1	2.20	106616
+map2check-assert/ex01_false	unreach-call	symex	1	FAILED	FALSE	5	__VERIFIER_assert	1	1.73	146548
+map2check-assert/ex01_false	unreach-call	hybrid	1	FAILED	FALSE	5	__VERIFIER_assert	1	2.22	105860
+map2check-assert/ex02_false	unreach-call	afl	1	UNKNOWN				0	2.05	105912
+map2check-assert/ex02_false	unreach-call	symex	1	UNKNOWN				0	31.58	226972
+map2check-assert/ex02_false	unreach-call	hybrid	1	UNKNOWN				0	37.23	208492
+memory-alloca/c.03-alloca-2	valid-memsafety	afl	1	UNKNOWN				0	11.35	107636
+memory-alloca/c.03-alloca-2	valid-memsafety	symex	1	UNKNOWN				0	31.99	170680
+memory-alloca/c.03-alloca-2	valid-memsafety	hybrid	1	UNKNOWN				0	40.35	189304
+memsafety-ext/dll_extends_pointer	valid-memsafety	afl	1	UNKNOWN				0	11.46	341328
+memsafety-ext/dll_extends_pointer	valid-memsafety	symex	1	UNKNOWN				0	31.66	178436
+memsafety-ext/dll_extends_pointer	valid-memsafety	hybrid	1	UNKNOWN				0	40.16	341584
+memsafety-ext/tree_stack	valid-memsafety	afl	1	UNKNOWN				0	11.42	357476
+memsafety-ext/tree_stack	valid-memsafety	symex	1	UNKNOWN				0	31.98	233212
+memsafety-ext/tree_stack	valid-memsafety	hybrid	1	UNKNOWN				0	40.45	342600
+memsafety-ext2/length_test03-1	valid-memsafety	afl	1	UNKNOWN				0	11.41	340860
+memsafety-ext2/length_test03-1	valid-memsafety	symex	1	UNKNOWN				0	31.52	145628
+memsafety-ext2/length_test03-1	valid-memsafety	hybrid	1	UNKNOWN				0	39.10	341328
+memsafety-ext2/split_list_test05-1	valid-memsafety	afl	1	FAILED	FALSE-DEREF	540	containsHead	1	2.52	108668
+memsafety-ext2/split_list_test05-1	valid-memsafety	symex	1	UNKNOWN				0	32.73	398900
+memsafety-ext2/split_list_test05-1	valid-memsafety	hybrid	1	FAILED	FALSE-DEREF	540	containsHead	1	2.58	108728
+memsafety/960521-1-1	valid-memsafety	afl	1	FAILED	FALSE-FREE	532	main	1	2.56	108420
+memsafety/960521-1-1	valid-memsafety	symex	1	FAILED	FALSE-FREE	532	main	1	0.59	130416
+memsafety/960521-1-1	valid-memsafety	hybrid	1	FAILED	FALSE-FREE	532	main	1	2.52	108484
+memsafety/960521-1-2	valid-memsafety	afl	1	UNKNOWN				0	11.36	108100
+memsafety/960521-1-2	valid-memsafety	symex	1	SUCCEEDED				1	19.37	129524
+memsafety/960521-1-2	valid-memsafety	hybrid	1	UNKNOWN				0	39.34	129828
+memsafety/960521-1-3	valid-memsafety	afl	1	FAILED	FALSE-DEREF	529	main	1	3.11	107060
+memsafety/960521-1-3	valid-memsafety	symex	1	FAILED	FALSE-DEREF	529	main	1	0.72	130516
+memsafety/960521-1-3	valid-memsafety	hybrid	1	FAILED	FALSE-DEREF	529	main	1	3.12	108552
+memsafety/test-0102-1	valid-memsafety	afl	1	UNKNOWN				0	12.00	341192
+memsafety/test-0102-1	valid-memsafety	symex	1	UNKNOWN				0	31.64	163588
+memsafety/test-0102-1	valid-memsafety	hybrid	1	UNKNOWN				0	39.33	151624
+array-examples/relax-1	valid-memsafety	afl	2	ERROR				0	2.92	108500
+array-examples/relax-1	valid-memsafety	symex	2	FAILED	FALSE-DEREF	570	is_relaxed_prefix	1	0.76	155496
+array-examples/relax-1	valid-memsafety	hybrid	2	FAILED	FALSE-DEREF	570	is_relaxed_prefix	1	4.04	154140
+array-examples/standard_sentinel-2	unreach-call	afl	2	UNKNOWN				0	11.12	106560
+array-examples/standard_sentinel-2	unreach-call	symex	2	UNKNOWN				0	31.50	181364
+array-examples/standard_sentinel-2	unreach-call	hybrid	2	UNKNOWN				0	38.77	341244
+array-examples/standard_two_index_04	unreach-call	afl	2	UNKNOWN				0	10.99	105204
+array-examples/standard_two_index_04	unreach-call	symex	2	UNKNOWN				0	31.51	179228
+array-examples/standard_two_index_04	unreach-call	hybrid	2	UNKNOWN				0	38.75	341696
+array-examples/standard_two_index_05	unreach-call	afl	2	UNKNOWN				0	11.01	105696
+array-examples/standard_two_index_05	unreach-call	symex	2	UNKNOWN				0	31.49	181088
+array-examples/standard_two_index_05	unreach-call	hybrid	2	UNKNOWN				0	39.39	341136
+array-memsafety/add_last_unsafe	valid-memsafety	afl	2	FAILED	FALSE-DEREF	522	main	1	2.54	107392
+array-memsafety/add_last_unsafe	valid-memsafety	symex	2	FAILED	FALSE-DEREF	522	main	1	0.57	144444
+array-memsafety/add_last_unsafe	valid-memsafety	hybrid	2	FAILED	FALSE-DEREF	522	main	1	2.51	107680
+array-memsafety/array01-alloca-2	valid-memsafety	afl	2	UNKNOWN				0	6.10	106884
+array-memsafety/array01-alloca-2	valid-memsafety	symex	2	UNKNOWN				0	31.69	170392
+array-memsafety/array01-alloca-2	valid-memsafety	hybrid	2	UNKNOWN				0	40.36	232524
+array-memsafety/insertionsort-alloca-1	valid-memsafety	afl	2	UNKNOWN				0	2.93	107564
+array-memsafety/insertionsort-alloca-1	valid-memsafety	symex	2	UNKNOWN				0	0.63	146088
+array-memsafety/insertionsort-alloca-1	valid-memsafety	hybrid	2	UNKNOWN				0	35.27	195536
+array-memsafety/lis_unsafe	valid-memsafety	afl	2	FAILED	FALSE-DEREF	521	lis	1	2.51	108144
+array-memsafety/lis_unsafe	valid-memsafety	symex	2	UNKNOWN				0	0.65	147020
+array-memsafety/lis_unsafe	valid-memsafety	hybrid	2	FAILED	FALSE-DEREF	521	lis	1	2.52	107400
+ldv-memsafety-bitfields/test-bitfields-1-1	valid-memsafety	afl	2	UNKNOWN				0	11.35	107288
+ldv-memsafety-bitfields/test-bitfields-1-1	valid-memsafety	symex	2	SUCCEEDED				1	0.50	130044
+ldv-memsafety-bitfields/test-bitfields-1-1	valid-memsafety	hybrid	2	SUCCEEDED				1	6.98	129784
+ldv-memsafety-bitfields/test-bitfields-2.1-2	valid-memsafety	afl	2	FAILED	FALSE-FREE	46	main	1	2.45	107100
+ldv-memsafety-bitfields/test-bitfields-2.1-2	valid-memsafety	symex	2	FAILED	FALSE-FREE	46	main	1	0.52	129652
+ldv-memsafety-bitfields/test-bitfields-2.1-2	valid-memsafety	hybrid	2	FAILED	FALSE-FREE	46	main	1	2.46	108612
+ldv-memsafety-bitfields/test-bitfields-3.1-2	valid-memsafety	afl	2	FAILED	FALSE-DEREF	42	main	1	2.50	108384
+ldv-memsafety-bitfields/test-bitfields-3.1-2	valid-memsafety	symex	2	FAILED	FALSE-DEREF	42	main	1	0.50	129388
+ldv-memsafety-bitfields/test-bitfields-3.1-2	valid-memsafety	hybrid	2	FAILED	FALSE-DEREF	42	main	1	2.51	108228
+ldv-memsafety/ArraysOfVariableLength	valid-memsafety	afl	2	UNKNOWN				0	11.40	108336
+ldv-memsafety/ArraysOfVariableLength	valid-memsafety	symex	2	SUCCEEDED				1	7.43	130636
+ldv-memsafety/ArraysOfVariableLength	valid-memsafety	hybrid	2	SUCCEEDED				1	14.47	130284
+ldv-memsafety/ArraysOfVariableLength2	valid-memsafety	afl	2	UNKNOWN				0	3.36	108756
+ldv-memsafety/ArraysOfVariableLength2	valid-memsafety	symex	2	UNKNOWN				0	31.47	130576
+ldv-memsafety/ArraysOfVariableLength2	valid-memsafety	hybrid	2	UNKNOWN				0	39.70	130884
+ldv-memsafety/memleaks_test1-1	valid-memsafety	afl	2	FAILED	FALSE-MEMTRACK			1	2.56	108688
+ldv-memsafety/memleaks_test1-1	valid-memsafety	symex	2	FAILED	FALSE-MEMTRACK			1	0.87	142236
+ldv-memsafety/memleaks_test1-1	valid-memsafety	hybrid	2	FAILED	FALSE-MEMTRACK			1	2.57	110272
+ldv-memsafety/memleaks_test10-2	valid-memsafety	afl	2	UNKNOWN				0	11.51	341244
+ldv-memsafety/memleaks_test10-2	valid-memsafety	symex	2	SUCCEEDED				1	1.48	143396
+ldv-memsafety/memleaks_test10-2	valid-memsafety	hybrid	2	SUCCEEDED				1	8.10	341324
+ldv-memsafety/memleaks_test17_2-1	valid-memsafety	afl	2	FAILED	FALSE-FREE	779	free_17	1	2.86	110392
+ldv-memsafety/memleaks_test17_2-1	valid-memsafety	symex	2	FAILED	FALSE-FREE	779	free_17	1	1.88	144872
+ldv-memsafety/memleaks_test17_2-1	valid-memsafety	hybrid	2	FAILED	FALSE-FREE	779	free_17	1	3.22	109608
+ldv-memsafety/memleaks_test3-2	valid-memsafety	afl	2	UNKNOWN				0	11.47	341184
+ldv-memsafety/memleaks_test3-2	valid-memsafety	symex	2	SUCCEEDED				1	0.88	140940
+ldv-memsafety/memleaks_test3-2	valid-memsafety	hybrid	2	SUCCEEDED				1	7.59	341368
+ldv-memsafety/memsetNonZero	valid-memsafety	afl	2	UNKNOWN				0	11.31	107032
+ldv-memsafety/memsetNonZero	valid-memsafety	symex	2	SUCCEEDED				1	0.49	130060
+ldv-memsafety/memsetNonZero	valid-memsafety	hybrid	2	SUCCEEDED				1	6.93	341064
+list-ext-properties/960521-1_1-1	valid-memsafety	afl	2	FAILED	FALSE-DEREF	533	main	1	2.49	107428
+list-ext-properties/960521-1_1-1	valid-memsafety	symex	2	FAILED	FALSE-DEREF	533	main	1	0.66	137244
+list-ext-properties/960521-1_1-1	valid-memsafety	hybrid	2	FAILED	FALSE-DEREF	533	main	1	2.52	108380
+list-ext-properties/960521-1_1-2	valid-memsafety	afl	2	UNKNOWN				0	11.39	341140
+list-ext-properties/960521-1_1-2	valid-memsafety	symex	2	SUCCEEDED				1	2.33	137540
+list-ext-properties/960521-1_1-2	valid-memsafety	hybrid	2	SUCCEEDED				1	9.11	341308
+list-ext-properties/960521-1_1-3	valid-memsafety	afl	2	FAILED	FALSE-FREE	536	main	1	2.47	108160
+list-ext-properties/960521-1_1-3	valid-memsafety	symex	2	FAILED	FALSE-FREE	536	main	1	0.64	136924
+list-ext-properties/960521-1_1-3	valid-memsafety	hybrid	2	FAILED	FALSE-FREE	536	main	1	2.50	108200
+list-ext-properties/list-ext	unreach-call	afl	2	FAILED	FALSE	556	main	1	2.18	105308
+list-ext-properties/list-ext	unreach-call	symex	2	FAILED	FALSE	556	main	1	0.59	135712
+list-ext-properties/list-ext	unreach-call	hybrid	2	FAILED	FALSE	556	main	1	2.17	105256
+list-ext-properties/list-ext	valid-memsafety	afl	2	FAILED	FALSE-DEREF	558	main	1	2.65	107864
+list-ext-properties/list-ext	valid-memsafety	symex	2	FAILED	FALSE-DEREF	558	main	1	3.98	139248
+list-ext-properties/list-ext	valid-memsafety	hybrid	2	FAILED	FALSE-DEREF	558	main	1	2.67	108452
+list-ext-properties/simple-ext	unreach-call	afl	2	FAILED	FALSE	540	main	1	2.21	106024
+list-ext-properties/simple-ext	unreach-call	symex	2	FAILED	FALSE	540	main	1	0.56	135468
+list-ext-properties/simple-ext	unreach-call	hybrid	2	FAILED	FALSE	540	main	1	2.15	105568
+list-ext-properties/simple-ext	valid-memcleanup	afl	2	UNKNOWN				0	11.49	341604
+list-ext-properties/simple-ext	valid-memcleanup	symex	2	UNKNOWN				0	0.85	136320
+list-ext-properties/simple-ext	valid-memcleanup	hybrid	2	UNKNOWN				0	36.04	341428
+list-ext-properties/test-0019_1-1	valid-memsafety	afl	2	FAILED	FALSE-MEMTRACK			1	2.52	107512
+list-ext-properties/test-0019_1-1	valid-memsafety	symex	2	FAILED	FALSE-MEMTRACK			1	0.51	129968
+list-ext-properties/test-0019_1-1	valid-memsafety	hybrid	2	FAILED	FALSE-MEMTRACK			1	2.49	107984
+list-ext-properties/test-0158_1-1	valid-memsafety	afl	2	UNKNOWN				0	11.38	341384
+list-ext-properties/test-0158_1-1	valid-memsafety	symex	2	SUCCEEDED				1	0.54	136132
+list-ext-properties/test-0158_1-1	valid-memsafety	hybrid	2	SUCCEEDED				1	6.97	341344
+map2check-assert/array_bug	unreach-call	afl	2	FAILED	FALSE	7	__VERIFIER_assert	1	2.13	106568
+map2check-assert/array_bug	unreach-call	symex	2	FAILED	FALSE	7	__VERIFIER_assert	1	0.49	136020
+map2check-assert/array_bug	unreach-call	hybrid	2	FAILED	FALSE	7	__VERIFIER_assert	1	2.16	106612
+map2check-assert/byte_add_bug	unreach-call	afl	2	UNKNOWN				0	11.06	106008
+map2check-assert/byte_add_bug	unreach-call	symex	2	SUCCEEDED				1	0.47	129588
+map2check-assert/byte_add_bug	unreach-call	hybrid	2	SUCCEEDED				1	6.67	341064
+map2check-assert/check_if_bug	unreach-call	afl	2	UNKNOWN				0	2.01	106804
+map2check-assert/check_if_bug	unreach-call	symex	2	UNKNOWN				0	31.87	187936
+map2check-assert/check_if_bug	unreach-call	hybrid	2	UNKNOWN				0	37.70	173076
+map2check-assert/ex01_false	unreach-call	afl	2	FAILED	FALSE	5	__VERIFIER_assert	1	2.12	105916
+map2check-assert/ex01_false	unreach-call	symex	2	FAILED	FALSE	5	__VERIFIER_assert	1	1.76	145836
+map2check-assert/ex01_false	unreach-call	hybrid	2	FAILED	FALSE	5	__VERIFIER_assert	1	2.15	105296
+map2check-assert/ex02_false	unreach-call	afl	2	UNKNOWN				0	2.00	105704
+map2check-assert/ex02_false	unreach-call	symex	2	UNKNOWN				0	31.56	226732
+map2check-assert/ex02_false	unreach-call	hybrid	2	UNKNOWN				0	37.18	211188
+memory-alloca/c.03-alloca-2	valid-memsafety	afl	2	UNKNOWN				0	11.32	107468
+memory-alloca/c.03-alloca-2	valid-memsafety	symex	2	UNKNOWN				0	32.04	172376
+memory-alloca/c.03-alloca-2	valid-memsafety	hybrid	2	UNKNOWN				0	40.78	164240
+memsafety-ext/dll_extends_pointer	valid-memsafety	afl	2	UNKNOWN				0	11.31	341080
+memsafety-ext/dll_extends_pointer	valid-memsafety	symex	2	UNKNOWN				0	31.65	179012
+memsafety-ext/dll_extends_pointer	valid-memsafety	hybrid	2	UNKNOWN				0	40.11	341680
+memsafety-ext/tree_stack	valid-memsafety	afl	2	UNKNOWN				0	11.36	357648
+memsafety-ext/tree_stack	valid-memsafety	symex	2	UNKNOWN				0	32.02	236884
+memsafety-ext/tree_stack	valid-memsafety	hybrid	2	UNKNOWN				0	40.09	343056
+memsafety-ext2/length_test03-1	valid-memsafety	afl	2	UNKNOWN				0	11.34	341480
+memsafety-ext2/length_test03-1	valid-memsafety	symex	2	UNKNOWN				0	31.49	145392
+memsafety-ext2/length_test03-1	valid-memsafety	hybrid	2	UNKNOWN				0	39.07	341628
+memsafety-ext2/split_list_test05-1	valid-memsafety	afl	2	FAILED	FALSE-DEREF	540	containsHead	1	2.51	109308
+memsafety-ext2/split_list_test05-1	valid-memsafety	symex	2	UNKNOWN				0	32.74	411844
+memsafety-ext2/split_list_test05-1	valid-memsafety	hybrid	2	FAILED	FALSE-DEREF	540	containsHead	1	2.52	108004
+memsafety/960521-1-1	valid-memsafety	afl	2	FAILED	FALSE-FREE	532	main	1	2.51	107676
+memsafety/960521-1-1	valid-memsafety	symex	2	FAILED	FALSE-FREE	532	main	1	0.59	130692
+memsafety/960521-1-1	valid-memsafety	hybrid	2	FAILED	FALSE-FREE	532	main	1	2.48	107312
+memsafety/960521-1-2	valid-memsafety	afl	2	UNKNOWN				0	11.34	106820
+memsafety/960521-1-2	valid-memsafety	symex	2	SUCCEEDED				1	15.77	129604
+memsafety/960521-1-2	valid-memsafety	hybrid	2	UNKNOWN				0	38.71	129624
+memsafety/960521-1-3	valid-memsafety	afl	2	FAILED	FALSE-DEREF	529	main	1	2.49	107416
+memsafety/960521-1-3	valid-memsafety	symex	2	FAILED	FALSE-DEREF	529	main	1	0.57	130416
+memsafety/960521-1-3	valid-memsafety	hybrid	2	FAILED	FALSE-DEREF	529	main	1	2.51	107952
+memsafety/test-0102-1	valid-memsafety	afl	2	UNKNOWN				0	11.38	108100
+memsafety/test-0102-1	valid-memsafety	symex	2	UNKNOWN				0	31.55	166684
+memsafety/test-0102-1	valid-memsafety	hybrid	2	UNKNOWN				0	40.00	341624
+array-examples/relax-1	valid-memsafety	afl	3	ERROR				0	2.66	108696
+array-examples/relax-1	valid-memsafety	symex	3	FAILED	FALSE-DEREF	570	is_relaxed_prefix	1	0.71	154800
+array-examples/relax-1	valid-memsafety	hybrid	3	FAILED	FALSE-DEREF	570	is_relaxed_prefix	1	4.31	155320
+array-examples/standard_sentinel-2	unreach-call	afl	3	UNKNOWN				0	11.00	106008
+array-examples/standard_sentinel-2	unreach-call	symex	3	UNKNOWN				0	31.50	181104
+array-examples/standard_sentinel-2	unreach-call	hybrid	3	UNKNOWN				0	39.46	341076
+array-examples/standard_two_index_04	unreach-call	afl	3	UNKNOWN				0	10.98	106300
+array-examples/standard_two_index_04	unreach-call	symex	3	UNKNOWN				0	31.49	180828
+array-examples/standard_two_index_04	unreach-call	hybrid	3	UNKNOWN				0	38.88	341544
+array-examples/standard_two_index_05	unreach-call	afl	3	UNKNOWN				0	10.98	106264
+array-examples/standard_two_index_05	unreach-call	symex	3	UNKNOWN				0	31.49	180152
+array-examples/standard_two_index_05	unreach-call	hybrid	3	UNKNOWN				0	39.44	341588
+array-memsafety/add_last_unsafe	valid-memsafety	afl	3	FAILED	FALSE-DEREF	522	main	1	2.45	107700
+array-memsafety/add_last_unsafe	valid-memsafety	symex	3	FAILED	FALSE-DEREF	522	main	1	0.57	146188
+array-memsafety/add_last_unsafe	valid-memsafety	hybrid	3	FAILED	FALSE-DEREF	522	main	1	2.48	107672
+array-memsafety/array01-alloca-2	valid-memsafety	afl	3	UNKNOWN				0	2.68	108208
+array-memsafety/array01-alloca-2	valid-memsafety	symex	3	UNKNOWN				0	31.64	171624
+array-memsafety/array01-alloca-2	valid-memsafety	hybrid	3	UNKNOWN				0	41.64	183780
+array-memsafety/insertionsort-alloca-1	valid-memsafety	afl	3	UNKNOWN				0	2.88	108064
+array-memsafety/insertionsort-alloca-1	valid-memsafety	symex	3	UNKNOWN				0	0.64	145980
+array-memsafety/insertionsort-alloca-1	valid-memsafety	hybrid	3	UNKNOWN				0	37.43	151840
+array-memsafety/lis_unsafe	valid-memsafety	afl	3	FAILED	FALSE-DEREF	521	lis	1	2.46	108216
+array-memsafety/lis_unsafe	valid-memsafety	symex	3	UNKNOWN				0	0.67	147068
+array-memsafety/lis_unsafe	valid-memsafety	hybrid	3	FAILED	FALSE-DEREF	521	lis	1	2.50	108416
+ldv-memsafety-bitfields/test-bitfields-1-1	valid-memsafety	afl	3	UNKNOWN				0	11.33	108488
+ldv-memsafety-bitfields/test-bitfields-1-1	valid-memsafety	symex	3	SUCCEEDED				1	0.49	130556
+ldv-memsafety-bitfields/test-bitfields-1-1	valid-memsafety	hybrid	3	SUCCEEDED				1	6.93	341312
+ldv-memsafety-bitfields/test-bitfields-2.1-2	valid-memsafety	afl	3	FAILED	FALSE-FREE	46	main	1	2.47	107652
+ldv-memsafety-bitfields/test-bitfields-2.1-2	valid-memsafety	symex	3	FAILED	FALSE-FREE	46	main	1	0.51	130252
+ldv-memsafety-bitfields/test-bitfields-2.1-2	valid-memsafety	hybrid	3	FAILED	FALSE-FREE	46	main	1	2.50	107380
+ldv-memsafety-bitfields/test-bitfields-3.1-2	valid-memsafety	afl	3	FAILED	FALSE-DEREF	42	main	1	2.47	107780
+ldv-memsafety-bitfields/test-bitfields-3.1-2	valid-memsafety	symex	3	FAILED	FALSE-DEREF	42	main	1	0.50	130440
+ldv-memsafety-bitfields/test-bitfields-3.1-2	valid-memsafety	hybrid	3	FAILED	FALSE-DEREF	42	main	1	2.48	108432
+ldv-memsafety/ArraysOfVariableLength	valid-memsafety	afl	3	UNKNOWN				0	11.33	108172
+ldv-memsafety/ArraysOfVariableLength	valid-memsafety	symex	3	SUCCEEDED				1	7.22	130836
+ldv-memsafety/ArraysOfVariableLength	valid-memsafety	hybrid	3	SUCCEEDED				1	13.93	130428
+ldv-memsafety/ArraysOfVariableLength2	valid-memsafety	afl	3	UNKNOWN				0	3.35	108172
+ldv-memsafety/ArraysOfVariableLength2	valid-memsafety	symex	3	UNKNOWN				0	31.48	130016
+ldv-memsafety/ArraysOfVariableLength2	valid-memsafety	hybrid	3	UNKNOWN				0	39.72	131264
+ldv-memsafety/memleaks_test1-1	valid-memsafety	afl	3	FAILED	FALSE-MEMTRACK			1	2.57	109420
+ldv-memsafety/memleaks_test1-1	valid-memsafety	symex	3	FAILED	FALSE-MEMTRACK			1	0.91	141804
+ldv-memsafety/memleaks_test1-1	valid-memsafety	hybrid	3	FAILED	FALSE-MEMTRACK			1	2.58	110156
+ldv-memsafety/memleaks_test10-2	valid-memsafety	afl	3	UNKNOWN				0	11.48	341344
+ldv-memsafety/memleaks_test10-2	valid-memsafety	symex	3	SUCCEEDED				1	1.47	142920
+ldv-memsafety/memleaks_test10-2	valid-memsafety	hybrid	3	SUCCEEDED				1	8.13	341028
+ldv-memsafety/memleaks_test17_2-1	valid-memsafety	afl	3	FAILED	FALSE-FREE	779	free_17	1	2.75	110956
+ldv-memsafety/memleaks_test17_2-1	valid-memsafety	symex	3	FAILED	FALSE-FREE	779	free_17	1	1.80	145108
+ldv-memsafety/memleaks_test17_2-1	valid-memsafety	hybrid	3	FAILED	FALSE-FREE	779	free_17	1	2.75	110088
+ldv-memsafety/memleaks_test3-2	valid-memsafety	afl	3	UNKNOWN				0	11.50	341080
+ldv-memsafety/memleaks_test3-2	valid-memsafety	symex	3	SUCCEEDED				1	0.94	141464
+ldv-memsafety/memleaks_test3-2	valid-memsafety	hybrid	3	SUCCEEDED				1	7.59	341144
+ldv-memsafety/memsetNonZero	valid-memsafety	afl	3	UNKNOWN				0	11.31	341072
+ldv-memsafety/memsetNonZero	valid-memsafety	symex	3	SUCCEEDED				1	0.48	130736
+ldv-memsafety/memsetNonZero	valid-memsafety	hybrid	3	SUCCEEDED				1	6.94	341564
+list-ext-properties/960521-1_1-1	valid-memsafety	afl	3	FAILED	FALSE-DEREF	533	main	1	2.51	107912
+list-ext-properties/960521-1_1-1	valid-memsafety	symex	3	FAILED	FALSE-DEREF	533	main	1	0.63	138088
+list-ext-properties/960521-1_1-1	valid-memsafety	hybrid	3	FAILED	FALSE-DEREF	533	main	1	2.50	108712
+list-ext-properties/960521-1_1-2	valid-memsafety	afl	3	UNKNOWN				0	11.38	341272
+list-ext-properties/960521-1_1-2	valid-memsafety	symex	3	SUCCEEDED				1	2.34	138308
+list-ext-properties/960521-1_1-2	valid-memsafety	hybrid	3	SUCCEEDED				1	9.10	341048
+list-ext-properties/960521-1_1-3	valid-memsafety	afl	3	FAILED	FALSE-FREE	536	main	1	2.44	107928
+list-ext-properties/960521-1_1-3	valid-memsafety	symex	3	FAILED	FALSE-FREE	536	main	1	0.66	138032
+list-ext-properties/960521-1_1-3	valid-memsafety	hybrid	3	FAILED	FALSE-FREE	536	main	1	2.52	107852
+list-ext-properties/list-ext	unreach-call	afl	3	FAILED	FALSE	556	main	1	2.17	105964
+list-ext-properties/list-ext	unreach-call	symex	3	FAILED	FALSE	556	main	1	0.56	136524
+list-ext-properties/list-ext	unreach-call	hybrid	3	FAILED	FALSE	556	main	1	2.20	106428
+list-ext-properties/list-ext	valid-memsafety	afl	3	FAILED	FALSE-DEREF	558	main	1	2.63	108916
+list-ext-properties/list-ext	valid-memsafety	symex	3	FAILED	FALSE-DEREF	558	main	1	3.92	139572
+list-ext-properties/list-ext	valid-memsafety	hybrid	3	FAILED	FALSE-DEREF	558	main	1	2.64	108380
+list-ext-properties/simple-ext	unreach-call	afl	3	FAILED	FALSE	540	main	1	2.17	106940
+list-ext-properties/simple-ext	unreach-call	symex	3	FAILED	FALSE	540	main	1	0.55	135536
+list-ext-properties/simple-ext	unreach-call	hybrid	3	FAILED	FALSE	540	main	1	2.18	105796
+list-ext-properties/simple-ext	valid-memcleanup	afl	3	UNKNOWN				0	11.50	340760
+list-ext-properties/simple-ext	valid-memcleanup	symex	3	UNKNOWN				0	0.81	136348
+list-ext-properties/simple-ext	valid-memcleanup	hybrid	3	UNKNOWN				0	36.03	341312
+list-ext-properties/test-0019_1-1	valid-memsafety	afl	3	FAILED	FALSE-MEMTRACK			1	2.47	108592
+list-ext-properties/test-0019_1-1	valid-memsafety	symex	3	FAILED	FALSE-MEMTRACK			1	0.51	130792
+list-ext-properties/test-0019_1-1	valid-memsafety	hybrid	3	FAILED	FALSE-MEMTRACK			1	2.48	108716
+list-ext-properties/test-0158_1-1	valid-memsafety	afl	3	UNKNOWN				0	11.36	341260
+list-ext-properties/test-0158_1-1	valid-memsafety	symex	3	SUCCEEDED				1	0.53	136196
+list-ext-properties/test-0158_1-1	valid-memsafety	hybrid	3	SUCCEEDED				1	6.96	341264
+map2check-assert/array_bug	unreach-call	afl	3	FAILED	FALSE	7	__VERIFIER_assert	1	2.13	106252
+map2check-assert/array_bug	unreach-call	symex	3	FAILED	FALSE	7	__VERIFIER_assert	1	0.49	136308
+map2check-assert/array_bug	unreach-call	hybrid	3	FAILED	FALSE	7	__VERIFIER_assert	1	2.17	106364
+map2check-assert/byte_add_bug	unreach-call	afl	3	UNKNOWN				0	11.06	340932
+map2check-assert/byte_add_bug	unreach-call	symex	3	SUCCEEDED				1	0.47	130172
+map2check-assert/byte_add_bug	unreach-call	hybrid	3	SUCCEEDED				1	6.64	130656
+map2check-assert/check_if_bug	unreach-call	afl	3	UNKNOWN				0	2.01	106808
+map2check-assert/check_if_bug	unreach-call	symex	3	UNKNOWN				0	31.76	187992
+map2check-assert/check_if_bug	unreach-call	hybrid	3	UNKNOWN				0	37.70	171156
+map2check-assert/ex01_false	unreach-call	afl	3	FAILED	FALSE	5	__VERIFIER_assert	1	2.14	106824
+map2check-assert/ex01_false	unreach-call	symex	3	FAILED	FALSE	5	__VERIFIER_assert	1	1.77	146708
+map2check-assert/ex01_false	unreach-call	hybrid	3	FAILED	FALSE	5	__VERIFIER_assert	1	2.15	106444
+map2check-assert/ex02_false	unreach-call	afl	3	UNKNOWN				0	1.99	106852
+map2check-assert/ex02_false	unreach-call	symex	3	UNKNOWN				0	31.52	227732
+map2check-assert/ex02_false	unreach-call	hybrid	3	UNKNOWN				0	37.17	211544
+memory-alloca/c.03-alloca-2	valid-memsafety	afl	3	UNKNOWN				0	11.32	108872
+memory-alloca/c.03-alloca-2	valid-memsafety	symex	3	UNKNOWN				0	31.97	172944
+memory-alloca/c.03-alloca-2	valid-memsafety	hybrid	3	UNKNOWN				0	41.35	184232
+memsafety-ext/dll_extends_pointer	valid-memsafety	afl	3	UNKNOWN				0	11.33	341436
+memsafety-ext/dll_extends_pointer	valid-memsafety	symex	3	UNKNOWN				0	31.64	178492
+memsafety-ext/dll_extends_pointer	valid-memsafety	hybrid	3	UNKNOWN				0	40.13	357728
+memsafety-ext/tree_stack	valid-memsafety	afl	3	UNKNOWN				0	11.38	341348
+memsafety-ext/tree_stack	valid-memsafety	symex	3	UNKNOWN				0	31.98	238312
+memsafety-ext/tree_stack	valid-memsafety	hybrid	3	UNKNOWN				0	40.20	342088
+memsafety-ext2/length_test03-1	valid-memsafety	afl	3	UNKNOWN				0	11.35	341376
+memsafety-ext2/length_test03-1	valid-memsafety	symex	3	UNKNOWN				0	31.50	145764
+memsafety-ext2/length_test03-1	valid-memsafety	hybrid	3	UNKNOWN				0	39.06	341324
+memsafety-ext2/split_list_test05-1	valid-memsafety	afl	3	FAILED	FALSE-DEREF	540	containsHead	1	2.50	109092
+memsafety-ext2/split_list_test05-1	valid-memsafety	symex	3	UNKNOWN				0	32.74	409352
+memsafety-ext2/split_list_test05-1	valid-memsafety	hybrid	3	FAILED	FALSE-DEREF	540	containsHead	1	2.52	108484
+memsafety/960521-1-1	valid-memsafety	afl	3	FAILED	FALSE-FREE	532	main	1	2.49	107900
+memsafety/960521-1-1	valid-memsafety	symex	3	FAILED	FALSE-FREE	532	main	1	0.59	129884
+memsafety/960521-1-1	valid-memsafety	hybrid	3	FAILED	FALSE-FREE	532	main	1	2.49	108608
+memsafety/960521-1-2	valid-memsafety	afl	3	UNKNOWN				0	11.34	108280
+memsafety/960521-1-2	valid-memsafety	symex	3	SUCCEEDED				1	15.62	129256
+memsafety/960521-1-2	valid-memsafety	hybrid	3	UNKNOWN				0	38.71	130644
+memsafety/960521-1-3	valid-memsafety	afl	3	FAILED	FALSE-DEREF	529	main	1	2.45	108256
+memsafety/960521-1-3	valid-memsafety	symex	3	FAILED	FALSE-DEREF	529	main	1	0.59	130764
+memsafety/960521-1-3	valid-memsafety	hybrid	3	FAILED	FALSE-DEREF	529	main	1	2.46	107884
+memsafety/test-0102-1	valid-memsafety	afl	3	UNKNOWN				0	11.38	341344
+memsafety/test-0102-1	valid-memsafety	symex	3	UNKNOWN				0	31.55	166588
+memsafety/test-0102-1	valid-memsafety	hybrid	3	UNKNOWN				0	38.97	341844
+array-examples/relax-1	valid-memsafety	afl	4	ERROR				0	2.70	108856
+array-examples/relax-1	valid-memsafety	symex	4	FAILED	FALSE-DEREF	570	is_relaxed_prefix	1	0.70	155464
+array-examples/relax-1	valid-memsafety	hybrid	4	FAILED	FALSE-DEREF	570	is_relaxed_prefix	1	3.83	155668
+array-examples/standard_sentinel-2	unreach-call	afl	4	UNKNOWN				0	10.99	105540
+array-examples/standard_sentinel-2	unreach-call	symex	4	UNKNOWN				0	31.48	181216
+array-examples/standard_sentinel-2	unreach-call	hybrid	4	UNKNOWN				0	38.86	341440
+array-examples/standard_two_index_04	unreach-call	afl	4	UNKNOWN				0	10.98	105864
+array-examples/standard_two_index_04	unreach-call	symex	4	UNKNOWN				0	31.49	180620
+array-examples/standard_two_index_04	unreach-call	hybrid	4	UNKNOWN				0	38.62	341412
+array-examples/standard_two_index_05	unreach-call	afl	4	UNKNOWN				0	10.97	105520
+array-examples/standard_two_index_05	unreach-call	symex	4	UNKNOWN				0	31.51	180360
+array-examples/standard_two_index_05	unreach-call	hybrid	4	UNKNOWN				0	38.91	341412
+array-memsafety/add_last_unsafe	valid-memsafety	afl	4	FAILED	FALSE-DEREF	522	main	1	2.46	108084
+array-memsafety/add_last_unsafe	valid-memsafety	symex	4	FAILED	FALSE-DEREF	522	main	1	0.56	145260
+array-memsafety/add_last_unsafe	valid-memsafety	hybrid	4	FAILED	FALSE-DEREF	522	main	1	2.49	107628
+array-memsafety/array01-alloca-2	valid-memsafety	afl	4	UNKNOWN				0	3.77	107820
+array-memsafety/array01-alloca-2	valid-memsafety	symex	4	UNKNOWN				0	31.71	171268
+array-memsafety/array01-alloca-2	valid-memsafety	hybrid	4	UNKNOWN				0	29.95	264612
+array-memsafety/insertionsort-alloca-1	valid-memsafety	afl	4	UNKNOWN				0	3.16	108388
+array-memsafety/insertionsort-alloca-1	valid-memsafety	symex	4	UNKNOWN				0	0.66	146444
+array-memsafety/insertionsort-alloca-1	valid-memsafety	hybrid	4	UNKNOWN				0	40.32	222720
+array-memsafety/lis_unsafe	valid-memsafety	afl	4	FAILED	FALSE-DEREF	521	lis	1	2.48	107712
+array-memsafety/lis_unsafe	valid-memsafety	symex	4	UNKNOWN				0	0.65	147044
+array-memsafety/lis_unsafe	valid-memsafety	hybrid	4	FAILED	FALSE-DEREF	521	lis	1	2.48	108168
+ldv-memsafety-bitfields/test-bitfields-1-1	valid-memsafety	afl	4	UNKNOWN				0	11.35	341296
+ldv-memsafety-bitfields/test-bitfields-1-1	valid-memsafety	symex	4	SUCCEEDED				1	0.49	129924
+ldv-memsafety-bitfields/test-bitfields-1-1	valid-memsafety	hybrid	4	SUCCEEDED				1	6.92	129920
+ldv-memsafety-bitfields/test-bitfields-2.1-2	valid-memsafety	afl	4	FAILED	FALSE-FREE	46	main	1	2.46	108288
+ldv-memsafety-bitfields/test-bitfields-2.1-2	valid-memsafety	symex	4	FAILED	FALSE-FREE	46	main	1	0.49	130424
+ldv-memsafety-bitfields/test-bitfields-2.1-2	valid-memsafety	hybrid	4	FAILED	FALSE-FREE	46	main	1	2.47	108316
+ldv-memsafety-bitfields/test-bitfields-3.1-2	valid-memsafety	afl	4	FAILED	FALSE-DEREF	42	main	1	2.50	107564
+ldv-memsafety-bitfields/test-bitfields-3.1-2	valid-memsafety	symex	4	FAILED	FALSE-DEREF	42	main	1	0.50	129644
+ldv-memsafety-bitfields/test-bitfields-3.1-2	valid-memsafety	hybrid	4	FAILED	FALSE-DEREF	42	main	1	2.47	108064
+ldv-memsafety/ArraysOfVariableLength	valid-memsafety	afl	4	UNKNOWN				0	11.35	107792
+ldv-memsafety/ArraysOfVariableLength	valid-memsafety	symex	4	SUCCEEDED				1	7.26	129732
+ldv-memsafety/ArraysOfVariableLength	valid-memsafety	hybrid	4	SUCCEEDED				1	13.95	130568
+ldv-memsafety/ArraysOfVariableLength2	valid-memsafety	afl	4	UNKNOWN				0	3.35	107896
+ldv-memsafety/ArraysOfVariableLength2	valid-memsafety	symex	4	UNKNOWN				0	31.48	130832
+ldv-memsafety/ArraysOfVariableLength2	valid-memsafety	hybrid	4	UNKNOWN				0	39.72	132780
+ldv-memsafety/memleaks_test1-1	valid-memsafety	afl	4	FAILED	FALSE-MEMTRACK			1	2.59	109460
+ldv-memsafety/memleaks_test1-1	valid-memsafety	symex	4	FAILED	FALSE-MEMTRACK			1	0.92	141760
+ldv-memsafety/memleaks_test1-1	valid-memsafety	hybrid	4	FAILED	FALSE-MEMTRACK			1	2.59	110144
+ldv-memsafety/memleaks_test10-2	valid-memsafety	afl	4	UNKNOWN				0	11.49	341016
+ldv-memsafety/memleaks_test10-2	valid-memsafety	symex	4	SUCCEEDED				1	1.55	142784
+ldv-memsafety/memleaks_test10-2	valid-memsafety	hybrid	4	SUCCEEDED				1	8.12	341256
+ldv-memsafety/memleaks_test17_2-1	valid-memsafety	afl	4	FAILED	FALSE-FREE	779	free_17	1	2.78	109892
+ldv-memsafety/memleaks_test17_2-1	valid-memsafety	symex	4	FAILED	FALSE-FREE	779	free_17	1	1.85	144336
+ldv-memsafety/memleaks_test17_2-1	valid-memsafety	hybrid	4	FAILED	FALSE-FREE	779	free_17	1	2.75	109544
+ldv-memsafety/memleaks_test3-2	valid-memsafety	afl	4	UNKNOWN				0	11.48	340828
+ldv-memsafety/memleaks_test3-2	valid-memsafety	symex	4	SUCCEEDED				1	0.93	141164
+ldv-memsafety/memleaks_test3-2	valid-memsafety	hybrid	4	SUCCEEDED				1	7.59	341028
+ldv-memsafety/memsetNonZero	valid-memsafety	afl	4	UNKNOWN				0	11.33	341184
+ldv-memsafety/memsetNonZero	valid-memsafety	symex	4	SUCCEEDED				1	0.50	130424
+ldv-memsafety/memsetNonZero	valid-memsafety	hybrid	4	SUCCEEDED				1	6.92	130164
+list-ext-properties/960521-1_1-1	valid-memsafety	afl	4	FAILED	FALSE-DEREF	533	main	1	2.46	108136
+list-ext-properties/960521-1_1-1	valid-memsafety	symex	4	FAILED	FALSE-DEREF	533	main	1	0.63	137292
+list-ext-properties/960521-1_1-1	valid-memsafety	hybrid	4	FAILED	FALSE-DEREF	533	main	1	2.48	107724
+list-ext-properties/960521-1_1-2	valid-memsafety	afl	4	UNKNOWN				0	11.39	341340
+list-ext-properties/960521-1_1-2	valid-memsafety	symex	4	SUCCEEDED				1	2.34	138612
+list-ext-properties/960521-1_1-2	valid-memsafety	hybrid	4	SUCCEEDED				1	9.08	341400
+list-ext-properties/960521-1_1-3	valid-memsafety	afl	4	FAILED	FALSE-FREE	536	main	1	2.47	108564
+list-ext-properties/960521-1_1-3	valid-memsafety	symex	4	FAILED	FALSE-FREE	536	main	1	0.65	137536
+list-ext-properties/960521-1_1-3	valid-memsafety	hybrid	4	FAILED	FALSE-FREE	536	main	1	2.49	108308
+list-ext-properties/list-ext	unreach-call	afl	4	FAILED	FALSE	556	main	1	2.17	106428
+list-ext-properties/list-ext	unreach-call	symex	4	FAILED	FALSE	556	main	1	0.56	136404
+list-ext-properties/list-ext	unreach-call	hybrid	4	FAILED	FALSE	556	main	1	2.17	106532
+list-ext-properties/list-ext	valid-memsafety	afl	4	FAILED	FALSE-DEREF	558	main	1	2.64	107704
+list-ext-properties/list-ext	valid-memsafety	symex	4	FAILED	FALSE-DEREF	558	main	1	4.21	139580
+list-ext-properties/list-ext	valid-memsafety	hybrid	4	FAILED	FALSE-DEREF	558	main	1	2.64	108460
+list-ext-properties/simple-ext	unreach-call	afl	4	FAILED	FALSE	540	main	1	2.17	106044
+list-ext-properties/simple-ext	unreach-call	symex	4	FAILED	FALSE	540	main	1	0.53	135844
+list-ext-properties/simple-ext	unreach-call	hybrid	4	FAILED	FALSE	540	main	1	2.15	106144
+list-ext-properties/simple-ext	valid-memcleanup	afl	4	UNKNOWN				0	11.48	341144
+list-ext-properties/simple-ext	valid-memcleanup	symex	4	UNKNOWN				0	0.84	136536
+list-ext-properties/simple-ext	valid-memcleanup	hybrid	4	UNKNOWN				0	36.01	341564
+list-ext-properties/test-0019_1-1	valid-memsafety	afl	4	FAILED	FALSE-MEMTRACK			1	2.47	107456
+list-ext-properties/test-0019_1-1	valid-memsafety	symex	4	FAILED	FALSE-MEMTRACK			1	0.51	130516
+list-ext-properties/test-0019_1-1	valid-memsafety	hybrid	4	FAILED	FALSE-MEMTRACK			1	2.51	107540
+list-ext-properties/test-0158_1-1	valid-memsafety	afl	4	UNKNOWN				0	11.33	341264
+list-ext-properties/test-0158_1-1	valid-memsafety	symex	4	SUCCEEDED				1	0.53	136832
+list-ext-properties/test-0158_1-1	valid-memsafety	hybrid	4	SUCCEEDED				1	6.97	341020
+map2check-assert/array_bug	unreach-call	afl	4	FAILED	FALSE	7	__VERIFIER_assert	1	2.16	105896
+map2check-assert/array_bug	unreach-call	symex	4	FAILED	FALSE	7	__VERIFIER_assert	1	0.51	135996
+map2check-assert/array_bug	unreach-call	hybrid	4	FAILED	FALSE	7	__VERIFIER_assert	1	2.15	105828
+map2check-assert/byte_add_bug	unreach-call	afl	4	UNKNOWN				0	11.07	106900
+map2check-assert/byte_add_bug	unreach-call	symex	4	SUCCEEDED				1	0.48	130260
+map2check-assert/byte_add_bug	unreach-call	hybrid	4	SUCCEEDED				1	6.63	130496
+map2check-assert/check_if_bug	unreach-call	afl	4	UNKNOWN				0	2.01	106280
+map2check-assert/check_if_bug	unreach-call	symex	4	UNKNOWN				0	31.89	187400
+map2check-assert/check_if_bug	unreach-call	hybrid	4	UNKNOWN				0	37.73	171176
+map2check-assert/ex01_false	unreach-call	afl	4	FAILED	FALSE	5	__VERIFIER_assert	1	2.14	105792
+map2check-assert/ex01_false	unreach-call	symex	4	FAILED	FALSE	5	__VERIFIER_assert	1	1.77	146260
+map2check-assert/ex01_false	unreach-call	hybrid	4	FAILED	FALSE	5	__VERIFIER_assert	1	2.13	105348
+map2check-assert/ex02_false	unreach-call	afl	4	UNKNOWN				0	1.98	106120
+map2check-assert/ex02_false	unreach-call	symex	4	UNKNOWN				0	31.52	227324
+map2check-assert/ex02_false	unreach-call	hybrid	4	UNKNOWN				0	37.18	210084
+memory-alloca/c.03-alloca-2	valid-memsafety	afl	4	UNKNOWN				0	11.31	107532
+memory-alloca/c.03-alloca-2	valid-memsafety	symex	4	UNKNOWN				0	31.94	172728
+memory-alloca/c.03-alloca-2	valid-memsafety	hybrid	4	UNKNOWN				0	40.92	180828
+memsafety-ext/dll_extends_pointer	valid-memsafety	afl	4	UNKNOWN				0	11.34	341240
+memsafety-ext/dll_extends_pointer	valid-memsafety	symex	4	UNKNOWN				0	31.65	178548
+memsafety-ext/dll_extends_pointer	valid-memsafety	hybrid	4	UNKNOWN				0	40.13	357548
+memsafety-ext/tree_stack	valid-memsafety	afl	4	UNKNOWN				0	11.36	341400
+memsafety-ext/tree_stack	valid-memsafety	symex	4	UNKNOWN				0	32.01	238560
+memsafety-ext/tree_stack	valid-memsafety	hybrid	4	UNKNOWN				0	40.27	357944
+memsafety-ext2/length_test03-1	valid-memsafety	afl	4	UNKNOWN				0	11.36	341012
+memsafety-ext2/length_test03-1	valid-memsafety	symex	4	UNKNOWN				0	31.50	145616
+memsafety-ext2/length_test03-1	valid-memsafety	hybrid	4	UNKNOWN				0	39.10	341636
+memsafety-ext2/split_list_test05-1	valid-memsafety	afl	4	FAILED	FALSE-DEREF	540	containsHead	1	2.51	108680
+memsafety-ext2/split_list_test05-1	valid-memsafety	symex	4	UNKNOWN				0	32.68	409592
+memsafety-ext2/split_list_test05-1	valid-memsafety	hybrid	4	FAILED	FALSE-DEREF	540	containsHead	1	2.52	108544
+memsafety/960521-1-1	valid-memsafety	afl	4	FAILED	FALSE-FREE	532	main	1	2.48	107612
+memsafety/960521-1-1	valid-memsafety	symex	4	FAILED	FALSE-FREE	532	main	1	0.58	129680
+memsafety/960521-1-1	valid-memsafety	hybrid	4	FAILED	FALSE-FREE	532	main	1	2.50	107864
+memsafety/960521-1-2	valid-memsafety	afl	4	UNKNOWN				0	11.36	107692
+memsafety/960521-1-2	valid-memsafety	symex	4	SUCCEEDED				1	15.75	129964
+memsafety/960521-1-2	valid-memsafety	hybrid	4	UNKNOWN				0	38.69	130492
+memsafety/960521-1-3	valid-memsafety	afl	4	FAILED	FALSE-DEREF	529	main	1	2.47	108572
+memsafety/960521-1-3	valid-memsafety	symex	4	FAILED	FALSE-DEREF	529	main	1	0.57	130600
+memsafety/960521-1-3	valid-memsafety	hybrid	4	FAILED	FALSE-DEREF	529	main	1	2.48	108768
+memsafety/test-0102-1	valid-memsafety	afl	4	UNKNOWN				0	11.38	341400
+memsafety/test-0102-1	valid-memsafety	symex	4	UNKNOWN				0	31.55	167548
+memsafety/test-0102-1	valid-memsafety	hybrid	4	UNKNOWN				0	39.00	341156
+array-examples/relax-1	valid-memsafety	afl	5	ERROR				0	2.66	108200
+array-examples/relax-1	valid-memsafety	symex	5	FAILED	FALSE-DEREF	570	is_relaxed_prefix	1	0.70	155352
+array-examples/relax-1	valid-memsafety	hybrid	5	FAILED	FALSE-DEREF	570	is_relaxed_prefix	1	3.77	155708
+array-examples/standard_sentinel-2	unreach-call	afl	5	UNKNOWN				0	11.01	105800
+array-examples/standard_sentinel-2	unreach-call	symex	5	UNKNOWN				0	31.50	183248
+array-examples/standard_sentinel-2	unreach-call	hybrid	5	UNKNOWN				0	38.85	341700
+array-examples/standard_two_index_04	unreach-call	afl	5	UNKNOWN				0	10.97	105848
+array-examples/standard_two_index_04	unreach-call	symex	5	UNKNOWN				0	31.50	180492
+array-examples/standard_two_index_04	unreach-call	hybrid	5	UNKNOWN				0	38.88	341468
+array-examples/standard_two_index_05	unreach-call	afl	5	UNKNOWN				0	10.97	106032
+array-examples/standard_two_index_05	unreach-call	symex	5	UNKNOWN				0	31.51	180236
+array-examples/standard_two_index_05	unreach-call	hybrid	5	UNKNOWN				0	38.89	341272
+array-memsafety/add_last_unsafe	valid-memsafety	afl	5	FAILED	FALSE-DEREF	522	main	1	2.46	108352
+array-memsafety/add_last_unsafe	valid-memsafety	symex	5	FAILED	FALSE-DEREF	522	main	1	0.54	146120
+array-memsafety/add_last_unsafe	valid-memsafety	hybrid	5	FAILED	FALSE-DEREF	522	main	1	2.46	107824
+array-memsafety/array01-alloca-2	valid-memsafety	afl	5	UNKNOWN				0	2.66	108272
+array-memsafety/array01-alloca-2	valid-memsafety	symex	5	UNKNOWN				0	31.65	173708
+array-memsafety/array01-alloca-2	valid-memsafety	hybrid	5	UNKNOWN				0	40.21	320840
+array-memsafety/insertionsort-alloca-1	valid-memsafety	afl	5	UNKNOWN				0	2.74	107512
+array-memsafety/insertionsort-alloca-1	valid-memsafety	symex	5	UNKNOWN				0	0.65	146400
+array-memsafety/insertionsort-alloca-1	valid-memsafety	hybrid	5	UNKNOWN				0	37.80	340948
+array-memsafety/lis_unsafe	valid-memsafety	afl	5	FAILED	FALSE-DEREF	521	lis	1	2.47	108776
+array-memsafety/lis_unsafe	valid-memsafety	symex	5	UNKNOWN				0	0.66	146912
+array-memsafety/lis_unsafe	valid-memsafety	hybrid	5	FAILED	FALSE-DEREF	521	lis	1	2.51	108800
+ldv-memsafety-bitfields/test-bitfields-1-1	valid-memsafety	afl	5	UNKNOWN				0	11.35	341244
+ldv-memsafety-bitfields/test-bitfields-1-1	valid-memsafety	symex	5	SUCCEEDED				1	0.50	130736
+ldv-memsafety-bitfields/test-bitfields-1-1	valid-memsafety	hybrid	5	SUCCEEDED				1	6.91	129944
+ldv-memsafety-bitfields/test-bitfields-2.1-2	valid-memsafety	afl	5	FAILED	FALSE-FREE	46	main	1	2.45	107948
+ldv-memsafety-bitfields/test-bitfields-2.1-2	valid-memsafety	symex	5	FAILED	FALSE-FREE	46	main	1	0.51	130368
+ldv-memsafety-bitfields/test-bitfields-2.1-2	valid-memsafety	hybrid	5	FAILED	FALSE-FREE	46	main	1	2.49	107752
+ldv-memsafety-bitfields/test-bitfields-3.1-2	valid-memsafety	afl	5	FAILED	FALSE-DEREF	42	main	1	2.49	108564
+ldv-memsafety-bitfields/test-bitfields-3.1-2	valid-memsafety	symex	5	FAILED	FALSE-DEREF	42	main	1	0.51	130100
+ldv-memsafety-bitfields/test-bitfields-3.1-2	valid-memsafety	hybrid	5	FAILED	FALSE-DEREF	42	main	1	2.52	108384
+ldv-memsafety/ArraysOfVariableLength	valid-memsafety	afl	5	UNKNOWN				0	11.35	108764
+ldv-memsafety/ArraysOfVariableLength	valid-memsafety	symex	5	SUCCEEDED				1	7.51	130128
+ldv-memsafety/ArraysOfVariableLength	valid-memsafety	hybrid	5	SUCCEEDED				1	13.95	130732
+ldv-memsafety/ArraysOfVariableLength2	valid-memsafety	afl	5	UNKNOWN				0	3.34	107920
+ldv-memsafety/ArraysOfVariableLength2	valid-memsafety	symex	5	UNKNOWN				0	31.49	130516
+ldv-memsafety/ArraysOfVariableLength2	valid-memsafety	hybrid	5	UNKNOWN				0	39.73	130940
+ldv-memsafety/memleaks_test1-1	valid-memsafety	afl	5	FAILED	FALSE-MEMTRACK			1	2.58	109460
+ldv-memsafety/memleaks_test1-1	valid-memsafety	symex	5	FAILED	FALSE-MEMTRACK			1	0.88	141632
+ldv-memsafety/memleaks_test1-1	valid-memsafety	hybrid	5	FAILED	FALSE-MEMTRACK			1	2.59	109976
+ldv-memsafety/memleaks_test10-2	valid-memsafety	afl	5	UNKNOWN				0	11.50	341352
+ldv-memsafety/memleaks_test10-2	valid-memsafety	symex	5	SUCCEEDED				1	1.47	143592
+ldv-memsafety/memleaks_test10-2	valid-memsafety	hybrid	5	SUCCEEDED				1	8.12	341168
+ldv-memsafety/memleaks_test17_2-1	valid-memsafety	afl	5	FAILED	FALSE-FREE	779	free_17	1	3.81	109848
+ldv-memsafety/memleaks_test17_2-1	valid-memsafety	symex	5	FAILED	FALSE-FREE	779	free_17	1	1.85	144824
+ldv-memsafety/memleaks_test17_2-1	valid-memsafety	hybrid	5	FAILED	FALSE-FREE	779	free_17	1	2.78	110012
+ldv-memsafety/memleaks_test3-2	valid-memsafety	afl	5	UNKNOWN				0	11.46	341168
+ldv-memsafety/memleaks_test3-2	valid-memsafety	symex	5	SUCCEEDED				1	0.91	141932
+ldv-memsafety/memleaks_test3-2	valid-memsafety	hybrid	5	SUCCEEDED				1	7.59	341448
+ldv-memsafety/memsetNonZero	valid-memsafety	afl	5	UNKNOWN				0	11.30	107636
+ldv-memsafety/memsetNonZero	valid-memsafety	symex	5	SUCCEEDED				1	0.48	130048
+ldv-memsafety/memsetNonZero	valid-memsafety	hybrid	5	SUCCEEDED				1	6.92	129932
+list-ext-properties/960521-1_1-1	valid-memsafety	afl	5	FAILED	FALSE-DEREF	533	main	1	2.49	107584
+list-ext-properties/960521-1_1-1	valid-memsafety	symex	5	FAILED	FALSE-DEREF	533	main	1	0.65	137712
+list-ext-properties/960521-1_1-1	valid-memsafety	hybrid	5	FAILED	FALSE-DEREF	533	main	1	2.48	107572
+list-ext-properties/960521-1_1-2	valid-memsafety	afl	5	UNKNOWN				0	11.35	341156
+list-ext-properties/960521-1_1-2	valid-memsafety	symex	5	SUCCEEDED				1	2.32	137884
+list-ext-properties/960521-1_1-2	valid-memsafety	hybrid	5	SUCCEEDED				1	9.07	341112
+list-ext-properties/960521-1_1-3	valid-memsafety	afl	5	FAILED	FALSE-FREE	536	main	1	2.48	107212
+list-ext-properties/960521-1_1-3	valid-memsafety	symex	5	FAILED	FALSE-FREE	536	main	1	0.65	137860
+list-ext-properties/960521-1_1-3	valid-memsafety	hybrid	5	FAILED	FALSE-FREE	536	main	1	2.47	108536
+list-ext-properties/list-ext	unreach-call	afl	5	FAILED	FALSE	556	main	1	2.15	106688
+list-ext-properties/list-ext	unreach-call	symex	5	FAILED	FALSE	556	main	1	0.57	136360
+list-ext-properties/list-ext	unreach-call	hybrid	5	FAILED	FALSE	556	main	1	2.17	105788
+list-ext-properties/list-ext	valid-memsafety	afl	5	FAILED	FALSE-DEREF	558	main	1	2.66	107436
+list-ext-properties/list-ext	valid-memsafety	symex	5	FAILED	FALSE-DEREF	558	main	1	4.17	139764
+list-ext-properties/list-ext	valid-memsafety	hybrid	5	FAILED	FALSE-DEREF	558	main	1	2.63	107864
+list-ext-properties/simple-ext	unreach-call	afl	5	FAILED	FALSE	540	main	1	2.16	106412
+list-ext-properties/simple-ext	unreach-call	symex	5	FAILED	FALSE	540	main	1	0.52	135468
+list-ext-properties/simple-ext	unreach-call	hybrid	5	FAILED	FALSE	540	main	1	2.15	105804
+list-ext-properties/simple-ext	valid-memcleanup	afl	5	UNKNOWN				0	11.47	341112
+list-ext-properties/simple-ext	valid-memcleanup	symex	5	UNKNOWN				0	0.82	136240
+list-ext-properties/simple-ext	valid-memcleanup	hybrid	5	UNKNOWN				0	36.02	341416
+list-ext-properties/test-0019_1-1	valid-memsafety	afl	5	FAILED	FALSE-MEMTRACK			1	2.46	107664
+list-ext-properties/test-0019_1-1	valid-memsafety	symex	5	FAILED	FALSE-MEMTRACK			1	0.52	130156
+list-ext-properties/test-0019_1-1	valid-memsafety	hybrid	5	FAILED	FALSE-MEMTRACK			1	2.49	107888
+list-ext-properties/test-0158_1-1	valid-memsafety	afl	5	UNKNOWN				0	11.34	341132
+list-ext-properties/test-0158_1-1	valid-memsafety	symex	5	SUCCEEDED				1	0.53	136632
+list-ext-properties/test-0158_1-1	valid-memsafety	hybrid	5	SUCCEEDED				1	6.96	341136
+map2check-assert/array_bug	unreach-call	afl	5	FAILED	FALSE	7	__VERIFIER_assert	1	2.16	105528
+map2check-assert/array_bug	unreach-call	symex	5	FAILED	FALSE	7	__VERIFIER_assert	1	0.51	136496
+map2check-assert/array_bug	unreach-call	hybrid	5	FAILED	FALSE	7	__VERIFIER_assert	1	2.17	105556
+map2check-assert/byte_add_bug	unreach-call	afl	5	UNKNOWN				0	11.05	341040
+map2check-assert/byte_add_bug	unreach-call	symex	5	SUCCEEDED				1	0.47	129628
+map2check-assert/byte_add_bug	unreach-call	hybrid	5	SUCCEEDED				1	6.64	341312
+map2check-assert/check_if_bug	unreach-call	afl	5	UNKNOWN				0	1.98	105308
+map2check-assert/check_if_bug	unreach-call	symex	5	UNKNOWN				0	31.99	187904
+map2check-assert/check_if_bug	unreach-call	hybrid	5	UNKNOWN				0	37.67	171268
+map2check-assert/ex01_false	unreach-call	afl	5	FAILED	FALSE	5	__VERIFIER_assert	1	2.13	105828
+map2check-assert/ex01_false	unreach-call	symex	5	FAILED	FALSE	5	__VERIFIER_assert	1	1.75	146332
+map2check-assert/ex01_false	unreach-call	hybrid	5	FAILED	FALSE	5	__VERIFIER_assert	1	2.12	105880
+map2check-assert/ex02_false	unreach-call	afl	5	UNKNOWN				0	1.99	105784
+map2check-assert/ex02_false	unreach-call	symex	5	UNKNOWN				0	31.56	226364
+map2check-assert/ex02_false	unreach-call	hybrid	5	UNKNOWN				0	37.17	214116
+memory-alloca/c.03-alloca-2	valid-memsafety	afl	5	UNKNOWN				0	11.32	107840
+memory-alloca/c.03-alloca-2	valid-memsafety	symex	5	UNKNOWN				0	31.88	172000
+memory-alloca/c.03-alloca-2	valid-memsafety	hybrid	5	UNKNOWN				0	40.96	189452
+memsafety-ext/dll_extends_pointer	valid-memsafety	afl	5	UNKNOWN				0	11.34	341312
+memsafety-ext/dll_extends_pointer	valid-memsafety	symex	5	UNKNOWN				0	31.65	178568
+memsafety-ext/dll_extends_pointer	valid-memsafety	hybrid	5	UNKNOWN				0	40.20	341640
+memsafety-ext/tree_stack	valid-memsafety	afl	5	UNKNOWN				0	11.35	357808
+memsafety-ext/tree_stack	valid-memsafety	symex	5	UNKNOWN				0	31.99	238772
+memsafety-ext/tree_stack	valid-memsafety	hybrid	5	UNKNOWN				0	40.76	357712
+memsafety-ext2/length_test03-1	valid-memsafety	afl	5	UNKNOWN				0	11.35	341288
+memsafety-ext2/length_test03-1	valid-memsafety	symex	5	UNKNOWN				0	31.48	145588
+memsafety-ext2/length_test03-1	valid-memsafety	hybrid	5	UNKNOWN				0	39.13	341520
+memsafety-ext2/split_list_test05-1	valid-memsafety	afl	5	FAILED	FALSE-DEREF	540	containsHead	1	2.50	109120
+memsafety-ext2/split_list_test05-1	valid-memsafety	symex	5	UNKNOWN				0	32.69	411436
+memsafety-ext2/split_list_test05-1	valid-memsafety	hybrid	5	FAILED	FALSE-DEREF	540	containsHead	1	2.51	108176
+memsafety/960521-1-1	valid-memsafety	afl	5	FAILED	FALSE-FREE	532	main	1	2.48	107784
+memsafety/960521-1-1	valid-memsafety	symex	5	FAILED	FALSE-FREE	532	main	1	0.59	130084
+memsafety/960521-1-1	valid-memsafety	hybrid	5	FAILED	FALSE-FREE	532	main	1	2.47	107240
+memsafety/960521-1-2	valid-memsafety	afl	5	UNKNOWN				0	11.35	107584
+memsafety/960521-1-2	valid-memsafety	symex	5	SUCCEEDED				1	16.09	130192
+memsafety/960521-1-2	valid-memsafety	hybrid	5	UNKNOWN				0	38.73	130720
+memsafety/960521-1-3	valid-memsafety	afl	5	FAILED	FALSE-DEREF	529	main	1	2.45	108516
+memsafety/960521-1-3	valid-memsafety	symex	5	FAILED	FALSE-DEREF	529	main	1	0.57	130172
+memsafety/960521-1-3	valid-memsafety	hybrid	5	FAILED	FALSE-DEREF	529	main	1	2.46	108584
+memsafety/test-0102-1	valid-memsafety	afl	5	UNKNOWN				0	11.38	341416
+memsafety/test-0102-1	valid-memsafety	symex	5	UNKNOWN				0	31.54	166604
+memsafety/test-0102-1	valid-memsafety	hybrid	5	UNKNOWN				0	39.97	341428

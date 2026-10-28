@@ -1,0 +1,30 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# D7 spike (Task 1.1): Rust core of the drop-in runtime, built with rustc
+# 1.72.1 (LLVM 16) as one fat-LTO bitcode module -> Map2CheckFunctions.bc.
+# Prototype only: implements what the link-smoke program reaches, stubs the rest.
+[package]
+name = "d7-core"
+version = "0.0.0"
+edition = "2021"
+rust-version = "1.72"
+publish = false
+
+[lib]
+name = "d7core"
+crate-type = ["staticlib"]
+path = "src/lib.rs"
+
+[features]
+# Strategy A as written in the plan: generator logic in the core, klee_* and
+# the AFL reject hook referenced from Rust and turned extern_weak afterwards,
+# selection by a strong global in the generator .ll over a weak default.
+a_literal = []
+
+[profile.release]
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+panic = "abort"
+debug = false
+
+[workspace]

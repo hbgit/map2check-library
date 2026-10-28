@@ -7,17 +7,23 @@
 pub mod legacy_files;
 pub(crate) mod termination;
 
+// The JSON channel is host-only: the drop-in core has none (see
+// `print_report_unless_mode_set` below) and is built without serde.
+#[cfg(not(feature = "dropin"))]
 use serde::Serialize;
 
+#[cfg(not(feature = "dropin"))]
 use crate::{caller::ViolatedProperty, error::Map2CheckError, state::AnalysisState};
 
 /// Top-level JSON output structure.
 /// Schema matches what Map2Check tool expects from the library.
+#[cfg(not(feature = "dropin"))]
 #[derive(Serialize)]
 struct Map2CheckLog<'a> {
     map2check_log: LogBody<'a>,
 }
 
+#[cfg(not(feature = "dropin"))]
 #[derive(Serialize)]
 struct LogBody<'a> {
     result: &'static str,
@@ -41,6 +47,7 @@ struct LogBody<'a> {
 
 /// Serialize the complete analysis state to a JSON string.
 /// Replaces `print_all_containers_as_json()` in caller_lib_result.c.
+#[cfg(not(feature = "dropin"))]
 pub fn to_json(state: &AnalysisState) -> Result<String, Map2CheckError> {
     let result = &state.result;
     let is_mem_violation = matches!(
@@ -79,25 +86,15 @@ pub fn to_json(state: &AnalysisState) -> Result<String, Map2CheckError> {
     serde_json::to_string_pretty(&log).map_err(Map2CheckError::from)
 }
 
-/// Makes the state safe to format, right before a report or a log file is
-/// written from it. Under KLEE (feature `klee`) values the program made
-/// symbolic are replaced by concrete values of the current path, so that
-/// formatting them does not fork KLEE (D1 condition 7); elsewhere it does
-/// nothing.
-pub(crate) fn prepare_for_output(state: &mut AnalysisState) {
-    #[cfg(feature = "klee")]
-    crate::nondet::klee::concretize(state);
-    #[cfg(not(feature = "klee"))]
-    let _ = state;
-}
-
 /// Print the JSON report to stdout, as the C library did. A failed write
 /// (closed stdout, EPIPE) is reported on stderr instead of panicking.
+#[cfg(not(feature = "dropin"))]
 pub fn print_json(state: &AnalysisState) -> Result<(), Map2CheckError> {
     write_report(&to_json(state)?);
     Ok(())
 }
 
+#[cfg(not(feature = "dropin"))]
 fn write_report(json: &str) {
     use std::io::Write as _;
     if let Err(e) = writeln!(std::io::stdout().lock(), "{json}") {
@@ -110,18 +107,25 @@ fn write_report(json: &str) {
 /// and keeps the analysed program's stdout clean, as develop does. The
 /// report is serialised under the state lock and written after the lock is
 /// released, so stdout can never affect the state or the verdict.
+#[cfg(not(feature = "dropin"))]
 pub fn print_report_unless_mode_set() {
     if crate::state::config().mode.is_some() {
         return;
     }
-    match crate::state::with_state(|s| {
-        prepare_for_output(s);
-        to_json(s)
-    }) {
+    match crate::state::with_state(|s| to_json(s)) {
         Ok(json) => write_report(&json),
         Err(e) => eprintln!("[map2check] error: {e}"),
     }
 }
+
+/// The drop-in core (feature `dropin`) has no JSON channel, as the C runtime
+/// has none: there `map2check_init` runs the `analysis_init` of the linked
+/// mode module, which always selects a mode, so the channel above could
+/// never print. Compiled out, the JSON serialiser is not in
+/// `Map2CheckFunctions.bc`; its float formatting carried a `freeze`, which
+/// KLEE 3.1 cannot execute (scripts/runtime-ir/check_no_freeze.py).
+#[cfg(feature = "dropin")]
+pub fn print_report_unless_mode_set() {}
 
 #[cfg(test)]
 mod tests {
