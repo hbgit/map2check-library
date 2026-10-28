@@ -4,11 +4,14 @@ This guide covers what a Map2Check maintainer or a C program needs to use
 the Rust `map2check-library` **2.0.0-rc.1**: what the release ships, how to
 install the 21 bitcode modules in place of the C runtime's, the Map2Check
 commit they were validated against, how to reproduce the validation, and how
-to link the C ABI by hand. Compatibility details are in
+to link the C ABI by hand. Paths of the form `map2check-library: <path>` and the `scripts/` and
+`docs/cutover/` files named below are in the source repository, not in the
+release archive, which ships only this guide, `api-deltas.md` and
+`semantic-deltas.md` under `docs/`. Compatibility details are in
 [`api-deltas.md`](api-deltas.md) (symbols and signatures) and
 [`semantic-deltas.md`](semantic-deltas.md) (behaviour). The steps a
 maintainer would take to adopt the package are suggested in
-[`cutover/handoff-map2check.md`](cutover/handoff-map2check.md).
+`map2check-library: docs/cutover/handoff-map2check.md`.
 
 **What the library is (D6, 2.0.0).** The library exports the C runtime ABI of
 Map2Check `develop`: the names its core modules own and the `__m2c_rt_*`
@@ -25,7 +28,7 @@ that Rust API.
 ## Release contents
 
 A release archive `map2check-library-<version>-<target>.tar.gz` (see
-[`release.md`](release.md)) unpacks to:
+`map2check-library: docs/release.md`) unpacks to:
 
 ```
 map2check-library-<version>-<target>/
@@ -50,7 +53,7 @@ The 21 modules are listed in `scripts/runtime-modules.txt` (`Map2CheckFunctions`
 `NonDetGeneratorKlee`, `NonDetGeneratorAFL`, `WasmRuntimeStubs`,
 `WitnessGeneration`, `WitnessGenerationNone`), each as `<Module>.bc`. The
 layout and the reasons for it are in
-[`cutover/d7-layout.md`](cutover/d7-layout.md).
+`map2check-library: docs/cutover/d7-layout.md`.
 
 ## Validated Map2Check commit
 
@@ -103,8 +106,8 @@ runs per side), with `scripts/it/compare_baselines.py`. Both finished with
 
 | Gate | Map2Check `develop` | Report | Baseline |
 |---|---|---|---|
-| 1 (2026-10-27, accepted 2026-10-28) | `3e914528ec57` | [`cutover/gate-2026-10-27.md`](cutover/gate-2026-10-27.md) | `docs/cutover/baselines/c-3e914528ec57.tsv` |
-| 2 (2026-10-28) | `0bca42eb89d1` | [`cutover/gate-2026-10-28.md`](cutover/gate-2026-10-28.md) | `docs/cutover/baselines/c-0bca42eb89d1.tsv` |
+| 1 (2026-10-27, accepted 2026-10-28) | `3e914528ec57` | `map2check-library: docs/cutover/gate-2026-10-27.md` | `docs/cutover/baselines/c-3e914528ec57.tsv` |
+| 2 (2026-10-28) | `0bca42eb89d1` | `map2check-library: docs/cutover/gate-2026-10-28.md` | `docs/cutover/baselines/c-0bca42eb89d1.tsv` |
 
 The reports hold the exact comparator commands and outputs; this is the
 second gate's:
@@ -137,7 +140,7 @@ an `SD-NN` of [`semantic-deltas.md`](semantic-deltas.md)), the median wall
 time of the drop-in at most 1.10 times the C's, the median peak memory
 at most 1.36 times, and no new timeouts. For `afl` and `hybrid` the wall time
 discounts up to 2.0 s of fixed compile time per run (the approved allowance
-in [`cutover/decisoes.md`](cutover/decisoes.md); it is not an SD): the drop-in
+in `map2check-library: docs/cutover/decisoes.md`; it is not an SD): the drop-in
 core is compiled with the program, and the median stays below the limit with
 it (0.905 on the second gate; 1.192 without it). The deviations that the
 gates accepted are SD-20, SD-24, SD-25 and SD-26.

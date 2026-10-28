@@ -42,19 +42,19 @@ corpus tasks the drop-in answers differently from the C runtime.
    `SHA256SUMS`. Keeping the option off keeps today's build.
 2. **Version pin.** Record the `map2check-library` release (tag and the
    archive's `SHA256SUMS`) the install uses, the way `MAP2CHECK_VERSION` pins
-   the Map2Check commit on our side. The package's `MAP2CHECK_VERSION` file
+   the Map2Check commit in `map2check-library`. The package's `MAP2CHECK_VERSION` file
    says which `develop` commit it was validated on.
 3. **CI.** A job that installs the package over a normal build and runs the
    regression corpus would catch a future runtime change early. The corpus
    and the comparator we used are `scripts/it/run-corpus.sh` and
-   `scripts/it/compare_baselines.py` in this repository, as an example.
+   `scripts/it/compare_baselines.py` in `map2check-library`, as an example.
 4. **Removing the C runtime.** Only after the option has run for a release
    cycle without unexplained differences, the C sources of the 21 modules
    could be dropped and the Rust package become the only runtime. Until then,
    keeping both allows going back by copying the C `.bc` files back.
 5. **Docker images.** The images that build Map2Check need no Rust toolchain
    to use the package, since it ships the `.bc` files. A Rust toolchain
-   (rustc 1.72.1 with LLVM 16 tools) is needed only to rebuild them with
+   (rustc 1.72.1 with LLVM 16 tools, the bitcode toolchain of `build-runtime-bc.sh`, distinct from the toolchain pinned in `rust-toolchain.toml`) is needed only to rebuild them with
    `scripts/build-runtime-bc.sh`.
 
 ## What could change for users
