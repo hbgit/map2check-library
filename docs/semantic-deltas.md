@@ -833,7 +833,11 @@ with develop's `fopen("w")` (within one process the first violation is
 final and aborts, SD-03, so two violations only meet across KLEE states).
 The `map2check_property_<prp>` files, `map2check_checked_error` and
 `klee_log.csv` are written only on a violation and are unaffected;
-`track_bb_log.st` carries no verdict and keeps the last writer. Plain mode
+`track_bb_log.st` carries no verdict and keeps the last writer. A KLEE
+state killed (timer, memory cap) between creating its temporary file and
+the rename or unlink can leave a `.<name>.<pid>.<n>.tmp` file in the
+scratch directory; the frontend reads only the fixed names, so the verdict
+is unaffected. Plain mode
 (AFL++, `none`) and the staticlib are unchanged: a `NONE` replaces whatever
 was there. Observable difference from the C under `symex`: a program that
 writes a violation and later `NONE` in the same path (only through direct

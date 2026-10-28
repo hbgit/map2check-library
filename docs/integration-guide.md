@@ -208,6 +208,16 @@ modules make the calls; a program that links the runtime by hand follows it:
 
 1. `map2check_init(0)` once, before any other call (the argument is the C
    runtime's `isSvComp`, ignored).
+
+   1b. Then `analysis_init()` of the linked analysis mode module and
+   `nondet_init()` of the linked generator module, in that order. The
+   `Map2CheckFunctions.bc` core of a Map2Check install makes these two
+   calls inside `map2check_init`, as the C runtime does; the staticlib
+   `libmap2check.a` does not, because it cannot reference names that only
+   the IR modules define. Without them the staticlib runs with the mode
+   unset: it writes no `map2check_property*` file, never aborts on a
+   violation, and prints the JSON report at exit. `tests/ffi_harness.c`
+   calls the mode's init for this reason.
 2. `map2check_track_bb` and the `map2check_nondet_<t>` calls as the program
    runs, and the check calls of the analysis mode module linked (the names
    of the C runtime, defined by the IR modules; `api-deltas.md` lists

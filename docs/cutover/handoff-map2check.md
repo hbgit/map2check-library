@@ -32,6 +32,24 @@ approved compile-time allowance for `afl` and `hybrid` is in
 [`decisoes.md`](decisoes.md). Please read those before deciding: on some
 corpus tasks the drop-in answers differently from the C runtime.
 
+**What the gates did not exercise.** The gate corpus has no `no-overflow`
+task, `scripts/it/run-corpus.sh` skips the `coverage-*` properties, and no
+gate run used `--btree` or `--wasm`. These modes were never compared end to
+end through the frontend. They are covered by less direct evidence:
+
+- `--check-overflow`, `--cover-branches` and wasm:
+  `scripts/runtime-ir/test-klee-generator.sh` runs `unsafe-overflow.c`, the
+  cover-branches mode and a wasm program under KLEE in the Map2Check image,
+  against the C runtime;
+- `--btree` and `--wasm`: the link matrix
+  (`scripts/it/check-link-matrix.sh`, both containers, with and without
+  `WasmRuntimeStubs`) links and runs every combination;
+- the OVERFLOW result files: the legacy goldens
+  (`tests/legacy_golden/OVERFLOW/`).
+
+Users of `--check-overflow` rely on this less direct evidence. A later gate
+could add an overflow task and a `--btree` pass.
+
 ## Possible changes in Map2Check
 
 1. **Build.** The C sources under `modules/backend/library/lib/` are compiled
