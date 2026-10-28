@@ -54,11 +54,18 @@ for m in $MODULES; do [ -f "$BC_DIR/$m.bc" ] || die "$BC_DIR/$m.bc não é arqui
 mkdir -p "$STAGE/$NAME/include" "$STAGE/$NAME/lib" "$STAGE/$NAME/docs"
 
 cd "$ROOT"
-cargo build --release
-cp target/release/libmap2check.a "$STAGE/$NAME/lib/libmap2check.a"
+# The staticlibs embed source paths (panic locations, debug info): remap the
+# repository and the cargo registry to fixed prefixes, so the tarball does
+# not depend on (or leak) the builder's home directory and checkout path.
+# Own target directory: the RUSTFLAGS would otherwise rebuild target/release.
+CARGO_HOME_DIR="${CARGO_HOME:-$HOME/.cargo}"
+export RUSTFLAGS="--remap-path-prefix=$ROOT=/src --remap-path-prefix=$CARGO_HOME_DIR/registry/src=/cargo/registry/src --remap-path-prefix=$CARGO_HOME_DIR/git/checkouts=/cargo/git/checkouts"
+export CARGO_TARGET_DIR="$ROOT/target/package-release"
+cargo build --locked --release
+cp "$CARGO_TARGET_DIR/release/libmap2check.a" "$STAGE/$NAME/lib/libmap2check.a"
 # Runtime profile (panic = unwind) with the wasm2c entry points.
-cargo build --profile runtime --features wasm
-cp target/runtime/libmap2check.a "$STAGE/$NAME/lib/libmap2check_runtime.a"
+cargo build --locked --profile runtime --features wasm
+cp "$CARGO_TARGET_DIR/runtime/libmap2check.a" "$STAGE/$NAME/lib/libmap2check_runtime.a"
 cp include/map2check.h "$STAGE/$NAME/include/"
 for m in $MODULES; do cp "$BC_DIR/$m.bc" "$STAGE/$NAME/lib/$m.bc"; done
 cp "$M2C_VERSION_FILE" "$STAGE/$NAME/MAP2CHECK_VERSION"
@@ -67,7 +74,8 @@ grep -qxF "#define MAP2CHECK_VERSION \"$VERSION\"" "$STAGE/$NAME/include/map2che
   || die "include/map2check.h não define MAP2CHECK_VERSION \"$VERSION\""
 
 cp docs/integration-guide.md docs/api-deltas.md docs/semantic-deltas.md "$STAGE/$NAME/docs/"
-cp CHANGELOG.md LICENSE "$STAGE/$NAME/"
+cp "$CHANGELOG_FILE" "$STAGE/$NAME/CHANGELOG.md"
+cp LICENSE "$STAGE/$NAME/"
 
 # SHA256SUMS interno: todos os outros arquivos, em ordem fixa, caminhos relativos.
 find "$STAGE/$NAME" -type d -exec chmod 755 {} +

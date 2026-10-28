@@ -107,6 +107,17 @@ if [ "$h1" = "$h2" ]; then ok "reprodutível: $h1"; else bad "não reprodutível
 
 # As duas bibliotecas exportam exatamente o ABI C do runtime (D6, 2.0.0).
 # A saída do nm vai para variáveis: `nm | grep -q` com pipefail falha por SIGPIPE.
+# Sem caminhos do host nas bibliotecas (--remap-path-prefix): nem o diretório
+# do repositório nem o home de quem construiu (o registro do cargo).
+for a in libmap2check.a libmap2check_runtime.a; do
+  leaks="$(strings -a "$P/lib/$a" | grep -cF -e "$ROOT" -e "${CARGO_HOME:-$HOME/.cargo}" -e "$HOME/" || true)"
+  if [ "$leaks" = 0 ]; then ok "$a sem caminhos do host"; else bad "$a tem $leaks strings com caminhos do host"; fi
+done
+
+# CHANGELOG_FILE: o arquivo verificado é o arquivo empacotado
+{ printf '# Changelog\n\n## [%s] - 2000-01-01\n\nmarcador-changelog-file\n' "$VERSION"; } > "$TMP/CHANGELOG.override.md"
+CHANGELOG_FILE="$TMP/CHANGELOG.override.md" "$PKG" "$TMP/dist-cl" >/dev/null
+if tar -xzOf "$TMP/dist-cl/$NAME.tar.gz" "$NAME/CHANGELOG.md" | cmp -s - "$TMP/CHANGELOG.override.md"; then ok "empacota o CHANGELOG_FILE verificado"; else bad "CHANGELOG_FILE verificado não é o empacotado"; fi
 if "$ROOT/scripts/check-export-set.sh" --without-wasm --lib "$P/lib/libmap2check.a" >/dev/null; then ok "libmap2check.a exporta só o ABI C do runtime"; else bad "libmap2check.a: exports fora do ABI C"; fi
 if "$ROOT/scripts/check-export-set.sh" --lib "$P/lib/libmap2check_runtime.a" >/dev/null; then ok "libmap2check_runtime.a exporta só o ABI C do runtime"; else bad "libmap2check_runtime.a: exports fora do ABI C"; fi
 rt_syms="$(nm -g --defined-only "$P/lib/libmap2check_runtime.a" 2>/dev/null)"
