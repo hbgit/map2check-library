@@ -781,6 +781,20 @@ Effects in gate run 1 (task 4.2), deterministic in 5 of 5 C reps:
   file exists, but it parses line 0 and an empty function. C under `afl`
   reports `533 main` for the same task, and so does Rust under `symex`.
 
+**Drop-in gate of 2026-10-27 (Task 4.1, `docs/cutover/gate-2026-10-27.md`;
+approved by the user on 2026-10-28):** the race shows on four keys, each
+deterministic in 5 of 5 C reps, and each has a row in
+`docs/cutover/deltas-aceitos.tsv`:
+- `list-ext-properties/simple-ext` and `map2check-assert/ex01_false`,
+  `unreach-call`/`symex`: verdict UNKNOWN in C, FAILED in the drop-in;
+- `list-ext-properties/list-ext`, `unreach-call`/`symex`: verdict UNKNOWN
+  in C, FAILED in the drop-in. With `--debug` the C run leaves
+  `test000001.abort.err` in `klee-out-0`, a 12-byte
+  `map2check_checked_error` and a 0-byte `map2check_property`;
+- `list-ext-properties/960521-1_1-1`, `valid-memsafety`/`symex`: FALSE-DEREF
+  on both sides, line `0` and an empty function in C, `533 main` in the
+  drop-in.
+
 The Rust library had the same race before `6b49b82` (task 3.3, "Cause B").
 
 **Scope in the drop-in runtime (approved by the user on 2026-10-27, Task
@@ -981,3 +995,112 @@ analysis_init();
 map2check_free_resolved_address(NULL, 1, "main", 0); /* Rust: nothing; develop: SIGSEGV */
 map2check_success();                                  /* Rust: NONE */
 ```
+
+### SD-24 — A `void main` runs to its end under KLEE
+
+**Classification:** intentional
+**Tests:** `tests/gate_deltas.rs::sd24_klee_generator_main_is_not_optnone`, `tests/gate_deltas.rs::sd24_gate_rows_name_the_void_main_keys`
+
+The user approved this on 2026-10-28 (Task 4.1, first drop-in gate,
+`docs/cutover/gate-2026-10-27.md`).
+
+**Rust:** the `main` of the generated `NonDetGeneratorKlee.bc`
+(`scripts/runtime-ir/gen_ll.py`) calls `i32 @__map2check_main__(i32, ptr)`,
+as `NonDetGeneratorKlee.c:18` does, and carries no attributes. When the
+program declares `void main(void)`, the return types do not match, and
+KLEE's `--optimize` folds the call to `tail call void
+@__map2check_main__()` / `ret i32 poison`. The path runs to its end, and the
+run gives the verdict of the analysis.
+
+**C runtime of Map2Check `develop`:** `NonDetGeneratorKlee.c` is compiled at
+`-O0`, so its `main` is `optnone`. KLEE's `assembly.ll` keeps
+`%8 = call i32 @__map2check_main__(...)` / `ret i32 %8`. KLEE stops the path
+with `KLEE: ERROR: ...: return void when caller expected a result` and
+writes a `.exec.err`. The frontend reports "KLEE terminated states early"
+and then UNKNOWN.
+
+**Effect in the gate:** `ldv-memsafety/memleaks_test10-2` and
+`ldv-memsafety/memleaks_test3-2`, `valid-memsafety`, under `symex` and
+`hybrid`: UNKNOWN in C, SUCCEEDED in the drop-in (expected verdict true).
+This is 4 rows in `docs/cutover/deltas-aceitos.tsv`. The verdicts of
+`memleaks_test1-1` and `memleaks_test17_2-1` (also `void main`) are equal,
+but their `symex` runs are shorter: 4.2 → 0.9 s and 19.6 → 1.8 s.
+
+**Reproduce** (`--nondet-generator symex --memtrack`):
+
+```c
+#include <stdlib.h>
+void main(void) {          /* C: KLEE ERROR, UNKNOWN */
+  int *p = malloc(sizeof(int));
+  free(p);                 /* drop-in: SUCCEEDED */
+}
+```
+
+### SD-25 — KLEE completes explorations that the C runtime leaves to the timer
+
+**Classification:** intentional
+**Tests:** `tests/gate_deltas.rs::sd25_gate_rows_name_the_keys_klee_completes`
+
+The user approved this on 2026-10-28 (Task 4.1, first drop-in gate,
+`docs/cutover/gate-2026-10-27.md`).
+
+**Rust:** under KLEE the drop-in runtime costs fewer interpreted
+instructions per check than the C runtime. On some programs KLEE then
+finishes every path within the budget, and the run reports the verdict the
+analysis proves. The checks and their results are the same; only the time
+differs.
+
+**C runtime of Map2Check `develop`:** on the same programs KLEE halts on
+its timer ("KLEE halted on its timer -- not a complete exploration"). The
+frontend reports UNKNOWN.
+
+**Effect in the gate:** each change is from UNKNOWN in C to SUCCEEDED in
+the drop-in, with expected verdict true. The keys, with one representative
+run each:
+
+| task | prp | gen | C | drop-in |
+|---|---|---|---|---|
+| `ldv-memsafety/ArraysOfVariableLength` | `valid-memsafety` | `symex` | 112 M instructions, 0 complete paths, 31 s | 50 M instructions, 1 complete path, 7 s |
+| `ldv-memsafety/ArraysOfVariableLength` | `valid-memsafety` | `hybrid` | KLEE phase on its timer | KLEE phase complete |
+| `memsafety/960521-1-2` | `valid-memsafety` | `symex` | 109 M instructions, 0 complete paths | 95 M instructions, 1 complete path, 16 s |
+| `list-ext-properties/960521-1_1-2` | `valid-memsafety` | `hybrid` | KLEE phase 30 M instructions, 13 partial paths | 5.5 M instructions, 31 complete paths |
+
+These are 4 rows in `docs/cutover/deltas-aceitos.tsv`.
+
+**Reproduce:** `map2check --nondet-generator symex --timeout 45 --memtrack
+ArraysOfVariableLength.c` (sv-benchmarks `ldv-memsafety`) with each
+runtime. Compare `KLEE: done: total instructions` and `completed paths` in
+KLEE's output.
+
+### SD-26 — An uninitialised heap read can fuzz differently under AFL++
+
+**Classification:** intentional
+**Tests:** `tests/gate_deltas.rs::sd26_gate_row_names_the_uninitialised_read_key`
+
+The user approved this on 2026-10-28 (Task 4.1, first drop-in gate,
+`docs/cutover/gate-2026-10-27.md`).
+
+**Rust:** the drop-in runtime allocates through the same `malloc`, but at
+other sizes and times than the C runtime, so the heap of the program under
+analysis has another layout. A program whose result depends on
+uninitialised heap memory can then crash on other inputs. In
+`list-ext-properties/list-ext` (`valid-memsafety`/`afl`), the free loop
+reads `p->n` of a node whose `n` was never written (`while (p->n != 0)`,
+line 558 of `list-ext.i`). Under the drop-in, the seed `A` does not crash.
+AFL++ finds a crashing input by havoc in about 1,600 executions, the
+witness replays it, and the run reports FAILED `FALSE-DEREF` at line 558,
+function `main` (expected verdict false, subproperty `valid-deref`).
+
+**C runtime of Map2Check `develop`:** the seed `A` crashes in AFL++'s dry
+run in persistent mode (sig 06, "We need at least one valid input seed that
+does not crash!"), so the fuzzer aborts. Replayed in a fresh process, the
+same input writes `NONE` and no `map2check_checked_error`. The frontend
+reports "Could not replicate error", then UNKNOWN.
+
+**Effect in the gate:** this one key, UNKNOWN in C and FAILED in the
+drop-in. One row in `docs/cutover/deltas-aceitos.tsv`.
+
+**Reproduce:** `map2check --debug --nondet-generator afl --timeout 45
+--memtrack list-ext.i` (sv-benchmarks `list-ext-properties`) with each
+runtime. Compare `afl-out/default/crashes/`, `map2check_property` and
+`map2check_checked_error` in the kept directory.
