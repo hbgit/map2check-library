@@ -8,8 +8,14 @@ documentation_style = "doxy"
 
 [export]
 prefix = ""
-include = []
-exclude = []
+include = ["ViolatedProperty"]
+exclude = ["ViolatedPropertyRaw"]
 
 [parse]
 parse_deps = false
+
+# `write_property` takes the C enum as its `int` (ViolatedPropertyRaw, so an
+# out-of-range value is defined behaviour); the header keeps the C runtime's
+# parameter type `enum ViolatedProperty`.
+[export.rename]
+"ViolatedPropertyRaw" = "enum ViolatedProperty"

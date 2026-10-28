@@ -804,37 +804,17 @@ fn map2check_error_writes_the_witness_files_and_aborts() {
     }
 }
 
-/// The values `write_property` takes, by the number the parent passes in
-/// `M2C_PROPERTY` (the C value of `enum ViolatedProperty`).
-fn property_by_c_value(value: i32) -> crate::caller::ViolatedProperty {
-    use crate::caller::ViolatedProperty as P;
-    [
-        P::None,
-        P::Unknown,
-        P::MemsafetyFree,
-        P::MemsafetyDeref,
-        P::MemsafetyMemtrack,
-        P::Reachability,
-        P::Overflow,
-        P::Assert,
-        P::MemsafetyMemcleanup,
-        P::DivByZero,
-        P::Concurrency,
-    ]
-    .into_iter()
-    .find(|p| *p as i32 == value)
-    .unwrap()
-}
-
 #[test]
 fn property_file_child() {
     if is_child() {
         println!("{STARTED}");
         let value: i32 = std::env::var("M2C_PROPERTY").unwrap().parse().unwrap();
         let line: i32 = std::env::var("M2C_LINE").unwrap().parse().unwrap();
-        // No mode, no init: `write_property` writes whatever the state.
+        // No mode, no init: `write_property` writes whatever the state. The
+        // value is passed as the C `int` of `enum ViolatedProperty`, in or
+        // out of range.
         // SAFETY: C-string literal is valid.
-        unsafe { write_property(property_by_c_value(value), line, c"main".as_ptr()) };
+        unsafe { write_property(value, line, c"main".as_ptr()) };
         println!("{RETURNED}");
     }
 }
@@ -847,7 +827,8 @@ type ExpectedFiles = Vec<(&'static str, String)>;
 /// `fprintf` format strings of `:50-106` for `map2check_property` and of the
 /// `write_property_<x>` helper each case calls (`:24-48`, `:108-130`) for
 /// `map2check_property_<prp>`, with `Line: %d` and `Function: %s`. A value
-/// outside the C switch (`Concurrency`, 10) leaves `map2check_property`
+/// outside the C switch (`Concurrency`, 10, or any `int` that is no
+/// enumerator, such as 11, -1 or `INT_MAX`) leaves `map2check_property`
 /// opened with `"w"` and closed: an empty file.
 #[test]
 fn property_file_matches_c_format() {
@@ -925,6 +906,11 @@ fn property_file_matches_c_format() {
         ),
         // no case of the switch
         (10, 42, vec![("map2check_property", String::new())]),
+        // out of the enum: no case of the switch either, and defined
+        // behaviour (the export takes the `int`)
+        (11, 42, vec![("map2check_property", String::new())]),
+        (-1, 42, vec![("map2check_property", String::new())]),
+        (i32::MAX, 42, vec![("map2check_property", String::new())]),
     ];
     for (value, line, expected) in cases {
         let dir = tempfile::tempdir().unwrap();
@@ -950,6 +936,34 @@ fn property_file_matches_c_format() {
                 "valor {value}: {name}"
             );
         }
+    }
+}
+
+#[test]
+fn property_file_non_utf8_child() {
+    if is_child() {
+        println!("{STARTED}");
+        // SAFETY: C-string literal is valid and null-terminated.
+        unsafe { write_property(7, 3, c"f\xffo".as_ptr()) };
+        println!("{RETURNED}");
+    }
+}
+
+/// A function name that is not valid UTF-8 still reaches the property
+/// files (develop prints it with `%s`); the invalid byte becomes U+FFFD
+/// instead of the whole name becoming empty.
+#[test]
+fn property_file_keeps_a_non_utf8_function_name() {
+    let dir = tempfile::tempdir().unwrap();
+    let output = run_child("property_file_non_utf8_child", dir.path());
+    assert_eq!(output.status.code(), Some(0));
+    let expected = "ASSERT\nLine: 3\nFunction: f\u{FFFD}o\n".as_bytes();
+    for name in ["map2check_property", "map2check_property_assert"] {
+        assert_eq!(
+            std::fs::read(dir.path().join(name)).unwrap(),
+            expected,
+            "{name}"
+        );
     }
 }
 

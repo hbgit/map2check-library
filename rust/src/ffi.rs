@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-only
 //
 // FFI boundary: #[unsafe(no_mangle)] extern "C" functions that Map2Check's LLVM Pass calls.
-// This is the ONLY module that contains unsafe code.
+// With `sys.rs` (the C library calls of the result channel) and `wasm.rs`,
+// one of the only modules that contain unsafe code (test modules aside).
 // Every unsafe block is annotated with a SAFETY comment.
 //
 // The C ABI (D6, 2.0.0): the `#[no_mangle]` functions here are exactly the
@@ -14,6 +15,7 @@
 // exported, kept as Rust functions because the Rust tests drive the core
 // through them.
 
+use std::borrow::Cow;
 use std::ffi::CStr;
 
 // Importações desmembradas para evitar bugs do cbindgen
@@ -56,17 +58,20 @@ use crate::state;
 
 // — Helpers —————————————————————————————————————————————————————————————————
 
-/// Convert a raw C string to &str, returning "" on null or invalid UTF-8.
+/// Convert a raw C string to text, `""` on null. Valid UTF-8 is borrowed
+/// unchanged; invalid UTF-8 keeps its valid parts and has each invalid
+/// sequence replaced by U+FFFD, so a name develop prints with `%s` is never
+/// dropped (the memory paths keep the raw bytes with [`c_bytes`]).
 ///
 /// # Safety
 /// `ptr` must be null or point to a valid, null-terminated C string that
 /// remains valid for the duration of the call.
-unsafe fn c_str<'a>(ptr: *const std::os::raw::c_char) -> &'a str {
+unsafe fn c_str<'a>(ptr: *const std::os::raw::c_char) -> Cow<'a, str> {
     if ptr.is_null() {
-        return "";
+        return Cow::Borrowed("");
     }
     // SAFETY: caller guarantees ptr is a valid null-terminated C string.
-    unsafe { CStr::from_ptr(ptr) }.to_str().unwrap_or("")
+    unsafe { CStr::from_ptr(ptr) }.to_string_lossy()
 }
 
 // A assinatura foi encurtada porque importamos o Map2CheckError ali em cima
@@ -114,6 +119,12 @@ fn run_vcc_check(checker: impl VccChecker, ctx: &VccContext, line: u32, fname: &
 fn check_active(check: Check) -> bool {
     mode::check_enabled(state::config().mode, check)
 }
+
+/// A C `enum ViolatedProperty` received by value as its `int`, so any value
+/// a C caller passes is defined behaviour. `cbindgen.toml` excludes this
+/// alias and renames it, so the header keeps the parameter type `enum
+/// ViolatedProperty` of the C runtime.
+pub type ViolatedPropertyRaw = std::os::raw::c_int;
 
 /// The C value of `enum ViolatedProperty` (`Map2CheckTypes.h:80-91`), the
 /// discriminant of [`ViolatedProperty`]; 10 is `Concurrency`.
@@ -315,7 +326,7 @@ pub unsafe extern "C" fn set_false_result(
                 return;
             };
             // SAFETY: caller guarantees function_name is a valid C string or null.
-            let fname = unsafe { c_str(function_name) };
+            let fname: &str = &unsafe { c_str(function_name) };
             record_violation(property, line_number as u32, fname, false);
         },
         (),
@@ -463,7 +474,7 @@ pub(crate) unsafe fn mark_target_reached(
     line: i32,
 ) {
     // SAFETY: caller guarantees func is a valid C string or null.
-    let fname = unsafe { c_str(func) };
+    let fname: &str = &unsafe { c_str(func) };
     record_violation(ViolatedProperty::Reachability, line as u32, fname, false);
 }
 
@@ -534,7 +545,7 @@ pub unsafe extern "C" fn map2check_track_bb(
     ffi_guard(
         || {
             // SAFETY: caller guarantees function_name is a valid C string or null.
-            let fname = unsafe { c_str(function_name) };
+            let fname: &str = &unsafe { c_str(function_name) };
             if let Err(e) = state::with_state(|s| {
                 if !crate::bbtrack::is_in_tracked(line, &s.bbtrack) {
                     let step = s.next_step();
@@ -631,20 +642,26 @@ pub extern "C" fn map2check_destroy() {
 /// not record a violation or end the run. `Concurrency`, outside the C
 /// switch, leaves `map2check_property` empty.
 ///
+/// `violated` is taken as a C `int` ([`ViolatedPropertyRaw`], `enum
+/// ViolatedProperty` in the header), so a value outside the enum is not
+/// undefined behaviour: like a value with no case in the C switch, it leaves
+/// `map2check_property` empty.
+///
 /// # Safety
-/// `violated` must be one of the `ViolatedProperty` values (C `NONE` 0 to
-/// `FALSE_DIVBYZERO` 9, or 10); `function_name` must be null or a valid
-/// null-terminated C string.
+/// `function_name` must be null or a valid null-terminated C string.
 #[no_mangle]
 pub unsafe extern "C" fn write_property(
-    violated: ViolatedProperty,
+    violated: ViolatedPropertyRaw,
     line: std::os::raw::c_int,
     function_name: *const std::os::raw::c_char,
 ) {
     ffi_guard(
         || {
+            // No case in the C switch: empty text, as for `Concurrency`.
+            let violated =
+                violated_property_from_raw(violated).unwrap_or(ViolatedProperty::Concurrency);
             // SAFETY: caller guarantees function_name is a valid C string or null.
-            let fname = unsafe { c_str(function_name) };
+            let fname: &str = &unsafe { c_str(function_name) };
             termination::write_property(violated, line, fname);
         },
         (),
@@ -737,7 +754,7 @@ unsafe fn rt_overflow_signed(
     };
     if let Some(property) = checker.violation() {
         // SAFETY: caller guarantees function_name is valid or null.
-        let fname = unsafe { c_str(function_name) };
+        let fname: &str = &unsafe { c_str(function_name) };
         record_violation(property, line, fname, false);
     }
 }
@@ -793,7 +810,7 @@ pub unsafe extern "C" fn __m2c_rt_overflow_overflowError(
     ffi_guard(
         || {
             // SAFETY: caller guarantees function_name is valid or null.
-            let fname = unsafe { c_str(function_name) };
+            let fname: &str = &unsafe { c_str(function_name) };
             record_violation(ViolatedProperty::Overflow, line, fname, false);
         },
         (),
@@ -1051,7 +1068,7 @@ pub unsafe extern "C" fn __m2c_rt_assert_map2check_assert(
     ffi_guard(
         || {
             // SAFETY: caller guarantees func_name is a valid C string or null.
-            let fname = unsafe { c_str(func_name) };
+            let fname: &str = &unsafe { c_str(func_name) };
             let ctx = VccContext::new(line as u32, 0, fname);
             match (AssertChecker {
                 expression: condition,
@@ -1209,7 +1226,7 @@ unsafe fn rt_mem_check_deref(
 ) {
     if with_c_memory(false, |m, _| m.check_deref(mode)) {
         // SAFETY: caller contract.
-        let fname = unsafe { c_str(function_name) };
+        let fname: &str = &unsafe { c_str(function_name) };
         // The result keeps lines as u32; the C `int` is stored as its bit
         // pattern and the property files print it back with `%d`
         // (`write_property_files`: `line as i32`), so a negative line reads
@@ -1235,7 +1252,7 @@ unsafe fn rt_mem_free_resolved_address(
     });
     if outcome == FreeOutcome::InvalidFree {
         // SAFETY: caller contract.
-        let fname = unsafe { c_str(function_name) };
+        let fname: &str = &unsafe { c_str(function_name) };
         record_violation(ViolatedProperty::MemsafetyFree, line, fname, false);
     }
 }
@@ -1327,7 +1344,7 @@ unsafe fn rt_mem_free(
     });
     if outcome == FreeOutcome::InvalidFree {
         // SAFETY: caller contract.
-        let fname = unsafe { c_str(function_name) };
+        let fname: &str = &unsafe { c_str(function_name) };
         record_violation(ViolatedProperty::MemsafetyFree, line, fname, false);
     }
 }
@@ -2645,7 +2662,7 @@ macro_rules! nondet_ffi {
             ffi_guard(
                 || {
                     // SAFETY: caller guarantees function_name is a valid C string or null.
-                    let fname = unsafe { c_str(function_name) };
+                    let fname: &str = &unsafe { c_str(function_name) };
                     let raw_value: $c_ty = if value.is_null() {
                         $zero
                     } else {
@@ -2829,7 +2846,7 @@ pub unsafe extern "C" fn map2check_save_basic_block_log(
     ffi_guard(
         || {
             // SAFETY: caller guarantees function_name is a valid C string or null.
-            let fname = unsafe { c_str(function_name) };
+            let fname: &str = &unsafe { c_str(function_name) };
             match state::with_state(|s| {
                 let step = s.next_step();
                 s.bbtrack
@@ -2891,7 +2908,7 @@ pub unsafe extern "C" fn map2check_map_alloca(
                 return;
             }
             // SAFETY: caller guarantees var_name is a valid C string or null.
-            let name = unsafe { c_str(var_name) };
+            let name: &str = &unsafe { c_str(var_name) };
             let addr = ptr_address as usize;
             if let Err(e) = state::with_state(|s| {
                 let step = s.next_step();
@@ -2948,7 +2965,7 @@ pub unsafe extern "C" fn map2check_map_non_static_alloca(
                 return;
             };
             // SAFETY: caller guarantees var_name is a valid C string or null.
-            let name = unsafe { c_str(var_name) };
+            let name: &str = &unsafe { c_str(var_name) };
             let addr = ptr_address as usize;
             if let Err(e) = state::with_state(|s| {
                 let step = s.next_step();
@@ -2992,7 +3009,7 @@ pub unsafe extern "C" fn map2check_map_funct_address(
     ffi_guard(
         || {
             // SAFETY: caller guarantees var_name is a valid C string or null.
-            let name = unsafe { c_str(var_name) };
+            let name: &str = &unsafe { c_str(var_name) };
             let addr = ptr_address as usize;
             let pointer_width = std::mem::size_of::<*const std::os::raw::c_void>();
             if let Err(e) = state::with_state(|s| {
@@ -3194,8 +3211,8 @@ pub unsafe extern "C" fn map2check_map_free(
     ffi_guard(
         || {
             // SAFETY: caller guarantees string pointers are valid or null.
-            let name = unsafe { c_str(var_name) };
-            let fname = unsafe { c_str(function_name) };
+            let name: &str = &unsafe { c_str(var_name) };
+            let fname: &str = &unsafe { c_str(function_name) };
             let addr = ptr_address as usize;
             if let Err(e) = state::with_state(|s| {
                 let step = s.next_step();
@@ -3239,8 +3256,8 @@ pub unsafe extern "C" fn map2check_map_store_pointer(
     ffi_guard(
         || {
             // SAFETY: caller guarantees string pointers are valid or null.
-            let name = unsafe { c_str(var_name) };
-            let fname = unsafe { c_str(funct_name) };
+            let name: &str = &unsafe { c_str(var_name) };
+            let fname: &str = &unsafe { c_str(funct_name) };
             let var_addr = var_address as usize;
             let points_to = value as usize;
             if let Err(e) = state::with_state(|s| {
@@ -3288,7 +3305,7 @@ pub unsafe extern "C" fn map2check_is_valid_assert(
                 return;
             }
             // SAFETY: caller guarantees function_name is a valid C string or null.
-            let fname = unsafe { c_str(function_name) };
+            let fname: &str = &unsafe { c_str(function_name) };
             let ctx = VccContext::new(line_number as u32, 0, fname);
             let checker = AssertChecker { expression };
             match checker.check(&ctx) {
@@ -3325,7 +3342,7 @@ macro_rules! overflow_ffi_binop {
                         return;
                     }
                     // SAFETY: caller guarantees function_name is valid or null.
-                    let fname = unsafe { c_str(function_name) };
+                    let fname: &str = &unsafe { c_str(function_name) };
                     let ctx = VccContext::new(line, scope, fname);
                     run_vcc_check(
                         $checker {
@@ -3360,7 +3377,7 @@ macro_rules! overflow_ffi_shift {
                         return;
                     }
                     // SAFETY: caller guarantees function_name is valid or null.
-                    let fname = unsafe { c_str(function_name) };
+                    let fname: &str = &unsafe { c_str(function_name) };
                     let ctx = VccContext::new(line, scope, fname);
                     run_vcc_check(
                         $checker {
@@ -3393,7 +3410,7 @@ pub unsafe extern "C" fn map2check_binop_neg_int(
                 return;
             }
             // SAFETY: caller guarantees function_name is valid or null.
-            let fname = unsafe { c_str(function_name) };
+            let fname: &str = &unsafe { c_str(function_name) };
             let ctx = VccContext::new(line, scope, fname);
             run_vcc_check(NegI32 { val: param1 }, &ctx, line, fname);
         },
@@ -3434,7 +3451,7 @@ unsafe fn signed_binop(
         return;
     }
     // SAFETY: caller guarantees function_name is valid or null.
-    let fname = unsafe { c_str(function_name) };
+    let fname: &str = &unsafe { c_str(function_name) };
     let ctx = VccContext::new(line, 0, fname);
     let checker = SignedBinop {
         op,
@@ -3564,7 +3581,7 @@ pub unsafe extern "C" fn map2check_check_load(
                 return;
             }
             // SAFETY: caller guarantees function_name is valid or null.
-            let fname = unsafe { c_str(function_name) };
+            let fname: &str = &unsafe { c_str(function_name) };
             if size < 0 {
                 record_violation(ViolatedProperty::MemsafetyDeref, line as u32, fname, false);
                 return;
@@ -3611,7 +3628,7 @@ pub unsafe extern "C" fn map2check_check_free(
                 return;
             }
             // SAFETY: caller guarantees string pointers are valid or null.
-            let fname = unsafe { c_str(function_name) };
+            let fname: &str = &unsafe { c_str(function_name) };
             let ctx = VccContext::new(line, 0, fname);
             let checker = FreeChecker {
                 address: ptr as usize,
@@ -3619,7 +3636,7 @@ pub unsafe extern "C" fn map2check_check_free(
             match checker.check(&ctx) {
                 Ok(crate::analysismode::VccOutcome::Violated { property }) => {
                     // SAFETY: as above.
-                    let var_name = unsafe { c_str(name) };
+                    let var_name: &str = &unsafe { c_str(name) };
                     if let Err(e) = state::with_state(|s| {
                         if s.result.ok {
                             let addr = ptr as usize;
@@ -3669,7 +3686,7 @@ pub unsafe extern "C" fn map2check_check_free_resolved_address(
     ffi_guard(
         || {
             // SAFETY: caller guarantees function_name is valid or null.
-            let fname = unsafe { c_str(function_name) };
+            let fname: &str = &unsafe { c_str(function_name) };
             if ptr.is_null() && is_null_valid != 0 {
                 return;
             }
@@ -3721,7 +3738,7 @@ pub unsafe extern "C" fn map2check_check_deref(
                 return;
             }
             // SAFETY: caller guarantees function_name is valid or null.
-            let fname = unsafe { c_str(function_name) };
+            let fname: &str = &unsafe { c_str(function_name) };
             let ctx = VccContext::new(line, scope, fname);
             run_vcc_check(
                 DerefChecker {

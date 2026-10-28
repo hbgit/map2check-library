@@ -3396,7 +3396,7 @@ fn write_property_without_output_directory_changes_nothing() {
     // export never touches the analysis state (`PropertyGenerator.c:50-106`
     // only writes files). Files: `ffi_golden_tests.rs`.
     // SAFETY: C-string literal is valid and null-terminated.
-    unsafe { write_property(ViolatedProperty::MemsafetyFree, 7, c"main".as_ptr()) };
+    unsafe { write_property(ViolatedProperty::MemsafetyFree as i32, 7, c"main".as_ptr()) };
     assert_ok();
 }
 
@@ -3419,6 +3419,17 @@ fn set_false_result_takes_the_c_enum_values() {
     // SAFETY: as above.
     unsafe { set_false_result(11, 6, c"main".as_ptr()) };
     assert_ok();
+}
+
+#[test]
+fn non_utf8_function_name_is_kept_not_dropped() {
+    let _guard = fresh();
+    // develop prints the name with `%s`; an invalid UTF-8 byte once turned
+    // the whole name into "". The valid parts are kept now, and the invalid
+    // byte becomes U+FFFD.
+    // SAFETY: C-string literal is valid and null-terminated.
+    unsafe { set_false_result(7, 4, c"ma\xffin".as_ptr()) };
+    assert_violated(ViolatedProperty::Assert, 4, "ma\u{FFFD}in");
 }
 
 #[test]
