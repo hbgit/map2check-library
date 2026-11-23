@@ -13,9 +13,7 @@ allow = [
 ]
 
 [advisories]
-ignore = [
-    "RUSTSEC-2024-0375",
-]
+ignore = []
 
 [bans]
 multiple-versions = "warn"
